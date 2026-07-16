@@ -39,7 +39,12 @@ is the canonical example of the format.
    defect-report notes) in condensed form. Precision is kept, but it
    lives at the bottom, not the top.
 9. `### See also` — keep, prune to entries a reader plausibly wants
-   next, one line each with the version tag if gated.
+   next, one line each with the version tag if gated. Write the bare
+   entry name in **bold** or `backticks`: any such span that resolves
+   in the index becomes a followable link in the viewer (Tab hops,
+   CR/K follows), so inventory lists and See-also sections are
+   navigation, not decoration. Keep version tags outside the span
+   (`**sort**` `(C++20)` — not `**sort (C++20)**`).
 10. Final `*Source: <cppreference URL>*` line — never remove
     (CC-BY-SA attribution).
 
