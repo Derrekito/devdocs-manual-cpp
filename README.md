@@ -20,11 +20,18 @@ tree — never by overwriting it.
 - `index.json` — entry name → page path map used by the plugin's
   search and `gK` lookup.
 - `pages-md/**/*.md` — one markdown file per reference page.
+- `STYLE.md` — the rewrite format contract; `pages-md/algorithm/sort.md`
+  is the canonical rewritten page.
 
-Editing conventions match the plugin's `notes/README.md`: task-oriented
-prose, fenced code with a language tag, expected output in ```text
-fences, and standard-version applicability (C++11/14/17/20/23) stated
-explicitly.
+Rewritten pages lead with a plain-language summary and usage synopsis,
+translate standardese parameters into what callers actually write,
+promote gotchas out of footnotes, and preserve the full formal
+declarations verbatim under a `### Reference` section. Version
+applicability (C++11/14/17/20/23) is stated explicitly, and every
+example on a rewritten page compiles — with printed output asserted —
+via the plugin repo's `make check-examples-run`. Pages not yet
+rewritten remain raw converter output; they get the same viewer
+features (links, pager) either way.
 
 ## License and attribution
 
