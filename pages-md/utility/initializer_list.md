@@ -1,78 +1,55 @@
 # std::initializer_list
 
-(not to be confused with member initializer list)
+`std::initializer_list<T>` (C++11) is a lightweight view over a
+temporary array the compiler builds for you: writing `{a, b, c}` where
+one is expected constructs a `const T` array behind the scenes and
+hands you an `initializer_list` that points into it. The list itself
+is typically just a pointer and a length — copying an
+`initializer_list` copies that pointer and length, never the backing
+array — and every element it exposes is `const T`, so you can't modify
+elements through it.
 
-```cpp
-template< class T >
-class initializer_list;  // (since C++11)
+```cpp skip
+void f(std::initializer_list<int> l);
+
+f({1, 2, 3});                    // braced-init-list as a function argument
+auto l = {1, 2, 3};              // special rule: auto deduces initializer_list<int>
+for (int x : {1, 2, 3}) { }      // braced-init-list bound to a range-for
+
+l.size(); l.begin(); l.end();    // T*/const T* pair under the hood
 ```
 
-An object of type `std::initializer_list<T>` is a lightweight proxy object that
-provides access to an array of objects of type const T (that may be allocated in
-read-only memory).
+### Guarantees and costs
 
-A `std::initializer_list` object is automatically constructed when:
+- An `initializer_list` is automatically constructed when a
+  braced-init-list is used to list-initialize an object whose
+  constructor takes an `initializer_list` parameter, is used as the
+  right operand of assignment or as a call argument to a function
+  taking one, or is bound to `auto` (including in a range-for).
+- May be implemented as a pointer and a length, or as a pair of
+  pointers — either way, `size()`, `begin()`, and `end()` are O(1).
+- Copying an `initializer_list` copies the view (pointer/length), not
+  the backing array; the array's lifetime is tied to the temporary
+  that created it, not to any copy of the list.
+- `iterator`/`const_iterator` are both `const T*`; `reference` and
+  `const_reference` are both `const T&` — there is no mutable access,
+  by design.
+- Declaring an explicit or partial specialization of
+  `std::initializer_list` is ill-formed.
 
-- a braced-init-list is used to list-initialize an object, where the
-  corresponding constructor accepts an `std::initializer_list` parameter,
-- a braced-init-list is used as the right operand of assignment or as a function
-  call argument, and the corresponding assignment operator/function accepts an
-  `std::initializer_list` parameter,
-- a braced-init-list is bound to `auto`, including in a ranged for loop.
+### Gotchas
 
-`std::initializer_list` may be implemented as a pair of pointers or pointer and
-length. Copying a `std::initializer_list` does not copy the backing array of the
-corresponding initializer list.
-
-The program is ill-formed if an explicit or partial specialization of
-`std::initializer_list` is declared.
-
-### Member types
-
-- **`value_type`** — `T`
-- **`reference`** — const T&
-- **`const_reference`** — const T&
-- **`size_type`** — `std::size_t`
-- **`iterator`** — const T*
-- **`const_iterator`** — const T*
-
-### Member functions
-
-- **(constructor)** — creates an empty initializer list (public member function)
-
-**Capacity**
-
-- **size** — returns the number of elements in the initializer list (public
-  member function)
-
-**Iterators**
-
-- **begin** — returns a pointer to the first element (public member function)
-- **end** — returns a pointer to one past the last element (public member
-  function)
-
-### Non-member functions
-
-- **std::begin(std::initializer_list) (C++11)** — overloads `std::begin`
-  (function template)
-- **std::end(std::initializer_list) (C++11)** — specializes `std::end` (function
-  template)
-
-**Free function templates overloaded for `std::initializer_list`**
-
-- **rbegincrbegin (C++14)** — returns a reverse iterator to the beginning of a
-  container or array (function template)
-- **rendcrend (C++14)** — returns a reverse end iterator for a container or
-  array (function template)
-- **empty (C++17)** — checks whether the container is empty (function template)
-- **data (C++17)** — obtains the pointer to the underlying array (function
-  template)
-
-### Notes
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_initializer_lists` | 200806L | (C++11) | List-initialization and
-      `std::initializer_list`
+- The backing array is a temporary. Once the full expression that
+  created it ends, an `initializer_list` that still points to it is
+  dangling — don't store one as a class member or return one from a
+  function.
+- Elements are always `const`; algorithms that need to modify elements
+  in place don't work directly on an `initializer_list` (copy into a
+  `vector` first).
+- `templated_fn({1, 2, 3})` fails to deduce a template parameter — a
+  braced-init-list is not an expression and has no type on its own.
+  Give the parameter a concrete `initializer_list<T>` type, or spell
+  out the template argument explicitly.
 
 ### Example
 
@@ -88,77 +65,64 @@ struct S
 
     S(std::initializer_list<T> l) : v(l)
     {
-         std::cout << "constructed with a " << l.size() << "-element list\n";
+        std::cout << "constructed with a " << l.size() << "-element list\n";
     }
 
     void append(std::initializer_list<T> l)
     {
         v.insert(v.end(), l.begin(), l.end());
     }
-
-    std::pair<const T*, std::size_t> c_arr() const
-    {
-        return {&v[0], v.size()}; // copy list-initialization in return statement
-                                  // this is NOT a use of std::initializer_list
-    }
 };
-
-template<typename T>
-void templated_fn(T) {}
 
 int main()
 {
-    S<int> s = {1, 2, 3, 4, 5}; // copy list-initialization
-    s.append({6, 7, 8});        // list-initialization in function call
+    S<int> s = {1, 2, 3, 4, 5};
+    s.append({6, 7, 8});
 
-    std::cout << "The vector now has " << s.c_arr().second << " ints:\n";
-
-    for (auto n : s.v)
-        std::cout << n << ' ';
+    std::cout << "The vector now has " << s.v.size() << " ints:\n";
+    for (std::size_t i = 0; i < s.v.size(); ++i)
+    {
+        if (i != 0)
+            std::cout << ' ';
+        std::cout << s.v[i];
+    }
     std::cout << '\n';
 
-    std::cout << "Range-for over brace-init-list: \n";
-
-    for (int x : {-1, -2, -3}) // the rule for auto makes this ranged-for work
-        std::cout << x << ' ';
-    std::cout << '\n';
-
-    auto al = {10, 11, 12}; // special rule for auto
-
-    std::cout << "The list bound to auto has size() = " << al.size() << '\n';
-
-//  templated_fn({1, 2, 3}); // compiler error! "{1, 2, 3}" is not an expression,
-                             // it has no type, and so T cannot be deduced
-    templated_fn<std::initializer_list<int>>({1, 2, 3}); // OK
-    templated_fn<std::vector<int>>({1, 2, 3});           // also OK
+    auto al = {10, 11, 12};          // special rule for auto
+    std::cout << "al.size() = " << al.size() << '\n';
 }
 ```
-
-Output:
 
 ```text
 constructed with a 5-element list
 The vector now has 8 ints:
 1 2 3 4 5 6 7 8
-Range-for over brace-init-list:
--1 -2 -3
-The list bound to auto has size() = 3
+al.size() = 3
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+```cpp skip
+template< class T >
+class initializer_list;  // (since C++11)
+```
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 2129 | C++11 | `std::initializer_list` could have explicit specializations
-      or partial specializations | the program is ill-formed in this case
+Member types: `value_type` = `T`; `reference`/`const_reference` =
+`const T&`; `size_type` = `std::size_t`; `iterator`/`const_iterator` =
+`const T*`.
+
+**Member functions**: (constructor) — creates an empty list;
+`size` (Capacity); `begin`, `end` (Iterators).
+
+Non-member: `std::begin`/`std::end` overloads (C++11). Free function
+templates overloaded for `initializer_list`: `rbegin`/`crbegin`,
+`rend`/`crend` (C++14), `empty`, `data` (C++17).
 
 ### See also
 
-- **span (C++20)** — a non-owning view over a contiguous sequence of objects
-  (class template)
-- **basic_string_view (C++17)** — read-only string view (class template)
+- **span** (C++20) — a non-owning view over a contiguous sequence of
+  objects
+- **basic_string_view** (C++17) — read-only string view
 
 ---
 *Source: https://en.cppreference.com/w/cpp/utility/initializer_list*

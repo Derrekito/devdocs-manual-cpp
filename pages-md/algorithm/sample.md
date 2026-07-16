@@ -1,67 +1,45 @@
 # std::sample
 
-```cpp
-template< class PopulationIterator, class SampleIterator,
-          class Distance, class URBG >
-SampleIterator sample( PopulationIterator first, PopulationIterator last,
-                       SampleIterator out, Distance n,
-                       URBG&& g );  // (since C++17)
+Selects `n` elements from a range without replacement, such that every
+possible sample of that size has equal probability, and writes them to
+an output iterator. If `n` exceeds the population size, the whole
+population is selected. (C++17)
+
+```cpp skip
+std::sample(first, last, out, n, g);   // (since C++17)
 ```
 
-Selects `n` elements from the sequence `[``first``,``last``)` (without
-replacement) such that each possible sample has equal probability of appearance,
-and writes those selected elements into the output iterator `out`. Random
-numbers are generated using the random number generator `g`.
+### What you provide
 
-If `n` is greater than the number of elements in the sequence, selects `last -
-first` elements.
+- **first, last** — the population to sample from (LegacyInputIterator
+  at minimum).
+- **out** — output iterator the samples are written to
+  (LegacyOutputIterator); must also be LegacyRandomAccessIterator if
+  `first`/`last` don't meet LegacyForwardIterator. Must not point into
+  `[first, last)` — that's undefined behavior.
+- **n** — number of samples to draw (an integer type).
+- **g** — a UniformRandomBitGenerator source of randomness, whose result
+  type converts to `n`'s type.
 
-The algorithm is stable (preserves the relative order of the selected elements)
-only if `PopulationIterator` meets the requirements of LegacyForwardIterator.
+### Guarantees and costs
 
-The behavior is undefined if `out` is in `[``first``,``last``)`.
+- Linear in the distance between `first` and `last`.
+- Every possible sample of size `n` is equally likely to be produced.
+- Stable — keeps the selected elements' relative order from the
+  population — only when `first`/`last` meet LegacyForwardIterator; with
+  plain input iterators, order isn't preserved.
+- May be implemented as either reservoir sampling or selection sampling;
+  the standard doesn't mandate which.
 
-### Parameters
+### Gotchas
 
-- **first, last** — pair of iterators forming the range from which to make the
-  sampling (the population)
-- **out** — the output iterator where the samples are written
-- **n** — number of samples to make
-- **g** — the random number generator used as the source of randomness
-
-**Type requirements**
-
-**-`PopulationIterator` must meet the requirements of LegacyInputIterator.**
-
-**-`SampleIterator` must meet the requirements of LegacyOutputIterator.**
-
-**-`SampleIterator` must also meet the requirements of LegacyRandomAccessIterator if `PopulationIterator` does not meet LegacyForwardIterator**
-
-**-`PopulationIterator`'s value type must be writable to `out`**
-
-**-`Distance` must be an integer type**
-
-**-`std::remove_reference_t<URBG>` must meet the requirements of UniformRandomBitGenerator and its return type must be convertible to `Distance`**
-
-### Return value
-
-Returns a copy of `out` after the last sample that was output, that is, end of
-the sample range.
-
-### Complexity
-
-Linear in `std::distance(first, last)`.
-
-### Notes
-
-This function may implement selection sampling or reservoir sampling.
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_sample` | 201603L | (C++17) | `std::sample`
-
-### Possible implementation
-
-See the implementations in libstdc++, libc++ and MSVC STL.
+- With only input iterators for the population, don't expect the sample
+  to preserve original order — use forward iterators (or better) if
+  order matters.
+- An output iterator that aliases the population range is undefined
+  behavior.
+- Like all `<random>`-based algorithms, results aren't portable across
+  standard library implementations, even with an identical seed.
 
 ### Example
 
@@ -74,25 +52,51 @@ See the implementations in libstdc++, libc++ and MSVC STL.
 
 int main()
 {
-    std::string in {"ABCDEFGHIJK"}, out;
-    std::sample(in.begin(), in.end(), std::back_inserter(out), 4,
-                std::mt19937 {std::random_device{}()});
-    std::cout << "Four random letters out of " << in << " : " << out << '\n';
+    std::string in{"ABCDEFGHIJK"};
+    std::string out;
+
+    std::mt19937 g(12345);   // fixed seed so this check is reproducible
+    std::sample(in.begin(), in.end(), std::back_inserter(out), 4, g);
+
+    bool all_from_in = std::all_of(out.begin(), out.end(), [&](char c)
+    {
+        return in.find(c) != std::string::npos;
+    });
+    std::cout << out.size() << " letters sampled, all from input: "
+              << std::boolalpha << all_from_in << '\n';
 }
 ```
 
-Possible output:
-
 ```text
-Four random letters out of ABCDEFGHIJK: EFGK
+4 letters sampled, all from input: true
 ```
+
+### Reference
+
+Full declaration:
+
+```cpp skip
+template< class PopulationIterator, class SampleIterator,
+          class Distance, class URBG >
+SampleIterator sample( PopulationIterator first, PopulationIterator last,
+                       SampleIterator out, Distance n,
+                       URBG&& g );  // (since C++17)
+```
+
+`PopulationIterator` must meet LegacyInputIterator; `SampleIterator` must
+meet LegacyOutputIterator (and LegacyRandomAccessIterator if
+`PopulationIterator` isn't at least LegacyForwardIterator);
+`PopulationIterator`'s value type must be writable to `out`; `Distance`
+must be an integer type; `std::remove_reference_t<URBG>` must meet
+UniformRandomBitGenerator with a result type convertible to `Distance`.
+Returns a copy of `out` positioned past the last sample written. Feature-
+test macro `__cpp_lib_sample` (value `201603L`) signals availability.
 
 ### See also
 
-- **random_shuffleshuffle (until C++17)(C++11)** — randomly re-orders elements
-  in a range (function template)
-- **ranges::sample (C++20)** — selects N random elements from a sequence
-  (niebloid)
+- **shuffle** (C++11) — randomly re-orders every element of a range
+- **ranges::sample** (C++20) — constrained version with the same
+  selection guarantees
 
 ---
 *Source: https://en.cppreference.com/w/cpp/algorithm/sample*

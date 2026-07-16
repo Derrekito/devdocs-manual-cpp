@@ -1,6 +1,92 @@
 # std::exchange
 
+Replaces `obj`'s value with `new_value` and returns the *old* value —
+a move-and-replace idiom in one call. Its main use is writing move
+constructors and move assignment operators: `n{std::exchange(other.n,
+0)}` moves `other.n` out while leaving a known, valid value (`0`)
+behind, in a single expression instead of a separate "save old value,
+then reset" pair.
+
+```cpp skip
+std::exchange(obj, new_value);  // (since C++14)
+```
+
+`constexpr` since C++20; `noexcept`-qualified since C++23 (see below).
+
+### What you provide
+
+- **obj** — the object to modify, taken by reference.
+- **new_value** — the value to assign to `obj`. Its type `U` defaults
+  to `T`, so a value, a braced-init-list, or a compatible object all
+  work.
+
+### Guarantees and costs
+
+- Returns the value `obj` held *before* the assignment.
+- `T` must be MoveConstructible, and objects of type `U` must be
+  move-assignable to `T`.
+- Since C++23, `noexcept` if `T`'s move constructor and the
+  `T& = U` assignment are both non-throwing; before that, no
+  exception guarantee is specified.
+
+### Gotchas
+
+- The old value is returned *by value* (a move out of `obj`, then
+  `obj` is reassigned) — for expensive `T` this is exactly one move
+  construction plus one move/copy assignment, not free.
+- Because `new_value`'s type defaults to `T`, `std::exchange(v, {1, 2,
+  3, 4})` and `std::exchange(fun, some_function)` both work without
+  spelling out the type — useful, but means a typo in the intended
+  type won't be caught by a mismatched second argument.
+- Order of evaluation matters when chaining: `a = std::exchange(b, a
+  + b)` for a Fibonacci-style update relies on `a + b` being computed
+  with the *old* `a` and `b` before either is touched — the same
+  building block used in `std::swap`-adjacent idioms.
+
+### Example
+
 ```cpp
+#include <iostream>
+#include <utility>
+#include <vector>
+
+struct S
+{
+    int n;
+
+    S(int v) : n(v) {}
+
+    S(S&& other) noexcept : n{std::exchange(other.n, 0)} {}
+};
+
+int main()
+{
+    S a(42);
+    S b(std::move(a));
+
+    std::cout << "a.n = " << a.n << ", b.n = " << b.n << '\n';
+
+    std::vector<int> v;
+    std::exchange(v, {1, 2, 3, 4});
+    for (int x : v)
+        std::cout << x << ' ';
+    std::cout << '\n';
+
+    for (int x{0}, y{1}; x < 20; x = std::exchange(y, x + y))
+        std::cout << x << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+a.n = 0, b.n = 42
+1 2 3 4 
+0 1 1 2 3 5 8 13 
+```
+
+### Reference
+
+```cpp skip
 template< class T, class U = T >
 T exchange( T& obj, U&& new_value );  // (since C++14) (until C++20)
 template< class T, class U = T >
@@ -9,152 +95,17 @@ template< class T, class U = T >
 constexpr T exchange( T& obj, U&& new_value ) noexcept(/* see below */);  // (since C++23)
 ```
 
-Replaces the value of `obj` with `new_value` and returns the old value of `obj`.
+`noexcept` since C++23:
+`noexcept(std::is_nothrow_move_constructible_v<T> &&
+std::is_nothrow_assignable_v<T&, U>)`.
 
-### Parameters
-
-- **obj** — object whose value to replace
-- **new_value** — the value to assign to `obj`
-
-**Type requirements**
-
-**-`T` must meet the requirements of MoveConstructible. Also, it must be possible to move-assign objects of type `U` to objects of type `T`.**
-
-### Return value
-
-The old value of `obj`.
-
-### Exceptions
-
-(none)
-*(until C++23)*
-
-`noexcept` specification:
-`noexcept( std::is_nothrow_move_constructible_v<T> &&
-std::is_nothrow_assignable_v<T&, U> )`
-*(since C++23)*
-
-### Possible implementation
-
-```cpp
-template<class T, class U = T>
-constexpr // Since C++20
-T exchange(T& obj, U&& new_value)
-    noexcept( // Since C++23
-        std::is_nothrow_move_constructible<T>::value &&
-        std::is_nothrow_assignable<T&, U>::value
-    )
-{
-    T old_value = std::move(obj);
-    obj = std::forward<U>(new_value);
-    return old_value;
-}
-```
-
-### Notes
-
-The `std::exchange` can be used when implementing move assignment operators and
-move constructors:
-
-```cpp
-struct S
-{
-    int n;
-
-    S(S&& other) noexcept : n{std::exchange(other.n, 0)} {}
-
-    S& operator=(S&& other) noexcept
-    {
-        if (this != &other)
-            n = std::exchange(other.n, 0); // Move n, while leaving zero in other.n
-        return *this;
-    }
-};
-```
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_exchange_function` | 201304L | (C++14) | `std::exchange`
-
-### Example
-
-```cpp
-#include <iostream>
-#include <iterator>
-#include <utility>
-#include <vector>
-
-class stream
-{
-public:
-    using flags_type = int;
-
-public:
-    flags_type flags() const { return flags_; }
-
-    // Replaces flags_ by newf, and returns the old value.
-    flags_type flags(flags_type newf) { return std::exchange(flags_, newf); }
-
-private:
-    flags_type flags_ = 0;
-};
-
-void f() { std::cout << "f()"; }
-
-int main()
-{
-    stream s;
-
-    std::cout << s.flags() << '\n';
-    std::cout << s.flags(12) << '\n';
-    std::cout << s.flags() << "\n\n";
-
-    std::vector<int> v;
-
-    // Since the second template parameter has a default value, it is possible
-    // to use a braced-init-list as second argument. The expression below
-    // is equivalent to std::exchange(v, std::vector<int>{1, 2, 3, 4});
-
-    std::exchange(v, {1, 2, 3, 4});
-
-    std::copy(begin(v), end(v), std::ostream_iterator<int>(std::cout, ", "));
-
-    std::cout << "\n\n";
-
-    void (*fun)();
-
-    // The default value of template parameter also makes possible to use a
-    // normal function as second argument. The expression below is equivalent to
-    // std::exchange(fun, static_cast<void(*)()>(f))
-    std::exchange(fun, f);
-    fun();
-
-    std::cout << "\n\nFibonacci sequence: ";
-    for (int a{0}, b{1}; a < 100; a = std::exchange(b, a + b))
-        std::cout << a << ", ";
-    std::cout << "...\n";
-}
-```
-
-Output:
-
-```text
-0
-0
-12
-
-1, 2, 3, 4,
-
-f()
-
-Fibonacci sequence: 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, ...
-```
+Feature-test macro: `__cpp_lib_exchange_function` (`201304L`, C++14).
 
 ### See also
 
-- **swap** — swaps the values of two objects (function template)
-- **atomic_exchangeatomic_exchange_explicit (C++11)(C++11)** — atomically
-  replaces the value of the atomic object with non-atomic argument and returns
-  the old value of the atomic (function template)
+- **swap** — swaps the values of two objects
+- **atomic_exchange** — atomically replaces the value of an atomic
+  object, returning the old value (`atomic_exchange_explicit`, C++11)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/utility/exchange*

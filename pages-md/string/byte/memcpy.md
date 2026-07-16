@@ -1,45 +1,47 @@
 # std::memcpy
 
-```cpp
-void* memcpy( void* dest, const void* src, std::size_t count );
+Copies `count` bytes from `src` to `dest`, treating both as raw
+`unsigned char` arrays — the fastest memory-to-memory copy the library
+offers. It's only well-defined for objects that are TriviallyCopyable;
+copying anything else is unspecified or undefined behavior even though
+it compiles. The source and destination must not overlap — use
+`std::memmove` when they might.
+
+```cpp skip
+std::memcpy(dest, src, count);   // count bytes; dest and src must not overlap
 ```
 
-Copies `count` bytes from the object pointed to by `src` to the object pointed
-to by `dest`. Both objects are reinterpreted as arrays of `unsigned char`.
+### What you provide
 
-If the objects overlap, the behavior is undefined.
+- **dest** — pointer to the destination memory; must be valid (non-null).
+- **src** — pointer to the source memory; must be valid (non-null).
+- **count** — number of bytes to copy (`std::size_t`).
 
-If either `dest` or `src` is an invalid or null pointer, the behavior is
-undefined, even if `count` is zero.
+### Guarantees and costs
 
-If the objects are potentially-overlapping or not TriviallyCopyable, the
-behavior of `memcpy` is not specified and may be undefined.
+- Returns `dest`.
+- Usually the fastest raw copy available: unlike `std::strcpy` it doesn't
+  scan the data, and unlike `std::memmove` it doesn't guard against
+  overlap.
+- Well-defined only when `dest` and `src` don't overlap and the copied
+  objects are TriviallyCopyable; otherwise the behavior is unspecified,
+  and may be undefined.
+- May be used to implicitly create objects in the destination buffer.
+- Many compilers recognize hand-written byte-copy loops and replace them
+  with a call to `memcpy`.
 
-### Parameters
+### Gotchas
 
-- **dest** — pointer to the memory location to copy to
-- **src** — pointer to the memory location to copy from
-- **count** — number of bytes to copy
-
-### Return value
-
-`dest`
-
-### Notes
-
-`std::memcpy` may be used to implicitly create objects in the destination
-buffer.
-
-`std::memcpy` is meant to be the fastest library routine for memory-to-memory
-copy. It is usually more efficient than `std::strcpy`, which must scan the data
-it copies or `std::memmove`, which must take precautions to handle overlapping
-inputs.
-
-Several C++ compilers transform suitable memory-copying loops to `std::memcpy`
-calls.
-
-Where strict aliasing prohibits examining the same memory as values of two
-different types, `std::memcpy` may be used to convert the values.
+- Overlapping `src`/`dest` is undefined behavior — reach for
+  `std::memmove` when the ranges might overlap.
+- Copying a type that isn't TriviallyCopyable (a user-defined copy
+  constructor or destructor, virtual functions, etc.) is undefined
+  behavior, even though the call compiles fine.
+- `dest` or `src` being null is undefined behavior even when `count` is
+  zero — don't rely on a zero-length call being a safe no-op.
+- It's the standard-sanctioned way to reinterpret an object's bytes as
+  another type when strict aliasing forbids doing so directly (e.g.
+  reading a `double`'s bit pattern into an `std::int64_t`).
 
 ### Example
 
@@ -47,61 +49,44 @@ different types, `std::memcpy` may be used to convert the values.
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <string>
 
 int main()
 {
-    // simple usage
-    char source[] = "once upon a daydream...", dest[4];
+    // simple byte copy
+    char source[] = "once upon a daydream...";
+    char dest[4];
     std::memcpy(dest, source, sizeof dest);
-    std::cout << "dest[4] = {";
-    for (int n{}; char c : dest)
-        std::cout << (n++ ? ", " : "") << '\'' << c << "'";
-    std::cout << "};\n";
+    std::cout << "dest = " << std::string(dest, 4) << '\n';
 
-    // reinterpreting
+    // reinterpreting bits without violating strict aliasing
     double d = 0.1;
-//  std::int64_t n = *reinterpret_cast<std::int64_t*>(&d); // aliasing violation
     std::int64_t n;
-    std::memcpy(&n, &d, sizeof d); // OK
-
-    std::cout << std::hexfloat << d << " is " << std::hex << n
-              << " as a std::int64_t\n" << std::dec;
-
-    // object creation in destination buffer
-    struct S
-    {
-        int x{42};
-        void print() const { std::cout << '{' << x << "}\n"; }
-    } s;
-    alignas(S) char buf[sizeof(S)];
-    S* ps = new (buf) S; // placement new
-    std::memcpy(ps, &s, sizeof s);
-    ps->print();
+    std::memcpy(&n, &d, sizeof d);
+    std::cout << std::hex << n << std::dec << '\n';
 }
 ```
 
-Output:
-
 ```text
-dest[4] = {'o', 'n', 'c', 'e'};
-0x1.999999999999ap-4 is 3fb999999999999a as a std::int64_t
-{42}
+dest = once
+3fb999999999999a
+```
+
+### Reference
+
+Full declaration:
+
+```cpp skip
+void* memcpy( void* dest, const void* src, std::size_t count );
 ```
 
 ### See also
 
-- **memmove** — moves one buffer to another (function)
-- **memset** — fills a buffer with a character (function)
-- **wmemcpy** — copies a certain amount of wide characters between two
-  non-overlapping arrays (function)
-- **copy** — copies characters (public member function of
-  `std::basic_string<CharT,Traits,Allocator>`)
-- **copycopy_if (C++11)** — copies a range of elements to a new location
-  (function template)
-- **copy_backward** — copies a range of elements in backwards order (function
-  template)
-- **is_trivially_copyable (C++11)** — checks if a type is trivially copyable
-  (class template)
+- **memmove** — same, but safe when the buffers overlap
+- **memset** — fills a buffer with a byte value
+- **is_trivially_copyable** (C++11) — checks whether a type may safely be
+  copied with `memcpy`
+- **copy** — copies a range of elements (algorithm, not raw bytes)
 
 **C documentation for `memcpy`**
 

@@ -1,6 +1,73 @@
 # std::is_sorted
 
+Checks whether a range is already sorted (non-descending by default) — use
+it to verify an assumption before calling something that requires a sorted
+range, like `std::binary_search`, `std::lower_bound`, or `std::merge`, all
+of which give silently wrong answers on unsorted input instead of failing
+loudly.
+
+```cpp skip
+std::is_sorted(first, last);               // uses operator<
+std::is_sorted(first, last, comp);          // your ordering
+std::is_sorted(policy, first, last);        // parallel        (since C++17)
+std::is_sorted(policy, first, last, comp);  // parallel + comp (since C++17)
+```
+
+Available since C++11; `constexpr` since C++20.
+
+### What you provide
+
+- **first, last** — forward iterators over the range to check.
+- **comp** — a callable answering *does `a` belong before `b`?*, taking two
+  elements and returning `bool`.
+- **policy** — an execution policy such as `std::execution::par` (C++17).
+
+### Guarantees and costs
+
+- Linear in the distance between `first` and `last`.
+- Empty ranges and ranges of length one are always considered sorted.
+- Parallel overloads: if a comparator throws, `std::terminate` is called;
+  allocation failure throws `std::bad_alloc`.
+
+### Gotchas
+
+- `is_sorted` checks the *same* ordering you're about to rely on — if you
+  check with `operator<` but then call `binary_search` with a custom
+  `comp`, the check doesn't cover you. Use the same comparator in both
+  places.
+
+### Example
+
 ```cpp
+#include <algorithm>
+#include <functional>
+#include <iostream>
+#include <vector>
+
+int main()
+{
+    std::vector<int> v{3, 1, 4, 1, 5};
+    std::cout << std::boolalpha;
+    std::cout << "unsorted: " << std::is_sorted(v.begin(), v.end()) << '\n';
+
+    std::sort(v.begin(), v.end());
+    std::cout << "after sort: " << std::is_sorted(v.begin(), v.end()) << '\n';
+    std::cout << "descending check: "
+              << std::is_sorted(v.begin(), v.end(), std::greater<>{}) << '\n';
+}
+```
+
+```text
+unsorted: false
+after sort: true
+descending check: false
+```
+
+### Reference
+
+Full declarations:
+
+```cpp skip
 template< class ForwardIt >
 bool is_sorted( ForwardIt first, ForwardIt last );  // (since C++11) (until C++20)
 template< class ForwardIt >
@@ -16,118 +83,17 @@ bool is_sorted( ExecutionPolicy&& policy, ForwardIt first, ForwardIt last,
                 Compare comp );  // (4) (since C++17)
 ```
 
-Checks if the elements in range `[``first``,``last``)` are sorted in
-non-descending order.
-
-A sequence is sorted with respect to a comparator `comp` if for any iterator
-`it` pointing to the sequence and any non-negative integer `n` such that `it +
-n` is a valid iterator pointing to an element of the sequence, `comp(*(it + n),
-*it)` evaluates to `false`.
-
-1) Elements are compared using `operator<`.
-
-3) Elements are compared using the given binary comparison function `comp`.
-
-2,4) Same as (1,3), but executed according to `policy`. These overloads do not
-   participate in overload resolution unless
-   `std::is_execution_policy_v<std::decay_t<ExecutionPolicy>>` is `true`. (until
-   C++20) `std::is_execution_policy_v<std::remove_cvref_t<ExecutionPolicy>>` is
-   `true`. (since C++20)
-
-### Parameters
-
-- **first, last** — the range of elements to examine
-- **policy** — the execution policy to use. See execution policy for details.
-- **comp** — comparison function object (i.e. an object that satisfies the
-  requirements of Compare) which returns ​`true` if the first argument is *less*
-  than (i.e. is ordered *before*) the second. The signature of the comparison
-  function should be equivalent to the following: `bool cmp(const Type1& a,
-  const Type2& b);` While the signature does not need to have const&, the
-  function must not modify the objects passed to it and must be able to accept
-  all values of type (possibly const) `Type1` and `Type2` regardless of value
-  category (thus, `Type1&` is not allowed, nor is `Type1` unless for `Type1` a
-  move is equivalent to a copy(since C++11)). The types Type1 and Type2 must be
-  such that an object of type ForwardIt can be dereferenced and then implicitly
-  converted to both of them. ​
-
-**Type requirements**
-
-**-`ForwardIt` must meet the requirements of LegacyForwardIterator.**
-
-### Return value
-
-`true` if the elements in the range are sorted in non-descending order.
-
-### Complexity
-
-Linear in the distance between `first` and `last`.
-
-### Exceptions
-
-The overloads with a template parameter named `ExecutionPolicy` report errors as
-follows:
-
-- If execution of a function invoked as part of the algorithm throws an
-  exception and `ExecutionPolicy` is one of the standard policies,
-  `std::terminate` is called. For any other `ExecutionPolicy`, the behavior is
-  implementation-defined.
-- If the algorithm fails to allocate memory, `std::bad_alloc` is thrown.
-
-### Possible implementation
-
-See also the implementations in libstdc++ and libc++.
-
-```cpp
-template<class ForwardIt>
-bool is_sorted(ForwardIt first, ForwardIt last)
-{
-    return std::is_sorted_until(first, last) == last;
-}
-```
-
-```cpp
-template<class ForwardIt, class Compare>
-bool is_sorted(ForwardIt first, ForwardIt last, Compare comp)
-{
-    return std::is_sorted_until(first, last, comp) == last;
-}
-```
-
-### Notes
-
-`std::is_sorted` returns `true` for empty ranges and ranges of length one.
-
-### Example
-
-```cpp
-#include <algorithm>
-#include <cassert>
-#include <functional>
-#include <iterator>
-#include <vector>
-
-int main()
-{
-    std::vector<int> v;
-    assert(std::is_sorted(v.cbegin(), v.cend()) && "an empty range is always sorted");
-    v.push_back(42);
-    assert(std::is_sorted(v.cbegin(), v.cend()) && "a range of size 1 is always sorted");
-
-    int data[] = {3, 1, 4, 1, 5};
-    assert(not std::is_sorted(std::begin(data), std::end(data)));
-
-    std::sort(std::begin(data), std::end(data));
-    assert(std::is_sorted(std::begin(data), std::end(data)));
-    assert(not std::is_sorted(std::begin(data), std::end(data), std::greater<>{}));
-}
-```
+A sequence is sorted with respect to `comp` when, for every valid `it` and
+non-negative `n`, `comp(*(it + n), *it)` is `false`. `ForwardIt` must
+satisfy LegacyForwardIterator. It's implemented in terms of
+`is_sorted_until`: `return std::is_sorted_until(first, last) == last;`. The
+policy overloads participate in overload resolution only for genuine
+execution-policy types.
 
 ### See also
 
-- **is_sorted_until (C++11)** — finds the largest sorted subrange (function
-  template)
-- **ranges::is_sorted (C++20)** — checks whether a range is sorted into
-  ascending order (niebloid)
+- **is_sorted_until** — the largest sorted prefix subrange (C++11)
+- **ranges::is_sorted** — constrained version with projections (C++20)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/algorithm/is_sorted*

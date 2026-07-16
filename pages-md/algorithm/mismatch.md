@@ -1,6 +1,93 @@
 # std::mismatch
 
+Answers: *where do two ranges first differ?* Compares two ranges
+element by element (with `operator==` or a predicate) and returns a pair
+of iterators pointing at the first pair that doesn't match — one
+position into each range.
+
+```cpp skip
+std::mismatch(first1, last1, first2);                 // range2 assumed >= range1's length
+std::mismatch(first1, last1, first2, last2);           // both ends given   (since C++14)
+std::mismatch(first1, last1, first2, pred);            // custom equality
+std::mismatch(first1, last1, first2, last2, pred);     // both ends + pred  (since C++14)
+std::mismatch(policy, first1, last1, first2, ...);      // parallel forms   (since C++17)
+```
+
+Since C++20 the non-policy overloads are `constexpr`.
+
+### What you provide
+
+- **first1, last1** — the first range.
+- **first2** (**, last2**) — the start of the second range, and
+  optionally its end. If `last2` is omitted, `first2 + (last1 - first1)`
+  is used as the implied end — the second range must actually be at
+  least that long, or behavior is undefined.
+- **p** — a binary predicate: return `true` if two elements should count
+  as equal. It must not modify its arguments and must accept both
+  element types without requiring a non-const reference.
+- **policy** — an execution policy (C++17); requires ForwardIt on both
+  ranges instead of InputIt.
+
+### Guarantees and costs
+
+- Returns a `std::pair` of iterators to the first non-equal elements, one
+  from each range.
+- If no mismatch is found: with only `last1` given, the pair holds
+  `last1` and the corresponding position in range2 — undefined behavior
+  if range2 is actually shorter than range1 *(until C++14)*. With `last2`
+  given explicitly, the pair holds whichever end (`last1` or `last2`) the
+  comparison reaches first *(since C++14)*.
+- Complexity: at most `last1 - first1` comparisons with only `last1`
+  given; at most `min(last1 - first1, last2 - first2)` with both ends
+  given.
+- Parallel overloads: a predicate that throws calls `std::terminate` for
+  standard policies; allocation failure throws `std::bad_alloc`.
+
+### Gotchas
+
+- Without an explicit `last2`, `mismatch` trusts range2 to be at least as
+  long as range1 — if it might be shorter, pass `last2` (available since
+  C++14) instead of relying on the implied-end overloads.
+- A returned pair that equals both ranges' ends can mean either "the
+  ranges are equal" or "one range ran out first" when only one end was
+  supplied — compare each returned iterator against its own range's end
+  to tell which.
+
+### Example
+
+This finds the longest prefix of a string that also appears, reversed,
+at its end (possibly overlapping):
+
 ```cpp
+#include <algorithm>
+#include <iostream>
+#include <string>
+
+std::string mirror_ends(const std::string& in)
+{
+    return std::string(in.begin(),
+                       std::mismatch(in.begin(), in.end(), in.rbegin()).first);
+}
+
+int main()
+{
+    std::cout << mirror_ends("abXYZba") << '\n'
+              << mirror_ends("abca") << '\n'
+              << mirror_ends("aba") << '\n';
+}
+```
+
+```text
+ab
+a
+aba
+```
+
+### Reference
+
+Full declarations:
+
+```cpp skip
 template< class InputIt1, class InputIt2 >
 std::pair<InputIt1, InputIt2>
     mismatch( InputIt1 first1, InputIt1 last1,
@@ -59,176 +146,18 @@ std::pair<ForwardIt1, ForwardIt2>
               BinaryPredicate p );  // (8) (since C++17)
 ```
 
-Returns the first mismatching pair of elements from two ranges: one defined by
-`[``first1``,``last1``)` and another defined by `[``first2``,``last2``)`. If
-`last2` is not provided (overloads (1-4)), it denotes `first2 + (last1 -
-first1)`.
-
-1,5) Elements are compared using `operator==`.
-
-3,7) Elements are compared using the given binary predicate `p`.
-
-2,4,6,8) Same as (1,3,5,7), but executed according to `policy`. These overloads
-   do not participate in overload resolution unless
-   `std::is_execution_policy_v<std::decay_t<ExecutionPolicy>>` is `true`. (until
-   C++20) `std::is_execution_policy_v<std::remove_cvref_t<ExecutionPolicy>>` is
-   `true`. (since C++20)
-
-### Parameters
-
-- **first1, last1** — the first range of the elements
-- **first2, last2** — the second range of the elements
-- **policy** — the execution policy to use. See execution policy for details.
-- **p** — binary predicate which returns ​`true` if the elements should be
-  treated as equal. The signature of the predicate function should be equivalent
-  to the following: `bool pred(const Type1 &a, const Type2 &b);` While the
-  signature does not need to have `const &`, the function must not modify the
-  objects passed to it and must be able to accept all values of type (possibly
-  const) `Type1` and `Type2` regardless of value category (thus, `Type1 &` is
-  not allowed, nor is `Type1` unless for `Type1` a move is equivalent to a
-  copy(since C++11)). The types Type1 and Type2 must be such that objects of
-  types InputIt1 and InputIt2 can be dereferenced and then implicitly converted
-  to Type1 and Type2 respectively. ​
-
-**Type requirements**
-
-**-`InputIt1` must meet the requirements of LegacyInputIterator.**
-
-**-`InputIt2` must meet the requirements of LegacyInputIterator.**
-
-**-`ForwardIt1` must meet the requirements of LegacyForwardIterator.**
-
-**-`ForwardIt2` must meet the requirements of LegacyForwardIterator.**
-
-**-`BinaryPredicate` must meet the requirements of BinaryPredicate.**
-
-### Return value
-
-`std::pair` with iterators to the first two non-equal elements.
-
-If no mismatches are found when the comparison reaches `last1`, the pair holds
-`last1` and the corresponding iterator from the second range. The behavior is
-undefined if the second range is shorter than the first range.
-*(until C++14)*
-
-If no mismatches are found when the comparison reaches `last1` or `last2`,
-whichever happens first, the pair holds the end iterator and the corresponding
-iterator from the other range.
-*(since C++14)*
-
-### Complexity
-
-1-4) At most `last1 - first1` applications of `operator==` or the predicate `p`
-
-5-8) At most `std::min(last1 - first1, last2 - first2)` applications of
-   `operator==` or the predicate `p`.
-
-### Exceptions
-
-The overloads with a template parameter named `ExecutionPolicy` report errors as
-follows:
-
-- If execution of a function invoked as part of the algorithm throws an
-  exception and `ExecutionPolicy` is one of the standard policies,
-  `std::terminate` is called. For any other `ExecutionPolicy`, the behavior is
-  implementation-defined.
-- If the algorithm fails to allocate memory, `std::bad_alloc` is thrown.
-
-### Possible implementation
-
-```cpp
-template<class InputIt1, class InputIt2>
-std::pair<InputIt1, InputIt2>
-    mismatch(InputIt1 first1, InputIt1 last1, InputIt2 first2)
-{
-    while (first1 != last1 && *first1 == *first2)
-        ++first1, ++first2;
-
-    return std::make_pair(first1, first2);
-}
-```
-
-```cpp
-template<class InputIt1, class InputIt2, class BinaryPredicate>
-std::pair<InputIt1, InputIt2>
-    mismatch(InputIt1 first1, InputIt1 last1, InputIt2 first2, BinaryPredicate p)
-{
-    while (first1 != last1 && p(*first1, *first2))
-        ++first1, ++first2;
-
-    return std::make_pair(first1, first2);
-}
-```
-
-```cpp
-template<class InputIt1, class InputIt2>
-std::pair<InputIt1, InputIt2>
-    mismatch(InputIt1 first1, InputIt1 last1, InputIt2 first2, InputIt2 last2)
-{
-    while (first1 != last1 && first2 != last2 && *first1 == *first2)
-        ++first1, ++first2;
-
-    return std::make_pair(first1, first2);
-}
-```
-
-```cpp
-template<class InputIt1, class InputIt2, class BinaryPredicate>
-std::pair<InputIt1, InputIt2>
-    mismatch(InputIt1 first1, InputIt1 last1,
-             InputIt2 first2, InputIt2 last2, BinaryPredicate p)
-{
-    while (first1 != last1 && first2 != last2 && p(*first1, *first2))
-        ++first1, ++first2;
-
-    return std::make_pair(first1, first2);
-}
-```
-
-### Example
-
-This program determines the longest substring that is simultaneously found at
-the very beginning of the given string and at the very end of it, in reverse
-order (possibly overlapping).
-
-```cpp
-#include <algorithm>
-#include <iostream>
-#include <string>
-
-std::string mirror_ends(const std::string& in)
-{
-    return std::string(in.begin(),
-                       std::mismatch(in.begin(), in.end(), in.rbegin()).first);
-}
-
-int main()
-{
-    std::cout << mirror_ends("abXYZba") << '\n'
-              << mirror_ends("abca") << '\n'
-              << mirror_ends("aba") << '\n';
-}
-```
-
-Output:
-
-```text
-ab
-a
-aba
-```
+`InputIt1`/`InputIt2` must meet LegacyInputIterator; the policy overloads
+require `ForwardIt1`/`ForwardIt2` (LegacyForwardIterator).
+`BinaryPredicate` must meet the BinaryPredicate requirements.
 
 ### See also
 
-- **equal** — determines if two sets of elements are the same (function
-  template)
-- **findfind_iffind_if_not (C++11)** — finds the first element satisfying
-  specific criteria (function template)
-- **lexicographical_compare** — returns `true` if one range is lexicographically
-  less than another (function template)
-- **search** — searches for a range of elements (function template)
-- **ranges::mismatch (C++20)** — finds the first position where two ranges
-  differ (niebloid)
+- **equal** — determines if two ranges are the same
+- **find**, **find_if** (C++11) — find the first element matching a
+  criterion
+- **lexicographical_compare** — orders one range against another
+- **search** — searches for a subrange
+- **ranges::mismatch** (C++20) — constrained version with projections
 
 ---
 *Source: https://en.cppreference.com/w/cpp/algorithm/mismatch*

@@ -1,6 +1,87 @@
 # std::multiset
 
+`std::multiset` is `std::set` with one difference: it allows multiple
+elements that compare equivalent to coexist. Elements stay sorted by
+`Compare`; search, insertion, and removal are all O(log n). Since
+elements double as keys, there is no `operator[]` here either — read
+elements with `find`/`count`, or `equal_range` to get every equivalent
+element at once.
+
+```cpp skip
+std::multiset<int> s;
+std::multiset<int> s{1, 1, 2, 3};
+
+s.insert(1);                       // always inserts, never overwrites
+s.emplace(4);                      // construct in place            (C++11)
+
+s.count(1);                        // number of equivalent elements
+s.find(1);                         // iterator to *one* matching element
+auto [lo, hi] = s.equal_range(1);  // iterator range over *all* of them
+
+s.erase(1);                        // erases every equivalent element
+```
+
+### Guarantees and costs
+
+- `find`, `count`, `insert`, `emplace`, `erase`, `equal_range`,
+  `lower_bound`, `upper_bound`: O(log n).
+- Elements that compare equivalent keep their relative insertion order
+  (since C++11).
+- `multiset` meets the requirements of Container,
+  AllocatorAwareContainer, AssociativeContainer, and
+  ReversibleContainer.
+- Equivalence, not `operator==`, decides duplicates: two elements `a`
+  and `b` are equivalent if `!comp(a, b) && !comp(b, a)`.
+- `iterator` is a constant iterator — elements can't be modified
+  through it, since mutating an element could break the container's
+  ordering invariant. (`iterator` and `const_iterator` may be the same
+  type; write overloads in terms of `const_iterator` to avoid an ODR
+  violation.)
+- `extract`/`merge` (C++17) move nodes out of or between containers
+  without copying elements.
+
+### Gotchas
+
+- No `operator[]` — there is no single value to return for a key that
+  may appear more than once.
+- `find` returns *one* matching iterator, not all of them; iterate
+  `equal_range` when duplicates matter.
+- `erase(value)` removes every equivalent element at once; pass an
+  iterator instead to remove just one of several duplicates.
+- `Compare` must impose a strict weak ordering; elements that don't
+  compare less either way are equivalent even if not `==`.
+
+### Example
+
 ```cpp
+#include <iostream>
+#include <set>
+
+int main()
+{
+    std::multiset<int> s{3, 1, 2, 1};
+
+    auto [lo, hi] = s.equal_range(1);
+    for (auto it = lo; it != hi; ++it)
+    {
+        if (it != lo)
+            std::cout << ' ';
+        std::cout << *it;
+    }
+    std::cout << '\n';
+
+    std::cout << "count(1) = " << s.count(1) << '\n';
+}
+```
+
+```text
+1 1
+count(1) = 2
+```
+
+### Reference
+
+```cpp skip
 template<
     class Key,
     class Compare = std::less<Key>,
@@ -14,151 +95,50 @@ namespace pmr {
 }  // (2) (since C++17)
 ```
 
-`std::multiset` is an associative container that contains a sorted set of
-objects of type Key. Unlike set, multiple keys with equivalent values are
-allowed. Sorting is done using the key comparison function Compare. Search,
-insertion, and removal operations have logarithmic complexity.
+`Key` must be CopyConstructible (a defect report closed a gap in the
+original wording that omitted this). `value_type` is `Key`;
+`node_type` (C++17) is a specialization of the node handle type shared
+with `set`.
 
-Everywhere the standard library uses the Compare requirements, equivalence is
-determined by using the equivalence relation as described on Compare. In
-imprecise terms, two objects `a` and `b` are considered equivalent if neither
-compares less than the other: `!comp(a, b) && !comp(b, a)`.
+**Member functions**, grouped as upstream groups them:
 
-The order of the elements that compare equivalent is the order of insertion and
-does not change.
-*(since C++11)*
+- (constructor), (destructor), `operator=`, `get_allocator`
 
-`std::multiset` meets the requirements of Container, AllocatorAwareContainer,
-AssociativeContainer and ReversibleContainer.
+  Iterators
+  - `begin`/`cbegin`, `end`/`cend` (C++11)
+  - `rbegin`/`crbegin`, `rend`/`crend` (C++11)
 
-### Template parameters
+  Capacity
+  - `empty`, `size`, `max_size`
 
-### Member types
+  Modifiers
+  - `clear`
+  - `insert` — elements or nodes (C++17)
+  - `insert_range` (C++23)
+  - `emplace` (C++11), `emplace_hint` (C++11)
+  - `erase`
+  - `swap`
+  - `extract` (C++17), `merge` (C++17)
 
-- **`key_type`** — `Key`
-- **`value_type`** — `Key`
-- **`size_type`** — Unsigned integer type (usually `std::size_t`)
-- **`difference_type`** — Signed integer type (usually `std::ptrdiff_t`)
-- **`key_compare`** — `Compare`
-- **`value_compare`** — `Compare`
-- **`allocator_type`** — `Allocator`
-- **`reference`** — `value_type&`
-- **`const_reference`** — const value_type&
-- **`pointer`** — `Allocator::pointer` (until C++11)
-  std::allocator_traits<Allocator>::pointer (since C++11)
-- **`Allocator::pointer`** — (until C++11)
-- **std::allocator_traits<Allocator>::pointer** — (since C++11)
-- **`const_pointer`** — `Allocator::const_pointer` (until C++11)
-  std::allocator_traits<Allocator>::const_pointer (since C++11)
-- **`Allocator::const_pointer`** — (until C++11)
-- **std::allocator_traits<Allocator>::const_pointer** — (since C++11)
-- **`iterator`** — Constant LegacyBidirectionalIterator to `value_type`
-- **`const_iterator`** — LegacyBidirectionalIterator to const value_type
-- **`reverse_iterator`** — std::reverse_iterator<iterator>
-- **`const_reverse_iterator`** — std::reverse_iterator<const_iterator>
-- **`node_type` (since C++17)** — a specialization of node handle representing a
-  container node
+  Lookup
+  - `count`, `find`, `contains` (C++20)
+  - `equal_range`, `lower_bound`, `upper_bound`
 
-### Member functions
+  Observers
+  - `key_comp`, `value_comp`
 
-- **(constructor)** — constructs the `multiset` (public member function)
-- **(destructor)** — destructs the `multiset` (public member function)
-- **operator=** — assigns values to the container (public member function)
-- **get_allocator** — returns the associated allocator (public member function)
+Non-member: lexicographic `operator==`/`<=>` (C++20 replaces the
+individual comparison operators with `<=>`), `std::swap`,
+`std::erase_if` (C++20; unlike sequence containers, `multiset` has no
+free-function `erase`). A `pmr::multiset` alias and deduction guides
+(C++17) are also provided.
 
-**Iterators**
+### See also
 
-- **begincbegin (C++11)** — returns an iterator to the beginning (public member
-  function)
-- **endcend (C++11)** — returns an iterator to the end (public member function)
-- **rbegincrbegin (C++11)** — returns a reverse iterator to the beginning
-  (public member function)
-- **rendcrend (C++11)** — returns a reverse iterator to the end (public member
-  function)
-
-**Capacity**
-
-- **empty** — checks whether the container is empty (public member function)
-- **size** — returns the number of elements (public member function)
-- **max_size** — returns the maximum possible number of elements (public member
-  function)
-
-**Modifiers**
-
-- **clear** — clears the contents (public member function)
-- **insert** — inserts elements or nodes(since C++17) (public member function)
-- **insert_range (C++23)** — inserts a range of elements (public member
-  function)
-- **emplace (C++11)** — constructs element in-place (public member function)
-- **emplace_hint (C++11)** — constructs elements in-place using a hint (public
-  member function)
-- **erase** — erases elements (public member function)
-- **swap** — swaps the contents (public member function)
-- **extract (C++17)** — extracts nodes from the container (public member
-  function)
-- **merge (C++17)** — splices nodes from another container (public member
-  function)
-
-**Lookup**
-
-- **count** — returns the number of elements matching specific key (public
-  member function)
-- **find** — finds element with specific key (public member function)
-- **contains (C++20)** — checks if the container contains element with specific
-  key (public member function)
-- **equal_range** — returns range of elements matching a specific key (public
-  member function)
-- **lower_bound** — returns an iterator to the first element *not less* than the
-  given key (public member function)
-- **upper_bound** — returns an iterator to the first element *greater* than the
-  given key (public member function)
-
-**Observers**
-
-- **key_comp** — returns the function that compares keys (public member
-  function)
-- **value_comp** — returns the function that compares keys in objects of type
-  `value_type` (public member function)
-
-### Non-member functions
-
-- **operator==operator!=operator<operator<=operator>operator>=operator<=>
-  (removed in C++20)(removed in C++20)(removed in C++20)(removed in
-  C++20)(removed in C++20)(C++20)** — lexicographically compares the values of
-  two `multisets` (function template)
-- **std::swap(std::multiset)** — specializes the `std::swap` algorithm (function
-  template)
-- **erase_if(std::multiset) (C++20)** — erases all elements satisfying specific
-  criteria (function template)
-
-### Deduction guides
-*(since C++17)*
-
-### Notes
-
-The member types `iterator` and `const_iterator` may be aliases to the same
-type. This means defining a pair of function overloads using the two types as
-parameter types may violate the One Definition Rule. Since `iterator` is
-convertible to `const_iterator`, a single function with a `const_iterator` as
-parameter type will work instead.
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_containers_ranges` | 202202L | (C++23) | Ranges construction and
-      insertion for containers
-
-### Example
-
-### Defect Reports
-
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
-
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 103 | C++98 | iterator allows modification of keys | iterator made
-      constant
-  LWG 230 | C++98 | `Key` was not required to be CopyConstructible (a key of
-      type `Key` might not be able to be constructed) | `Key` is also required
-      to be CopyConstructible
+- **set** — same sorted-element container, but unique elements
+- **multimap** — same duplicate-key semantics, with a mapped value
+- **unordered_multiset** — same duplicate-key semantics, hashed
+  instead of sorted
 
 ---
 *Source: https://en.cppreference.com/w/cpp/container/multiset*

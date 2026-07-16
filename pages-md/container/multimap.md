@@ -1,6 +1,84 @@
 # std::multimap
 
+`std::multimap` is `std::map` with one difference: it allows multiple
+entries to share the same key. That difference removes `operator[]` —
+there is no single value to return for a key that may have several —
+so lookups go through `find`, `count`, or, for all the entries at
+once, `equal_range`. Keys stay sorted by `Compare`; search, insertion,
+and removal are all O(log n).
+
+```cpp skip
+std::multimap<std::string, int> m;
+std::multimap<std::string, int> m{{"a", 1}, {"a", 2}, {"b", 3}};
+
+m.insert({"a", 4});                  // always inserts, never overwrites
+m.emplace("a", 5);                   // construct in place              (C++11)
+
+m.count("a");                        // number of entries with key "a"
+m.find("a");                         // iterator to *one* matching entry
+auto [lo, hi] = m.equal_range("a");  // iterator range over *all* of them
+for (auto it = lo; it != hi; ++it)
+    /* it->second */;
+
+m.erase("a");                        // erases every entry with key "a"
+```
+
+### Guarantees and costs
+
+- `find`, `count`, `insert`, `emplace`, `erase`, `equal_range`,
+  `lower_bound`, `upper_bound`: O(log n).
+- Iterators traverse keys in non-descending order (per `Compare`).
+  Entries whose keys compare equivalent keep their relative insertion
+  order (since C++11).
+- `multimap` meets the requirements of Container,
+  AllocatorAwareContainer, AssociativeContainer, and
+  ReversibleContainer.
+- `value_type` is `std::pair<const Key, T>`; equivalence between keys
+  is defined by `!comp(a, b) && !comp(b, a)`, not `operator==`.
+- `extract`/`merge` (C++17) move nodes out of or between containers
+  without copying keys or values.
+
+### Gotchas
+
+- No `operator[]` — a duplicate-key container has no single value to
+  hand back for a key. Use `insert`/`emplace` to add and
+  `find`/`equal_range` to read.
+- `find` returns *one* matching iterator, not all of them; iterate
+  `equal_range` when a key may have more than one entry.
+- `erase(key)` removes every entry with that key at once — pass an
+  iterator instead if only one of several duplicates should go.
+- `Compare` must impose a strict weak ordering; keys that don't
+  compare less either way are treated as equivalent, not necessarily
+  equal by `==`.
+
+### Example
+
 ```cpp
+#include <iostream>
+#include <map>
+#include <string>
+
+int main()
+{
+    std::multimap<std::string, int> m;
+    m.insert({"a", 1});
+    m.insert({"a", 2});
+    m.insert({"b", 3});
+
+    auto [lo, hi] = m.equal_range("a");
+    for (auto it = lo; it != hi; ++it)
+        std::cout << it->first << " => " << it->second << '\n';
+}
+```
+
+```text
+a => 1
+a => 2
+```
+
+### Reference
+
+```cpp skip
 template<
     class Key,
     class T,
@@ -17,157 +95,50 @@ namespace pmr {
 }  // (2) (since C++17)
 ```
 
-`std::multimap` is an associative container that contains a sorted list of
-key-value pairs, while permitting multiple entries with the same key. Sorting is
-done according to the comparison function `Compare`, applied to the keys.
-Search, insertion, and removal operations have logarithmic complexity.
+`Key` must be CopyConstructible (a defect report closed a gap in the
+original wording that omitted this). `node_type` (C++17) is a
+specialization of the node handle type shared with `map`.
 
-Iterators of `std::multimap` iterate in non-descending order of keys, where
-non-descending is defined by the comparison that was used for construction. That
-is, given
+**Member functions**, grouped as upstream groups them:
 
-- `m`, a `std::multimap`
-- `it_l` and `it_r`, dereferenceable iterators to `m`, with `it_l < it_r`.
+- (constructor), (destructor), `operator=`, `get_allocator`
 
-`m.value_comp()(*it_r, *it_l) == false` (least to greatest if using the default
-comparison).
+  Iterators
+  - `begin`/`cbegin`, `end`/`cend` (C++11)
+  - `rbegin`/`crbegin`, `rend`/`crend` (C++11)
 
-The order of the key-value pairs whose keys compare equivalent is the order of
-insertion and does not change.
-*(since C++11)*
+  Capacity
+  - `empty`, `size`, `max_size`
 
-Everywhere the standard library uses the Compare requirements, equivalence is
-determined by using the equivalence relation as described on Compare. In
-imprecise terms, two objects `a` and `b` are considered equivalent if neither
-compares less than the other: `!comp(a, b) && !comp(b, a)`.
+  Modifiers
+  - `clear`
+  - `insert` — elements or nodes (C++17)
+  - `insert_range` (C++23)
+  - `emplace` (C++11), `emplace_hint` (C++11)
+  - `erase`
+  - `swap`
+  - `extract` (C++17), `merge` (C++17)
 
-`std::multimap` meets the requirements of Container, AllocatorAwareContainer,
-AssociativeContainer and ReversibleContainer.
+  Lookup
+  - `count`, `find`, `contains` (C++20)
+  - `equal_range`, `lower_bound`, `upper_bound`
 
-### Template parameters
+  Observers
+  - `key_comp`, `value_comp`
 
-### Member types
+Non-member: lexicographic `operator==`/`<=>` (C++20 replaces the
+individual comparison operators with `<=>`), `std::swap`,
+`std::erase_if` (C++20; unlike sequence containers, `multimap` has no
+free-function `erase`). A `pmr::multimap` alias and deduction guides
+(C++17) are also provided.
 
-- **`key_type`** — `Key`
-- **`mapped_type`** — `T`
-- **`value_type`** — std::pair<const Key, T>
-- **`size_type`** — Unsigned integer type (usually `std::size_t`)
-- **`difference_type`** — Signed integer type (usually `std::ptrdiff_t`)
-- **`key_compare`** — `Compare`
-- **`allocator_type`** — `Allocator`
-- **`reference`** — `value_type&`
-- **`const_reference`** — const value_type&
-- **`pointer`** — `Allocator::pointer` (until C++11)
-  std::allocator_traits<Allocator>::pointer (since C++11)
-- **`Allocator::pointer`** — (until C++11)
-- **std::allocator_traits<Allocator>::pointer** — (since C++11)
-- **`const_pointer`** — `Allocator::const_pointer` (until C++11)
-  std::allocator_traits<Allocator>::const_pointer (since C++11)
-- **`Allocator::const_pointer`** — (until C++11)
-- **std::allocator_traits<Allocator>::const_pointer** — (since C++11)
-- **`iterator`** — LegacyBidirectionalIterator to `value_type`
-- **`const_iterator`** — LegacyBidirectionalIterator to const value_type
-- **`reverse_iterator`** — std::reverse_iterator<iterator>
-- **`const_reverse_iterator`** — std::reverse_iterator<const_iterator>
-- **`node_type` (since C++17)** — a specialization of node handle representing a
-  container node
+### See also
 
-### Member classes
-
-- **value_compare** — compares objects of type `value_type` (class)
-
-### Member functions
-
-- **(constructor)** — constructs the `multimap` (public member function)
-- **(destructor)** — destructs the `multimap` (public member function)
-- **operator=** — assigns values to the container (public member function)
-- **get_allocator** — returns the associated allocator (public member function)
-
-**Iterators**
-
-- **begincbegin (C++11)** — returns an iterator to the beginning (public member
-  function)
-- **endcend (C++11)** — returns an iterator to the end (public member function)
-- **rbegincrbegin (C++11)** — returns a reverse iterator to the beginning
-  (public member function)
-- **rendcrend (C++11)** — returns a reverse iterator to the end (public member
-  function)
-
-**Capacity**
-
-- **empty** — checks whether the container is empty (public member function)
-- **size** — returns the number of elements (public member function)
-- **max_size** — returns the maximum possible number of elements (public member
-  function)
-
-**Modifiers**
-
-- **clear** — clears the contents (public member function)
-- **insert** — inserts elements or nodes(since C++17) (public member function)
-- **insert_range (C++23)** — inserts a range of elements (public member
-  function)
-- **emplace (C++11)** — constructs element in-place (public member function)
-- **emplace_hint (C++11)** — constructs elements in-place using a hint (public
-  member function)
-- **erase** — erases elements (public member function)
-- **swap** — swaps the contents (public member function)
-- **extract (C++17)** — extracts nodes from the container (public member
-  function)
-- **merge (C++17)** — splices nodes from another container (public member
-  function)
-
-**Lookup**
-
-- **count** — returns the number of elements matching specific key (public
-  member function)
-- **find** — finds element with specific key (public member function)
-- **contains (C++20)** — checks if the container contains element with specific
-  key (public member function)
-- **equal_range** — returns range of elements matching a specific key (public
-  member function)
-- **lower_bound** — returns an iterator to the first element *not less* than the
-  given key (public member function)
-- **upper_bound** — returns an iterator to the first element *greater* than the
-  given key (public member function)
-
-**Observers**
-
-- **key_comp** — returns the function that compares keys (public member
-  function)
-- **value_comp** — returns the function that compares keys in objects of type
-  `value_type` (public member function)
-
-### Non-member functions
-
-- **operator==operator!=operator<operator<=operator>operator>=operator<=>
-  (removed in C++20)(removed in C++20)(removed in C++20)(removed in
-  C++20)(removed in C++20)(C++20)** — lexicographically compares the values of
-  two `multimaps` (function template)
-- **std::swap(std::multimap)** — specializes the `std::swap` algorithm (function
-  template)
-- **erase_if(std::multimap) (C++20)** — erases all elements satisfying specific
-  criteria (function template)
-
-### Deduction guides
-*(since C++17)*
-
-### Notes
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_containers_ranges` | 202202L | (C++23) | Ranges construction and
-      insertion for containers
-
-### Example
-
-### Defect reports
-
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
-
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 230 | C++98 | `Key` was not required to be CopyConstructible (a key of
-      type `Key` might not be able to be constructed) | `Key` is also required
-      to be CopyConstructible
+- **map** — same key-value container, but unique keys and `operator[]`
+- **multiset** — same duplicate-key semantics, keys only, no mapped
+  value
+- **unordered_multimap** — same duplicate-key semantics, hashed
+  instead of sorted
 
 ---
 *Source: https://en.cppreference.com/w/cpp/container/multimap*

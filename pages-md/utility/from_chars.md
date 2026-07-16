@@ -1,9 +1,106 @@
 # std::from_chars
 
-```cpp
+Parses a character sequence into a number, in place. Unlike
+`std::strtol`/`std::sscanf`/`std::stoi`, `std::from_chars` is
+locale-independent, non-allocating, and non-throwing — it exists to
+be the fastest possible conversion for high-throughput text formats
+like JSON or XML, at the cost of the small, strict grammar described
+below. Success or failure comes back as a `std::errc` in the returned
+`std::from_chars_result`, not an exception.
+
+```cpp skip
+std::from_chars(first, last, int_value);           // integer, base 10
+std::from_chars(first, last, int_value, base);      // integer, base 2..36
+std::from_chars(first, last, double_value);         // float, chars_format::general
+std::from_chars(first, last, double_value, fmt);    // float, explicit chars_format
+```
+
+Integer overloads are `constexpr` since C++23.
+
+### What you provide
+
+- **first, last** — `const char*` range to parse; need not be
+  NUL-terminated.
+- **value** — an out-parameter (integer or floating-point reference)
+  where the parsed value is stored on success; left unmodified on
+  failure.
+- **base** — integer base, 2 to 36 inclusive (default 10). `"0x"`/`"0X"`
+  prefixes are never recognized, even for base 16.
+- **fmt** — a `std::chars_format` bitmask (`general`, `fixed`,
+  `scientific`, `hex`) controlling which floating-point grammar to
+  accept.
+
+### Guarantees and costs
+
+- Throws nothing; failure is reported through `ec`, never an
+  exception.
+- Locale-independent: parsing always follows the default ("C") locale
+  grammar, regardless of the program's current locale.
+- Integers follow `std::strtol`'s grammar except: no `0x`/`0X` prefix
+  for base 16, only a minus sign is recognized (and only for signed
+  types), and leading whitespace is not skipped.
+- Floats follow `std::strtod`'s grammar (adjusted per `fmt`), also
+  without a plus sign or leading-whitespace skipping; the result is
+  the nearest representable value, rounding ties per
+  `std::round_to_nearest`.
+- `from_chars` is guaranteed to recover exactly what `to_chars` wrote
+  only when both come from the same standard library implementation.
+
+### Gotchas
+
+- Always check `ec` — a failed call leaves `value` untouched, so
+  reading it without checking `ec` first silently uses stale data.
+- No match at all (e.g. non-numeric input) gives
+  `std::errc::invalid_argument` with `ptr == first`.
+- A match that doesn't fit the target type gives
+  `std::errc::result_out_of_range`, with `ptr` past the matched
+  characters but `value` still unmodified.
+- Leading whitespace is **not** skipped — `" 42"` fails to parse where
+  `strtol`/`sscanf` would succeed. A lone sign with no digits after it
+  also counts as no match.
+
+### Example
+
+```cpp c++17
+#include <charconv>
+#include <iomanip>
+#include <iostream>
+#include <string_view>
+#include <system_error>
+
+int main()
+{
+    for (std::string_view str : {"1234", "15 foo", "bar", " 42"})
+    {
+        int result{};
+        auto [ptr, ec] =
+            std::from_chars(str.data(), str.data() + str.size(), result);
+
+        std::cout << std::quoted(str) << ": ";
+        if (ec == std::errc())
+            std::cout << "value " << result
+                       << ", remainder " << std::quoted(ptr) << '\n';
+        else if (ec == std::errc::invalid_argument)
+            std::cout << "not a number\n";
+        else
+            std::cout << "out of range\n";
+    }
+}
+```
+
+```text
+"1234": value 1234, remainder ""
+"15 foo": value 15, remainder " foo"
+"bar": not a number
+" 42": not a number
+```
+
+### Reference
+
+```cpp skip
 std::from_chars_result
     from_chars( const char* first, const char* last,
-                /* integer-type */& value, int base = 10 );  // (1) (since C++17) (constexpr since C++23)
+                /* integer-type */& value, int base = 10 );  // (since C++17)
 std::from_chars_result
     from_chars( const char* first, const char* last, float& value,
                 std::chars_format fmt = std::chars_format::general );
@@ -12,192 +109,30 @@ std::from_chars_result
                 std::chars_format fmt = std::chars_format::general );
 std::from_chars_result
     from_chars( const char* first, const char* last, long double& value,
-                std::chars_format fmt = std::chars_format::general );  // (since C++17) (until C++23)
-std::from_chars_result
-    from_chars( const char* first, const char* last,
-                /* floating-point-type */& value,
-                std::chars_format fmt = std::chars_format::general );  // (since C++23)
+                std::chars_format fmt = std::chars_format::general );
 ```
 
-Analyzes the character sequence `[``first``,``last``)` for a pattern described
-below. If no characters match the pattern or if the value obtained by parsing
-the matched characters is not representable in the type of `value`, `value` is
-unmodified, otherwise the characters matching the pattern are interpreted as a
-text representation of an arithmetic value, which is stored in `value`.
+Formally: on success, `ptr` is the first non-matching character (or
+`last`, if the whole range matched) and `ec` is value-initialized. On
+no match, `ptr == first` and `ec == std::errc::invalid_argument`. On a
+match that overflows the target type, `ec ==
+std::errc::result_out_of_range`. `from_chars` provides overloads for
+all cv-unqualified signed and unsigned integer types plus `char`, and
+for all cv-unqualified floating-point types.
 
-1) Integer parsers: Expects the pattern identical to the one used by
-`std::strtol` in the default ("C") locale and the given non-zero numeric base,
-except that
-
-- `"0x"` or `"0X"` prefixes are not recognized if `base` is 16
-- only the minus sign is recognized (not the plus sign), and only for signed
-  integer types of `value`
-- leading whitespace is not ignored.
-
-The library provides overloads for all cv-unqualified(since C++23) signed and
-unsigned integer types and char as the referenced type of the parameter `value`.
-2) Floating-point parsers: Expects the pattern identical to the one used by
-`std::strtod` in the default ("C") locale, except that
-
-- the plus sign is not recognized outside of the exponent (only the minus sign
-  is permitted at the beginning)
-- if `fmt` has `std::chars_format::scientific` set but not
-  `std::chars_format::fixed`, the exponent part is required (otherwise it is
-  optional)
-- if `fmt` has `std::chars_format::fixed` set but not
-  `std::chars_format::scientific`, the optional exponent is not permitted
-- if `fmt` is `std::chars_format::hex`, the prefix `"0x"` or `"0X"` is not
-  permitted (the string `"0x123"` parses as the value `"0"` with unparsed
-  remainder `"x123"`)
-- leading whitespace is not ignored.
-
-In any case, the resulting value is one of at most two floating-point values
-   closest to the value of the string matching the pattern, after rounding
-   according to `std::round_to_nearest`.
-
-The library provides overloads for all cv-unqualified floating-point types as
-the referenced type of the parameter `value`.
-*(since C++23)*
-
-### Parameters
-
-- **first, last** — valid character range to parse
-- **value** — the out-parameter where the parsed value is stored if successful
-- **base** — integer base to use: a value between 2 and 36 (inclusive).
-- **fmt** — floating-point formatting to use, a bitmask of type
-  `std::chars_format`
-
-### Return value
-
-On success, returns a value of type `std::from_chars_result` such that `ptr`
-points at the first character not matching the pattern, or has the value equal
-to `last` if all characters match and `ec` is value-initialized.
-
-If there is no pattern match, returns a value of type `std::from_chars_result`
-such that `ptr` equals `first` and `ec` equals `std::errc::invalid_argument`.
-`value` is unmodified.
-
-If the pattern was matched, but the parsed value is not in the range
-representable by the type of `value`, returns value of type
-`std::from_chars_result` such that `ec` equals `std::errc::result_out_of_range`
-and `ptr` points at the first character not matching the pattern. `value` is
-unmodified.
-
-### Exceptions
-
-Throws nothing.
-
-### Notes
-
-Unlike other parsing functions in C++ and C libraries, `std::from_chars` is
-locale-independent, non-allocating, and non-throwing. Only a small subset of
-parsing policies used by other libraries (such as `std::sscanf`) is provided.
-This is intended to allow the fastest possible implementation that is useful in
-common high-throughput contexts such as text-based interchange (JSON or XML).
-
-The guarantee that `std::from_chars` can recover every floating-point value
-formatted by `std::to_chars` exactly is only provided if both functions are from
-the same implementation.
-
-A pattern consisting of a sign with no digits following it is treated as pattern
-that did not match anything.
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_to_chars` | 201611L | (C++17) | Elementary string conversions
-      (`std::from_chars`, `std::to_chars`)
-  202306L | (C++26) | Testing for success or failure of `<charconv>` functions
-  `__cpp_lib_constexpr_charconv` | 202207L | (C++23) | Add constexpr modifiers
-      to `std::from_chars` and `std::to_chars` overloads for integral types
-
-### Example
-
-```cpp
-#include <cassert>
-#include <charconv>
-#include <iomanip>
-#include <iostream>
-#include <optional>
-#include <string_view>
-#include <system_error>
-
-int main()
-{
-    for (std::string_view const str : {"1234", "15 foo", "bar", " 42", "5000000000"})
-    {
-        std::cout << "String: " << std::quoted(str) << ". ";
-        int result{};
-        auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), result);
-
-        if (ec == std::errc())
-            std::cout << "Result: " << result << ", ptr -> " << std::quoted(ptr) << '\n';
-        else if (ec == std::errc::invalid_argument)
-            std::cout << "This is not a number.\n";
-        else if (ec == std::errc::result_out_of_range)
-            std::cout << "This number is larger than an int.\n";
-    }
-
-    // C++23's constexpr from_char demo / C++26's operator bool() demo:
-    auto to_int = [](std::string_view s) -> std::optional<int>
-    {
-        int value{};
-#if __cpp_lib_to_chars >= 202306L
-        if (std::from_chars(s.data(), s.data() + s.size(), value))
-#else
-        if (std::from_chars(s.data(), s.data() + s.size(), value).ec == std::errc{})
-#endif
-            return value;
-        else
-            return std::nullopt;
-    };
-
-    assert(to_int("42") == 42);
-    assert(to_int("foo") == std::nullopt);
-#if __cpp_lib_constexpr_charconv and __cpp_lib_optional >= 202106
-    static_assert(to_int("42") == 42);
-    static_assert(to_int("foo") == std::nullopt);
-#endif
-}
-```
-
-Output:
-
-```text
-String: "1234". Result: 1234, ptr -> ""
-String: "15 foo". Result: 15, ptr -> " foo"
-String: "bar". This is not a number.
-String: " 42". This is not a number.
-String: "5000000000". This number is larger than an int.
-```
-
-### Defect reports
-
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
-
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 2955 | C++17 | this function was in `<utility>` and used `std::error_code`
-      | moved to `<charconv>` and uses `std::errc`
-  LWG 3373 | C++17 | `std::from_chars_result` might have additional members |
-      additional members are prohibited
+Feature-test macros: `__cpp_lib_to_chars` — `201611L` (C++17, the
+`from_chars`/`to_chars` family), `202306L` (C++26, `operator bool()` on
+the result for success/failure testing); `__cpp_lib_constexpr_charconv`
+— `202207L` (C++23, `constexpr` for the integer overloads).
 
 ### See also
 
-- **from_chars_result (C++17)** — the return type of **`std::from_chars`**
-  (class)
-- **to_chars (C++17)** — converts an integer or floating-point value to a
-  character sequence (function)
-- **stoistolstoll (C++11)(C++11)(C++11)** — converts a string to a signed
-  integer (function)
-- **stofstodstold (C++11)(C++11)(C++11)** — converts a string to a floating
-  point value (function)
-- **strtolstrtoll (C++11)** — converts a byte string to an integer value
-  (function)
-- **strtofstrtodstrtold** — converts a byte string to a floating-point value
-  (function)
-- **scanffscanfsscanf** — reads formatted input from `stdin`, a file stream or a
-  buffer (function)
-- **operator>>** — extracts formatted data (public member function of
-  `std::basic_istream<CharT,Traits>`)
+- **from_chars_result (C++17)** — the return type of `std::from_chars`
+- **to_chars (C++17)** — the inverse: number to character sequence
+- **to_string (C++11)** — simpler, locale-sensitive numeric-to-string conversion
+- **stoi, stol, stoll (C++11)** — string to signed integer, throws on failure
+- **stof, stod, stold (C++11)** — string to floating point, throws on failure
+- **operator>>** — extracts formatted data (of `std::basic_istream`)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/utility/from_chars*

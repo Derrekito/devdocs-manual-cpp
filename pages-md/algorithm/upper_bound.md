@@ -1,127 +1,51 @@
 # std::upper_bound
 
-```cpp
-template< class ForwardIt, class T >
-ForwardIt upper_bound( ForwardIt first, ForwardIt last, const T& value );  // (until C++20)
-template< class ForwardIt, class T >
-constexpr ForwardIt upper_bound( ForwardIt first, ForwardIt last,
-                                 const T& value );  // (since C++20)
-template< class ForwardIt, class T, class Compare >
-ForwardIt upper_bound( ForwardIt first, ForwardIt last,
-                       const T& value, Compare comp );  // (until C++20)
-template< class ForwardIt, class T, class Compare >
-constexpr ForwardIt upper_bound( ForwardIt first, ForwardIt last,
-                                 const T& value, Compare comp );  // (since C++20)
+Finds the first element in a partitioned (typically sorted) range that
+compares strictly greater than `value` — the "just past all matches" edge.
+Pair it with `std::lower_bound` for the "at or after" edge, or use
+`std::equal_range` to get both at once.
+
+```cpp skip
+std::upper_bound(first, last, value);        // uses operator<
+std::upper_bound(first, last, value, comp);   // your ordering
 ```
 
-Returns an iterator pointing to the first element in the range
-`[``first``,``last``)` such that `value < element` (or `comp(value, element)`)
-is `true` (i.e. that is strictly greater than `value`), or `last` if no such
-element is found.
+Since C++20 both overloads are `constexpr`.
 
-The range `[``first``,``last``)` must be partitioned with respect to the
-expression `!(value < element)` or `!comp(value, element)`, i.e., all elements
-for which the expression is `true` must precede all elements for which the
-expression is `false`. A fully-sorted range meets this criterion.
+### What you provide
 
-The first version uses operator< to compare the elements, the second version
-uses the given comparison function `comp`.
+- **first, last** — forward iterators over the range to search.
+- **value** — the value to compare elements against.
+- **comp** — a callable answering *does `a` belong before `b`?*, taking two
+  arguments. It need not be a full ordering (`Compare`) — heterogeneous
+  comparisons against `value` are fine as long as the range stays
+  partitioned with respect to it.
 
-### Parameters
+### Guarantees and costs
 
-- **first, last** — iterators defining the partially-ordered range to examine
-- **value** — value to compare the elements to
-- **comp** — binary predicate which returns ​`true` if the first argument is
-  *less* than (i.e. is ordered before) the second. The signature of the
-  predicate function should be equivalent to the following: `bool pred(const
-  Type1 &a, const Type2 &b);` While the signature does not need to have `const
-  &`, the function must not modify the objects passed to it and must be able to
-  accept all values of type (possibly const) `Type1` and `Type2` regardless of
-  value category (thus, `Type1 &` is not allowed, nor is `Type1` unless for
-  `Type1` a move is equivalent to a copy(since C++11)). The type Type1 must be
-  such that an object of type T can be implicitly converted to Type1. The type
-  Type2 must be such that an object of type ForwardIt can be dereferenced and
-  then implicitly converted to Type2. ​
+- The range must be partitioned with respect to `!(value < element)` (or
+  `!comp(value, element)`) — all elements where that expression is `true`
+  must precede all where it's `false`. A fully-sorted range always
+  satisfies this.
+- Returns the first element for which `value < element` (or
+  `comp(value, element)`) holds, or `last` if none does.
+- At most `log2(last - first) + O(1)` comparisons — but for iterators that
+  aren't random-access, the number of iterator *increments* is still
+  linear, so the log-N comparison count doesn't buy log-N wall-clock time.
+  `std::map`, `std::multimap`, `std::set`, and `std::multiset` provide
+  their own `upper_bound` member — prefer it over this free function on
+  those containers.
+- Defect reports corrected the original wording: LWG 270 relaxed the
+  ordering requirement to the partitioning above (permitting heterogeneous
+  comparisons); LWG 384 corrected the comparison-count bound to
+  `log2(...) + O(1)`; LWG 577 confirmed that returning `last` is allowed.
 
-**Type requirements**
+### Gotchas
 
-**-`ForwardIt` must meet the requirements of LegacyForwardIterator.**
-
-**-`Compare` must meet the requirements of BinaryPredicate. It is not required to satisfy Compare.**
-
-### Return value
-
-Iterator pointing to the first element in the range `[``first``,``last``)` such
-that `value < element` (or `comp(value, element)`) is `true`, or `last` if no
-such element is found.
-
-### Complexity
-
-The number of comparisons performed is logarithmic in the distance between
-`first` and `last` (at most log2(last - first) + O(1) comparisons).
-
-However, for non-LegacyRandomAccessIterators, the number of iterator increments
-is linear. Notably, `std::map`, `std::multimap`, `std::set`, and `std::multiset`
-iterators are not random access, and so their member `upper_bound` functions
-should be preferred.
-
-### Possible implementation
-
-See also the implementations in libstdc++ and libc++.
-
-```cpp
-template<class ForwardIt, class T>
-ForwardIt upper_bound(ForwardIt first, ForwardIt last, const T& value)
-{
-    ForwardIt it;
-    typename std::iterator_traits<ForwardIt>::difference_type count, step;
-    count = std::distance(first, last);
-
-    while (count > 0)
-    {
-        it = first;
-        step = count / 2;
-        std::advance(it, step);
-
-        if (!(value < *it))
-        {
-            first = ++it;
-            count -= step + 1;
-        }
-        else
-            count = step;
-    }
-
-    return first;
-}
-```
-
-```cpp
-template<class ForwardIt, class T, class Compare>
-ForwardIt upper_bound(ForwardIt first, ForwardIt last, const T& value, Compare comp)
-{
-    ForwardIt it;
-    typename std::iterator_traits<ForwardIt>::difference_type count, step;
-    count = std::distance(first, last);
-
-    while (count > 0)
-    {
-        it = first;
-        step = count / 2;
-        std::advance(it, step);
-
-        if (!comp(value, *it))
-        {
-            first = ++it;
-            count -= step + 1;
-        }
-        else
-            count = step;
-    }
-
-    return first;
-}
-```
+- An unsorted (or unpartitioned) range doesn't throw or assert — it just
+  gives you a wrong iterator silently.
+- "Greater than" is strict: an element equal to `value` is *not* included —
+  `upper_bound` lands just past the last match, not on it.
 
 ### Example
 
@@ -136,79 +60,50 @@ int main()
 {
     const std::vector<int> data{1, 2, 4, 5, 5, 6};
 
-    for (int i = 0; i < 7; ++i)
-    {
-        // Search first element that is greater than i
-        auto upper = std::upper_bound(data.begin(), data.end(), i);
+    auto upper = std::upper_bound(data.begin(), data.end(), 4);
+    std::cout << "first > 4: " << *upper
+               << " at index " << std::distance(data.begin(), upper) << '\n';
 
-        std::cout << i << " < ";
-        upper != data.end()
-            ? std::cout << *upper << " at index " << std::distance(data.begin(), upper)
-            : std::cout << "not found";
-        std::cout << '\n';
-    }
-
-    std::vector<PriceInfo> prices{{100.0}, {101.5}, {102.5}, {102.5}, {107.3}};
-
-    for (double to_find : {102.5, 110.2})
-    {
-        auto prc_info = std::upper_bound(prices.begin(), prices.end(), to_find,
-            [](double value, const PriceInfo& info)
-            {
-                return value < info.price;
-            });
-
-        prc_info != prices.end()
-            ? std::cout << prc_info->price << " at index " << prc_info - prices.begin()
-            : std::cout << to_find << " not found";
-        std::cout << '\n';
-    }
+    const std::vector<PriceInfo>
+        prices{{100.0}, {101.5}, {102.5}, {102.5}, {107.3}};
+    auto p = std::upper_bound(prices.begin(), prices.end(), 102.5,
+        [](double value, const PriceInfo& info) { return value < info.price; });
+    std::cout << "first price > 102.5: " << p->price << '\n';
 }
 ```
 
-Output:
-
 ```text
-0 < 1 at index 0
-1 < 2 at index 1
-2 < 4 at index 2
-3 < 4 at index 2
-4 < 5 at index 3
-5 < 6 at index 5
-6 < not found
-107.3 at index 4
-110.2 not found
+first > 4: 5 at index 3
+first price > 102.5: 107.3
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+Full declarations:
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 270 | C++98 | `Compare` was required to satisfy Compare and `T` was
-      required to be LessThanComparable (strict weak ordering required) | only a
-      partitioning is required; heterogeneous comparisons permitted
-  LWG 384 | C++98 | at most log(last - first) + 1 comparisons were allowed |
-      corrected to log2(last - first) + O(1)
-  LWG 577 | C++98 | `last` could not be returned | allowed
+```cpp skip
+template< class ForwardIt, class T >
+ForwardIt upper_bound( ForwardIt first, ForwardIt last, const T& value );  // (until C++20)
+template< class ForwardIt, class T >
+constexpr ForwardIt upper_bound( ForwardIt first, ForwardIt last,
+                                 const T& value );  // (since C++20)
+template< class ForwardIt, class T, class Compare >
+ForwardIt upper_bound( ForwardIt first, ForwardIt last,
+                       const T& value, Compare comp );  // (until C++20)
+template< class ForwardIt, class T, class Compare >
+constexpr ForwardIt upper_bound( ForwardIt first, ForwardIt last,
+                                 const T& value, Compare comp );  // (since C++20)
+```
+
+`ForwardIt` must satisfy LegacyForwardIterator; `Compare` need only satisfy
+BinaryPredicate, not the full Compare requirements.
 
 ### See also
 
-- **equal_range** — returns range of elements matching a specific key (function
-  template)
-- **lower_bound** — returns an iterator to the first element *not less* than the
-  given value (function template)
-- **partition** — divides a range of elements into two groups (function
-  template)
-- **partition_point (C++11)** — locates the partition point of a partitioned
-  range (function template)
-- **ranges::upper_bound (C++20)** — returns an iterator to the first element
-  *greater* than a certain value (niebloid)
-- **upper_bound** — returns an iterator to the first element *greater* than the
-  given key (public member function of `std::set<Key,Compare,Allocator>`)
-- **upper_bound** — returns an iterator to the first element *greater* than the
-  given key (public member function of `std::multiset<Key,Compare,Allocator>`)
+- **lower_bound** — first element not less than a given value
+- **equal_range** — the full range of elements equivalent to a value
+- **partition_point** — the boundary of an already-partitioned range (C++11)
+- **ranges::upper_bound** — constrained version with projections (C++20)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/algorithm/upper_bound*

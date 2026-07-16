@@ -1,101 +1,62 @@
 # std::forward
 
-```cpp
-template< class T >
-T&& forward( typename std::remove_reference<T>::type& t ) noexcept;  // (since C++11) (until C++14)
-template< class T >
-constexpr T&& forward( std::remove_reference_t<T>& t ) noexcept;  // (since C++14)
-template< class T >
-T&& forward( typename std::remove_reference<T>::type&& t ) noexcept;  // (since C++11) (until C++14)
-template< class T >
-constexpr T&& forward( std::remove_reference_t<T>&& t ) noexcept;  // (since C++14)
-```
+`std::forward` only makes sense inside a template, on a forwarding
+reference (a `T&&` parameter where `T` is a deduced, cv-unqualified
+template parameter). Called as `std::forward<T>(t)`, it hands `t` on
+to the next function with the same value category — lvalue or rvalue —
+that it had when the caller passed it in. Unlike `std::move`, which
+unconditionally casts to an rvalue, `forward` casts conditionally
+based on `T`: that conditional cast is the entire reason it exists.
 
-1) Forwards lvalues as either lvalues or as rvalues, depending on T.
-
-When `t` is a forwarding reference (a function argument that is declared as an
-rvalue reference to a cv-unqualified function template parameter), this overload
-forwards the argument to another function with the value category it had when
-passed to the calling function.
-
-For example, if used in a wrapper such as the following, the template behaves as
-described below:
-
-```cpp
+```cpp skip
 template<class T>
 void wrapper(T&& arg)
 {
-    // arg is always lvalue
-    foo(std::forward<T>(arg)); // Forward as lvalue or as rvalue, depending on T
+    foo(std::forward<T>(arg));   // forwards arg with its original value category
 }
 ```
 
-- If a call to `wrapper()` passes an rvalue `std::string`, then `T` is deduced
-  to `std::string` (not `std::string&`, `const std::string&`, or
-  `std::string&&`), and `std::forward` ensures that an rvalue reference is
-  passed to `foo`.
-- If a call to `wrapper()` passes a const lvalue `std::string`, then `T` is
-  deduced to `const std::string&`, and `std::forward` ensures that a const
-  lvalue reference is passed to `foo`.
-- If a call to `wrapper()` passes a non-const lvalue `std::string`, then `T` is
-  deduced to `std::string&`, and `std::forward` ensures that a non-const lvalue
-  reference is passed to `foo`.
+### What you provide
 
-2) Forwards rvalues as rvalues and prohibits forwarding of rvalues as lvalues.
+- **t** — the forwarding-reference parameter to pass on, and the
+  explicit template argument `T` deduced from it by the enclosing
+  template. Passing anything other than the `T` deduced for that
+  parameter defeats the point.
 
-This overload makes it possible to forward a result of an expression (such as
-function call), which may be rvalue or lvalue, as the original value category of
-a forwarding reference argument.
+### Guarantees and costs
 
-For example, if a wrapper does not just forward its argument, but calls a member
-function on the argument, and forwards its result:
+- `constexpr` since C++14 (plain, non-`constexpr` `noexcept` before
+  that); `noexcept` in every version since C++11.
+- Constant-time: it compiles down to `static_cast<T&&>(t)` and nothing
+  more.
+- If a call to `wrapper()` passes an rvalue, `T` deduces to the
+  unqualified type and `forward` produces an rvalue reference; if it
+  passes a const lvalue, `T` deduces to `const U&` and `forward`
+  produces a const lvalue reference; if it passes a non-const lvalue,
+  `T` deduces to `U&` and `forward` produces a non-const lvalue
+  reference. Each case reproduces exactly what the caller passed.
+- Instantiating the rvalue-only overload with an lvalue reference type
+  for `T` — i.e. attempting to forward an rvalue as an lvalue — is a
+  compile-time error, not a silent conversion.
 
-```cpp
-// transforming wrapper
-template<class T>
-void wrapper(T&& arg)
-{
-    foo(forward<decltype(forward<T>(arg).get())>(forward<T>(arg).get()));
-}
-```
+### Gotchas
 
-where the type of arg may be
-
-```cpp
-struct Arg
-{
-    int i = 1;
-    int  get() && { return i; } // call to this overload is rvalue
-    int& get() &  { return i; } // call to this overload is lvalue
-};
-```
-
-Attempting to forward an rvalue as an lvalue, such as by instantiating the form
-(2) with lvalue reference type T, is a compile-time error.
-
-### Notes
-
-See template argument deduction for the special rules behind forwarding
-references (`T&&` used as a function parameter) and forwarding references for
-other detail.
-
-### Parameters
-
-- **t** — the object to be forwarded
-
-### Return value
-
-`static_cast<T&&>(t)`
-
-### Complexity
-
-Constant.
+- `std::forward<T>(t)` is only correct on a genuine forwarding
+  reference. On an ordinary named `T&&` parameter that isn't deduced
+  (e.g. a move constructor's `A&&`), use `std::move` instead — the
+  parameter is always an lvalue inside the function body, and
+  forwarding adds nothing there.
+- Forwarding the result of a member call that itself depends on value
+  category (an object with `&`/`&&`-qualified overloads of the same
+  member) needs `std::forward<decltype(expr)>(expr)` at each step —
+  dropping the intermediate `forward` silently collapses everything to
+  an lvalue.
+- Calling `std::forward<T>(t)` more than once on the same `t` inside a
+  function is the same hazard as using a moved-from object twice: the
+  first forward to an rvalue-accepting overload may leave `t` moved
+  from.
 
 ### Example
-
-This example demonstrates perfect forwarding of the parameter(s) to the argument
-of the constructor of class `T`. Also, perfect forwarding of parameter packs is
-demonstrated.
 
 ```cpp
 #include <iostream>
@@ -108,71 +69,51 @@ struct A
     A(int& n)  { std::cout << "lvalue overload, n=" << n << '\n'; }
 };
 
-class B
-{
-public:
-    template<class T1, class T2, class T3>
-    B(T1&& t1, T2&& t2, T3&& t3) :
-        a1_{std::forward<T1>(t1)},
-        a2_{std::forward<T2>(t2)},
-        a3_{std::forward<T3>(t3)}
-    {}
-
-private:
-    A a1_, a2_, a3_;
-};
-
 template<class T, class U>
 std::unique_ptr<T> make_unique1(U&& u)
 {
     return std::unique_ptr<T>(new T(std::forward<U>(u)));
 }
 
-template<class T, class... U>
-std::unique_ptr<T> make_unique2(U&&... u)
-{
-    return std::unique_ptr<T>(new T(std::forward<U>(u)...));
-}
-
-auto make_B(auto&&... args) // since C++20
-{
-    return B(std::forward<decltype(args)>(args)...);
-}
-
 int main()
 {
-    auto p1 = make_unique1<A>(2); // rvalue
+    auto p1 = make_unique1<A>(2);   // rvalue
     int i = 1;
-    auto p2 = make_unique1<A>(i); // lvalue
-
-    std::cout << "B\n";
-    auto t = make_unique2<B>(2, i, 3);
-
-    std::cout << "make_B\n";
-    [[maybe_unused]] B b = make_B(4, i, 5);
+    auto p2 = make_unique1<A>(i);   // lvalue
 }
 ```
-
-Output:
 
 ```text
 rvalue overload, n=2
 lvalue overload, n=1
-B
-rvalue overload, n=2
-lvalue overload, n=1
-rvalue overload, n=3
-make_B
-rvalue overload, n=4
-lvalue overload, n=1
-rvalue overload, n=5
 ```
+
+### Reference
+
+```cpp skip
+template< class T >
+T&& forward( typename std::remove_reference<T>::type& t ) noexcept;  // (since C++11) (until C++14)
+template< class T >
+constexpr T&& forward( std::remove_reference_t<T>& t ) noexcept;  // (since C++14)
+template< class T >
+T&& forward( typename std::remove_reference<T>::type&& t ) noexcept;  // (since C++11) (until C++14)
+template< class T >
+constexpr T&& forward( std::remove_reference_t<T>&& t ) noexcept;  // (since C++14)
+```
+
+Return value: `static_cast<T&&>(t)`. Complexity: constant. The second
+overload (rvalue reference parameter) exists to forward the result of
+an expression — such as a call to an `&&`-qualified member function —
+as the original value category of a forwarding-reference argument;
+instantiating it with an lvalue reference type for `T` is ill-formed,
+which is what makes forwarding an rvalue as an lvalue a compile error
+rather than a silent bug.
 
 ### See also
 
-- **move (C++11)** — obtains an rvalue reference (function template)
-- **move_if_noexcept (C++11)** — obtains an rvalue reference if the move
-  constructor does not throw (function template)
+- **move** (C++11) — unconditionally casts to an rvalue reference
+- **move_if_noexcept** (C++11) — rvalue reference only if the move
+  constructor is `noexcept`, else a copy-preserving lvalue
 
 ---
 *Source: https://en.cppreference.com/w/cpp/utility/forward*

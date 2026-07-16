@@ -1,6 +1,98 @@
 # std::remove, std::remove_if
 
-```cpp
+`remove` does **not** shrink the container. It shifts the elements
+you're keeping to the front, preserving their relative order, and
+returns an iterator to the new logical end — everything from there to
+the old `last` is left with unspecified values, and the container's
+size is unchanged. You must follow it with a call to `erase` to
+actually drop the tail (the *erase–remove idiom*):
+`v.erase(std::remove(v.begin(), v.end(), value), v.end());`. Since
+C++20, `std::erase`/`std::erase_if` do both steps in one call for
+standard sequence (`erase`) or any (`erase_if`) container.
+
+```cpp skip
+std::remove(first, last, value);               // erase-remove: drop == value
+std::remove_if(first, last, pred);              // erase-remove: drop matching
+std::remove(policy, first, last, value);        // parallel        (since C++17)
+std::remove_if(policy, first, last, pred);       // parallel + pred (since C++17)
+std::erase(container, value);                    // does both steps (since C++20)
+std::erase_if(container, pred);                  // does both steps (since C++20)
+```
+
+`constexpr` since C++20.
+
+### What you provide
+
+- **first, last** — forward iterators bounding the range.
+- **value** — elements equal to this (via `operator==`) are dropped.
+- **pred** — `remove_if` only: a callable returning `true` for
+  elements to drop; must not modify what it's given.
+- **policy** — an execution policy (C++17) for parallel execution.
+
+### Guarantees and costs
+
+- `remove`: exactly `N` comparisons with `value`, where
+  `N = std::distance(first, last)`.
+- `remove_if`: exactly `N` predicate applications.
+- Relative order of kept elements is preserved.
+- Iterators between the returned iterator and the old `last` stay
+  dereferenceable but hold unspecified values.
+- Parallel overloads: if a predicate throws, `std::terminate` is
+  called; allocation failure throws `std::bad_alloc`.
+
+### Gotchas
+
+- Forgetting the `erase` call is the classic bug: the container's
+  `size()` doesn't change, so "removed" elements are still iterated
+  and counted until you erase the tail.
+- Won't work on `std::set`/`std::map` — their iterators don't
+  dereference to mutable (MoveAssignable) types, since keys can't be
+  reordered in place.
+- `std::list`/`std::forward_list` have their own member
+  `remove`/`remove_if` that erase directly — prefer those over the
+  free function on those containers.
+- `value` is taken by reference: passing a reference to an element
+  inside `[first, last)` (e.g. `std::remove(v.begin(), v.end(),
+  v[0])`) can misbehave once that element gets overwritten mid-shift.
+- `<cstdio>` also declares a `std::remove` that deletes a file by
+  path — an unrelated overload pulled in by `using namespace std`.
+
+### Example
+
+```cpp c++20
+#include <algorithm>
+#include <cctype>
+#include <iostream>
+#include <string>
+#include <string_view>
+
+int main()
+{
+    std::string str1{"Text with some   spaces"};
+
+    auto noSpaceEnd = std::remove(str1.begin(), str1.end(), ' ');
+
+    // Spaces are gone only logically; the string isn't shrunk yet.
+    std::cout << std::string_view(str1.begin(), noSpaceEnd)
+              << " size: " << str1.size() << '\n';
+
+    str1.erase(noSpaceEnd, str1.end());
+
+    // Now physically shrunk.
+    std::cout << str1 << " size: " << str1.size() << '\n';
+}
+```
+
+```text
+Textwithsomespaces size: 23
+Textwithsomespaces size: 18
+```
+
+### Reference
+
+Full declarations:
+
+```cpp skip
 template< class ForwardIt, class T >
 ForwardIt remove( ForwardIt first, ForwardIt last, const T& value );  // (until C++20)
 template< class ForwardIt, class T >
@@ -18,195 +110,21 @@ ForwardIt remove_if( ExecutionPolicy&& policy,
                      ForwardIt first, ForwardIt last, UnaryPredicate p );  // (4) (since C++17)
 ```
 
-Removes all elements satisfying specific criteria from the range
-`[``first``,``last``)` and returns a past-the-end iterator for the new end of
-the range.
-
-1) Removes all elements that are equal to `value` (using `operator==`).
-
-3) Removes all elements for which predicate `p` returns `true`.
-
-2,4) Same as (1,3), but executed according to `policy`. These overloads do not
-   participate in overload resolution unless
-   `std::is_execution_policy_v<std::decay_t<ExecutionPolicy>>` is `true`. (until
-   C++20) `std::is_execution_policy_v<std::remove_cvref_t<ExecutionPolicy>>` is
-   `true`. (since C++20)
-
-If the value type of `ForwardIt` is not CopyAssignable, the behavior is
-undefined.
-*(until C++11)*
-
-If the type of `*first` is not MoveAssignable, the behavior is undefined.
-*(since C++11)*
-
-Removing is done by shifting (by means of copy assignment(until C++11)move
-assignment(since C++11)) the elements in the range in such a way that the
-elements that are not to be removed appear in the beginning of the range.
-Relative order of the elements that remain is preserved and the *physical* size
-of the container is unchanged. Iterators pointing to an element between the new
-*logical* end and the *physical* end of the range are still dereferenceable, but
-the elements themselves have unspecified values (as per MoveAssignable
-post-condition)(since C++11).
-
-### Parameters
-
-- **first, last** — the range of elements to process
-- **value** — the value of elements to remove
-- **policy** — the execution policy to use. See execution policy for details.
-- **p** — unary predicate which returns ​`true` if the element should be
-  removed. The expression `p(v)` must be convertible to `bool` for every
-  argument `v` of type (possibly const) `VT`, where `VT` is the value type of
-  `ForwardIt`, regardless of value category, and must not modify `v`. Thus, a
-  parameter type of `VT&`is not allowed, nor is `VT` unless for `VT` a move is
-  equivalent to a copy(since C++11). ​
-
-**Type requirements**
-
-**-`ForwardIt` must meet the requirements of LegacyForwardIterator.**
-
-**-`UnaryPredicate` must meet the requirements of Predicate.**
-
-### Return value
-
-Past-the-end iterator for the new range of values (if this is not `end`, then it
-points to an unspecified value, and so do iterators to any values between this
-iterator and `end`).
-
-### Complexity
-
-Given `N` as `std::distance(first, last)`:
-
-1,2) exactly `N` comparisons with `value` using `operator==`.
-
-3,4) exactly `N` applications of the predicate `p`.
-
-### Exceptions
-
-The overloads with a template parameter named `ExecutionPolicy` report errors as
-follows:
-
-- If execution of a function invoked as part of the algorithm throws an
-  exception and `ExecutionPolicy` is one of the standard policies,
-  `std::terminate` is called. For any other `ExecutionPolicy`, the behavior is
-  implementation-defined.
-- If the algorithm fails to allocate memory, `std::bad_alloc` is thrown.
-
-### Notes
-
-A call to `remove` is typically followed by a call to a container's `erase`
-member function, which erases the unspecified values and reduces the *physical*
-size of the container to match its new *logical* size. These two invocations
-together constitute a so-called *Erase–remove* idiom, which can be achieved by
-the free function `std::erase` that has overloads for all standard *sequence*
-containers, or `std::erase_if` that has overloads for *all* standard
-containers(since C++20).
-
-The similarly-named container member functions `list::remove`,
-`list::remove_if`, `forward_list::remove`, and `forward_list::remove_if` erase
-the removed elements.
-
-These algorithms cannot be used with associative containers such as `std::set`
-and `std::map` because their iterator types do not dereference to MoveAssignable
-types (the keys in these containers are not modifiable).
-
-The standard library also defines an overload of `std::remove` in `<cstdio>`,
-which takes a `const char*` and is used to delete files.
-
-Because `std::remove` takes `value` by reference, it can have unexpected
-behavior if it is a reference to an element of the range `[``first``,``last``)`.
-
-### Possible implementation
-
-```cpp
-template<class ForwardIt, class T>
-ForwardIt remove(ForwardIt first, ForwardIt last, const T& value)
-{
-    first = std::find(first, last, value);
-    if (first != last)
-        for (ForwardIt i = first; ++i != last;)
-            if (!(*i == value))
-                *first++ = std::move(*i);
-    return first;
-}
-```
-
-```cpp
-template<class ForwardIt, class UnaryPredicate>
-ForwardIt remove_if(ForwardIt first, ForwardIt last, UnaryPredicate p)
-{
-    first = std::find_if(first, last, p);
-    if (first != last)
-        for (ForwardIt i = first; ++i != last;)
-            if (!p(*i))
-                *first++ = std::move(*i);
-    return first;
-}
-```
-
-### Example
-
-The following code removes all spaces from a string by shifting all non-space
-characters to the left and then erasing the extra. This is an example of
-Erase-remove idiom.
-
-```cpp
-#include <algorithm>
-#include <cctype>
-#include <iostream>
-#include <string>
-#include <string_view>
-
-int main()
-{
-    std::string str1{"Text with some   spaces"};
-
-    auto noSpaceEnd = std::remove(str1.begin(), str1.end(), ' ');
-
-    // The spaces are removed from the string only logically.
-    // Note, we use view, the original string is still not shrunk:
-    std::cout << std::string_view(str1.begin(), noSpaceEnd)
-              << " size: " << str1.size() << '\n';
-
-    str1.erase(noSpaceEnd, str1.end());
-
-    // The spaces are removed from the string physically.
-    std::cout << str1 << " size: " << str1.size() << '\n';
-
-    std::string str2 = "Text\n with\tsome \t  whitespaces\n\n";
-    str2.erase(std::remove_if(str2.begin(),
-                              str2.end(),
-                              [](unsigned char x) { return std::isspace(x); }),
-               str2.end());
-    std::cout << str2 << '\n';
-}
-```
-
-Output:
-
-```text
-Textwithsomespaces size: 23
-Textwithsomespaces size: 18
-Textwithsomewhitespaces
-```
-
-### Defect reports
-
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
-
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 283 | C++98 | `T` was required to be EqualityComparable, but the value
-      type of `ForwardIt` is not always `T` | required the value type of
-      `ForwardIt` to be CopyAssignable instead
+`ForwardIt` must meet LegacyForwardIterator; the value type must be
+MoveAssignable (CopyAssignable until C++11) or behavior is undefined —
+shifting is implemented with move-assignment. LWG 283 (applied
+retroactively to C++98): `T` was originally required to be
+EqualityComparable with the value type required CopyAssignable; the
+corrected requirement is that the value type of `ForwardIt` be
+CopyAssignable/MoveAssignable, full stop.
 
 ### See also
 
-- **remove_copyremove_copy_if** — copies a range of elements omitting those that
-  satisfy specific criteria (function template)
-- **unique** — removes consecutive duplicate elements in a range (function
-  template)
-- **ranges::removeranges::remove_if (C++20)(C++20)** — removes elements
-  satisfying specific criteria (niebloid)
+- **remove_copy** — copies a range, omitting elements matching criteria
+- **unique** — removes consecutive duplicate elements
+- **erase** — free function combining remove + erase (C++20)
+- **erase_if** — free function combining remove_if + erase, any container (C++20)
+- **ranges::remove** — constrained version (C++20)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/algorithm/remove*

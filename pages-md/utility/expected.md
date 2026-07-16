@@ -1,116 +1,85 @@
 # std::expected
 
-```cpp
-template< class T, class E >
-class expected;  // (since C++23)
+`std::expected<T, E>` (C++23) holds a return value that is either a `T`
+or an `E` — the error-handling alternative to exceptions and to
+`std::optional` when you want to say *why* something failed, not just
+*that* it failed. It always holds exactly one of the two (never
+neither), and like `optional` the active value lives inline inside the
+`expected` object: no dynamic allocation.
+
+```cpp skip
+std::expected<T, E> e{val};                    // holds a T
+std::expected<T, E> e = std::unexpected(err);   // holds an E
+if (e) ...                                      // true iff it holds a T
+*e, e->member                                   // access T, UB if it holds E
+e.value()                                       // access T, throws bad_expected_access<E> if E
+e.error()                                       // access E, UB if it holds T
+e.value_or(fallback)                            // T if present, else fallback
+e.and_then(f) / e.transform(f)                  // chain on the T
+e.or_else(f) / e.transform_error(f)             // chain on the E
 ```
 
-The class template `std::expected` provides a way to store either of two values.
-An object of `std::expected` at any given time either holds an *expected* value
-of type `T`, or an *unexpected* value of type `E`. `std::expected` is never
-valueless.
+### What you provide
 
-The stored value is allocated directly within the storage occupied by the
-`expected` object. No dynamic memory allocation takes place.
-
-A program is ill-formed if it instantiates an `expected` with a reference type,
-a function type, or a specialization of `std::unexpected`. In addition, `T` must
-not be `std::in_place_t` or `std::unexpect_t`.
-
-### Template parameters
-
-- **T** — the type of the expected value. The type must either be (possibly
-  cv-qualified) `void`, or meet the Destructible requirements (in particular,
-  array and reference types are not allowed).
-- **E** — the type of the unexpected value. The type must meet the Destructible
-  requirements, and must be a valid template argument for `std::unexpected` (in
-  particular, arrays, non-object types, and cv-qualified types are not allowed).
-
-### Member types
-
-- **`value_type`** — `T`
-- **`error_type`** — `E`
-- **`unexpected_type`** — `std::unexpected<E>`
-
-### Member alias templates
-
-- **rebind<U>** — expected<U, error_type>
+- **T** — the expected value type. May be (possibly cv-qualified)
+  `void`, or any type meeting the Destructible requirements; arrays
+  and references are not allowed, and `T` cannot be `std::in_place_t`
+  or `std::unexpect_t`.
+- **E** — the error type. Must meet the Destructible requirements and
+  be a valid argument to `std::unexpected` (no arrays, non-object
+  types, or cv-qualified types).
 
 ### Member functions
 
-- **(constructor)** — constructs the `expected` object (public member function)
-- **(destructor)** — destroys the `expected` object, along with its contained
-  value (public member function)
-- **operator=** — assigns contents (public member function)
+| Member | What it does |
+| --- | --- |
+| `operator*`, `operator->` | access the value; **UB** if it holds an error |
+| `value()` | access the value; throws `bad_expected_access<E>` if error |
+| `error()` | access the error; **UB** if it holds a value |
+| `value_or(v)` | value if present, else `v` |
+| `has_value()`, `operator bool` | test which alternative is held |
+| `and_then(f)` | apply `f` to the value, else keep `*this`'s error |
+| `transform(f)` | map the value through `f`, else keep the error |
+| `or_else(f)` | keep the value, else call `f` on the error |
+| `transform_error(f)` | map the error through `f`, else keep the value |
+| `emplace(args...)` | construct the value in place, replacing prior contents |
+| `swap(other)` | exchange contents |
 
-**Observers**
+Non-members: `operator==`, `std::swap`. Helper types: `std::unexpected`
+(wraps an `E` for construction/return), `std::bad_expected_access<E>`
+(what `value()`/`error()` throw on the wrong access), `std::unexpect_t`
+(in-place construction tag for the error alternative).
 
-- **operator->operator*** — accesses the expected value (public member function)
-- **operator boolhas_value** — checks whether the object contains an expected
-  value (public member function)
-- **value** — returns the expected value (public member function)
-- **error** — returns the unexpected value (public member function)
-- **value_or** — returns the expected value if present, another value otherwise
-  (public member function)
+### Guarantees and costs
 
-**Monadic operations**
+- No dynamic allocation: the active alternative occupies space inside
+  the `expected` object itself, same as `optional`.
+- `expected` is never valueless — it always holds a `T` or an `E`.
+- Comparisons (`operator==`) and `swap` are defined between `expected`
+  objects.
 
-- **and_then** — returns the result of the given function on the expected value
-  if it exists; otherwise, returns the `expected` itself (public member
-  function)
-- **transform** — returns an `expected` containing the transformed expected
-  value if it exists; otherwise, returns the `expected` itself (public member
-  function)
-- **or_else** — returns the `expected` itself if it contains an expected value;
-  otherwise, returns the result of the given function on the unexpected value
-  (public member function)
-- **transform_error** — returns the `expected` itself if it contains an expected
-  value; otherwise, returns an `expected` containing the transformed unexpected
-  value (public member function)
+### Gotchas
 
-**Modifiers**
-
-- **emplace** — constructs the expected value in-place (public member function)
-- **swap** — exchanges the contents (public member function)
-
-### Non-member functions
-
-- **operator== (C++23)** — compares `expected` objects (function template)
-- **swap(std::expected) (C++23)** — specializes the `std::swap` algorithm
-  (function)
-
-### Helper classes
-
-- **unexpected (C++23)** — represented as an unexpected value (class template)
-- **bad_expected_access (C++23)** — exception indicating checked access to an
-  `expected` that contains an unexpected value (class template)
-- **unexpectunexpect_t (C++23)** — in-place construction tag for unexpected
-  value in `expected` (tag)
-
-### Notes
-
-Types with the same functionality are called `Result` in Rust and `Either` in
-Haskell.
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_expected` | 202202L | (C++23) | class template `std::expected` and
-      associated helper classes
-  202211L | (C++23) | Monadic functions for `std::expected`
+- `*e` / `e->x` on an `expected` holding an error is **undefined
+  behavior**; `.value()` instead throws `bad_expected_access<E>` —
+  pick based on whether holding an error there is a bug (use `*`) or
+  an expected outcome you handle (use `value()`).
+- `.error()` is UB if `expected` currently holds a value — check
+  `has_value()` (or `if (e)`) before reaching for `.error()`.
+- A program is ill-formed if it instantiates `expected` with a
+  reference type, a function type, or a specialization of
+  `std::unexpected` as `T` or `E`.
 
 ### Example
 
-```cpp
+```cpp c++23
 #include <cmath>
 #include <expected>
 #include <iomanip>
 #include <iostream>
 #include <string_view>
 
-enum class parse_error
-{
-    invalid_input,
-    overflow
-};
+enum class parse_error { invalid_input, overflow };
 
 auto parse_number(std::string_view& str) -> std::expected<double, parse_error>
 {
@@ -120,7 +89,7 @@ auto parse_number(std::string_view& str) -> std::expected<double, parse_error>
 
     if (begin == end)
         return std::unexpected(parse_error::invalid_input);
-    else if (std::isinf(retval))
+    if (std::isinf(retval))
         return std::unexpected(parse_error::overflow);
 
     str.remove_prefix(end - begin);
@@ -129,46 +98,46 @@ auto parse_number(std::string_view& str) -> std::expected<double, parse_error>
 
 int main()
 {
-    auto process = [](std::string_view str)
+    for (std::string_view str : {"42", "meow", "inf"})
     {
-        std::cout << "str: " << std::quoted(str) << ", ";
+        std::cout << std::quoted(str) << ": ";
         if (const auto num = parse_number(str); num.has_value())
-            std::cout << "value: " << *num << '\n';
-            // If num did not have a value, dereferencing num
-            // would cause an undefined behavior, and
-            // num.value() would throw std::bad_expected_access.
-            // num.value_or(123) uses specified default value 123.
+            std::cout << "value " << *num << '\n';
         else if (num.error() == parse_error::invalid_input)
-            std::cout << "error: invalid input\n";
-        else if (num.error() == parse_error::overflow)
-            std::cout << "error: overflow\n";
+            std::cout << "invalid input\n";
         else
-            std::cout << "unexpected!\n"; // or invoke std::unreachable();
-    };
-
-    for (auto src : {"42", "42abc", "meow", "inf"})
-        process(src);
+            std::cout << "overflow\n";
+    }
 }
 ```
 
-Output:
-
 ```text
-str: "42", value: 42
-str: "42abc", value: 42
-str: "meow", error: invalid input
-str: "inf", error: overflow
+"42": value 42
+"meow": invalid input
+"inf": overflow
 ```
 
-### References
+### Reference
 
-- C++23 standard (ISO/IEC 14882:2023):
+```cpp skip
+template< class T, class E >
+class expected;  // (since C++23)
+```
+
+Formally: `T` must be (possibly cv-qualified) `void` or Destructible;
+`E` must be Destructible and a valid `std::unexpected` argument.
+`rebind<U>` names `expected<U, error_type>`. Types with the same
+purpose are called `Result` in Rust and `Either` in Haskell.
+
+Feature-test macro: `__cpp_lib_expected` — `202202L` (C++23, the class
+template and helpers), `202211L` (C++23, monadic operations).
 
 ### See also
 
-- **variant (C++17)** — a type-safe discriminated union (class template)
-- **optional (C++17)** — a wrapper that may or may not hold an object (class
-  template)
+- **unexpected (C++23)** — wraps an error value for construction into `expected`
+- **bad_expected_access (C++23)** — exception thrown by wrong-alternative access
+- **variant (C++17)** — a type-safe discriminated union
+- **optional (C++17)** — a wrapper that may or may not hold a value
 
 ---
 *Source: https://en.cppreference.com/w/cpp/utility/expected*

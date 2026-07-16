@@ -1,61 +1,54 @@
 # std::any
 
-```cpp
-class any;  // (since C++17)
+`std::any` (C++17) is a type-erased container that holds a single
+value of any copy-constructible type — or nothing at all. Unlike
+`std::variant`, it isn't limited to a fixed set of alternatives named
+in its type; unlike `std::optional`, the type it might hold isn't part
+of its own type either. Getting the value back out requires knowing
+(or checking) the type: `std::any_cast<T>` throws `std::bad_any_cast`
+if the contained object isn't a `T`.
+
+```cpp skip
+std::any a = 1;                        // holds an int
+a = 3.14;                              // now holds a double
+a = std::string("hi");                 // now holds a std::string
+
+a.has_value();                         // true unless empty
+a.type();                              // std::type_info of the contained type
+
+std::any_cast<double>(a);              // by value; throws bad_any_cast on mismatch
+double* p = std::any_cast<double>(&a); // by pointer; nullptr on mismatch, no throw
+
+a.reset();                             // back to empty
 ```
 
-The class `any` describes a type-safe container for single values of any copy
-constructible type.
+### Guarantees and costs
 
-1) An object of class `any` stores an instance of any type that satisfies the
-   constructor requirements or is empty, and this is referred to as the *state*
-   of the class `any` object. The stored instance is called the contained
-   object. Two states are equivalent if they are either both empty or if both
-   are not empty and if the contained objects are equivalent.
+- Two `any` objects are equivalent if both are empty, or if both hold
+  equivalent contained objects.
+- Implementations are encouraged to avoid a dynamic allocation for
+  small contained objects, but that optimization may only apply to
+  types where `std::is_nothrow_move_constructible` is `true` — a
+  throwing move constructor forces heap storage.
+- `emplace` changes the contained object by constructing the new one
+  in place, without going through a temporary.
+- `any_cast<T>` on a value or reference throws `std::bad_any_cast` on
+  a type mismatch; the pointer-returning overload returns `nullptr`
+  instead of throwing.
 
-2) The non-member `any_cast` functions provide type-safe access to the contained
-   object.
+### Gotchas
 
-Implementations are encouraged to avoid dynamic allocations for small objects,
-but such an optimization may only be applied to types for which
-`std::is_nothrow_move_constructible` returns `true`.
-
-### Member functions
-
-- **(constructor)** — constructs an `any` object (public member function)
-- **operator=** — assigns an `any` object (public member function)
-- **(destructor)** — destroys an `any` object (public member function)
-
-**Modifiers**
-
-- **emplace** — change the contained object, constructing the new object
-  directly (public member function)
-- **reset** — destroys contained object (public member function)
-- **swap** — swaps two `any` objects (public member function)
-
-**Observers**
-
-- **has_value** — checks if object holds a value (public member function)
-- **type** — returns the `typeid` of the contained value (public member
-  function)
-
-### Non-member functions
-
-- **std::swap(std::any) (C++17)** — specializes the `std::swap` algorithm
-  (function)
-- **any_cast (C++17)** — type-safe access to the contained object (function
-  template)
-- **make_any (C++17)** — creates an `any` object (function template)
-
-### Helper classes
-
-- **bad_any_cast (C++17)** — exception thrown by the value-returning forms of
-  `any_cast` on a type mismatch (class)
-
-### Notes
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_any` | 201606L | (C++17) | `std::any`
+- `any_cast<T>` requires an *exact* type match (modulo cv/reference)
+  — it does not attempt implicit conversions the way ordinary function
+  calls do. Casting a `std::any` holding an `int` as `<double>` throws,
+  even though `int` converts to `double` everywhere else.
+- Checking `a.type()` against `typeid(T)` and then calling
+  `any_cast<T>(&a)` avoids the throw path when a miss is expected to
+  be common — prefer the pointer overload for probing.
+- Holding any type at all comes at a cost: even the small-object
+  optimization only kicks in for nothrow-move-constructible types, and
+  there's no way to query which storage strategy an implementation
+  chose.
 
 ### Example
 
@@ -65,17 +58,12 @@ but such an optimization may only be applied to types for which
 
 int main()
 {
-    std::cout << std::boolalpha;
-
-    // any type
     std::any a = 1;
     std::cout << a.type().name() << ": " << std::any_cast<int>(a) << '\n';
+
     a = 3.14;
     std::cout << a.type().name() << ": " << std::any_cast<double>(a) << '\n';
-    a = true;
-    std::cout << a.type().name() << ": " << std::any_cast<bool>(a) << '\n';
 
-    // bad cast
     try
     {
         a = 1;
@@ -86,44 +74,51 @@ int main()
         std::cout << e.what() << '\n';
     }
 
-    // has value
-    a = 2;
-    if (a.has_value())
-        std::cout << a.type().name() << ": " << std::any_cast<int>(a) << '\n';
-
-    // reset
     a.reset();
-    if (!a.has_value())
-        std::cout << "no value\n";
-
-    // pointer to contained data
-    a = 3;
-    int* i = std::any_cast<int>(&a);
-    std::cout << *i << '\n';
+    std::cout << std::boolalpha << "has_value: " << a.has_value() << '\n';
 }
 ```
 
-Possible output:
-
 ```text
-int: 1
-double: 3.14
-bool: true
+i: 1
+d: 3.14
 bad any_cast
-int: 2
-no value
-3
+has_value: false
 ```
+
+### Reference
+
+```cpp skip
+class any;  // (since C++17)
+```
+
+An `any` object stores an instance of any type satisfying the
+constructor requirements, or is empty; the stored instance is the
+*contained object*.
+
+**Member functions**: (constructor), `operator=`, (destructor).
+
+- Modifiers
+  - `emplace` — change the contained object, constructing in place
+  - `reset` — destroy the contained object
+  - `swap`
+- Observers
+  - `has_value`
+  - `type` — `typeid` of the contained value
+
+Non-member: `std::swap`, `any_cast` — type-safe access to the
+contained object, `make_any` — constructs an `any` in place. Helper
+class: `bad_any_cast`, thrown by the value-returning forms of
+`any_cast` on a type mismatch.
 
 ### See also
 
-- **function (C++11)** — wraps callable object of any copy constructible type
-  with specified function call signature (class template)
-- **move_only_function (C++23)** — wraps callable object of any type with
-  specified function call signature (class template)
-- **variant (C++17)** — a type-safe discriminated union (class template)
-- **optional (C++17)** — a wrapper that may or may not hold an object (class
-  template)
+- **function** (C++11) — wraps a callable of any copy-constructible
+  type with a specified call signature
+- **move_only_function** (C++23) — wraps a callable of any type with
+  a specified call signature
+- **variant** (C++17) — a type-safe discriminated union
+- **optional** (C++17) — a wrapper that may or may not hold an object
 
 ---
 *Source: https://en.cppreference.com/w/cpp/utility/any*

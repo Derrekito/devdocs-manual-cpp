@@ -1,154 +1,62 @@
-# std::round, std::roundf, std::roundl, std::lround, std::lroundf, std::lroundl, std::llround, std::llroundf
+# std::round, std::lround, std::llround (and f/l variants)
 
-```cpp
-Rounding to floating-point types
-float       round ( float num );
-double      round ( double num );
-long double round ( long double num );  // (since C++11) (until C++23)
-constexpr /* floating-point-type */
-            round ( /* floating-point-type */ num );  // (since C++23)
-float       roundf( float num );  // (2) (since C++11) (constexpr since C++23)
-long double roundl( long double num );  // (3) (since C++11) (constexpr since C++23)
-long
-long lround ( float num );
-long lround ( double num );
-long lround ( long double num );  // (since C++11) (until C++23)
-constexpr long lround( /* floating-point-type */ num );  // (since C++23)
-long lroundf( float num );  // (5) (since C++11) (constexpr since C++23)
-long lroundl( long double num );  // (6) (since C++11) (constexpr since C++23)
-long long
-long long llround ( float num );
-long long llround ( double num );
-long long llround ( long double num );  // (since C++11) (until C++23)
-constexpr long long llround( /* floating-point-type */ num );  // (since C++23)
-long long llroundf( float num );  // (8) (since C++11) (constexpr since C++23)
-long long llroundl( long double num );  // (9) (since C++11) (constexpr since C++23)
-Additional overloads
-template< class Integer >
-double round( Integer num );  // (A) (since C++11) (constexpr since C++23)
-template< class Integer >
-long lround( Integer num );  // (B) (since C++11) (constexpr since C++23)
-template< class Integer >
-long long llround( Integer num );  // (C) (since C++11) (constexpr since C++23)
+Rounds to the nearest integer, with halfway cases (`x.5`) always
+rounding **away from zero** — `2.5` becomes `3`, `-2.5` becomes `-3` —
+regardless of the current floating-point rounding mode. `round` and
+its `f`/`l` variants return a floating-point value; `lround`/`llround`
+return `long`/`long long` directly.
+
+```cpp skip
+std::round(num);     // nearest integer, as a float/double/long double
+std::lround(num);    // nearest integer, as a long           (since C++11)
+std::llround(num);   // nearest integer, as a long long       (since C++11)
 ```
 
-1-3) Computes the nearest integer value to `num` (in floating-point format),
-   rounding halfway cases away from zero, regardless of the current rounding
-   mode. The library provides overloads of `std::round` for all cv-unqualified
-   floating-point types as the type of the parameter `num`.(since C++23)
+Overloads for all floating-point types exist directly (since C++23,
+`constexpr`); integer arguments are treated as `double`.
 
-4-9) Computes the nearest integer value to `num` (in integer format), rounding
-   halfway cases away from zero, regardless of the current rounding mode. The
-   library provides overloads of `std::lround` and `std::llround` for all
-   cv-unqualified floating-point types as the type of the parameter `num`.(since
-   C++23)
+### What you provide
 
-A-C) Additional overloads are provided for all integer types, which are treated
-   as `double`.
+- **num** — a floating-point or integer value.
 
-### Parameters
+### Guarantees and costs
 
-- **num** — floating-point or integer value
+- Halfway cases always round away from zero, independent of
+  `std::fesetround`.
+- `±∞` and `±0` are returned unmodified by `round`; `NaN` returns
+  `NaN`.
+- `round` itself never overflows — the largest representable
+  floating-point values are already exact integers — but the *result*
+  can overflow if you then store it into a narrower integer type.
+- `lround`/`llround`: if `num` is `±∞`, is `NaN`, or the rounded
+  result doesn't fit the return type, `FE_INVALID` is raised and an
+  implementation-defined value is returned (no exception is thrown —
+  check `std::fetestexcept(FE_INVALID)` if this matters). `FE_INEXACT`
+  is never raised by these two, unlike `round`, which may (but need
+  not) raise it for a non-integer input.
+- Error reporting follows `math_errhandling`, as with the rest of
+  `<cmath>`.
 
-### Return value
+### Gotchas
 
-If no errors occur, the nearest integer value to `num`, rounding halfway cases
-away from zero, is returned.
-
-Return value
-
-`num`
-
-If a domain error occurs, an implementation-defined value is returned.
-
-### Error handling
-
-Errors are reported as specified in `math_errhandling`.
-
-If the result of `std::lround` or `std::llround` is outside the range
-representable by the return type, a domain error or a range error may occur.
-
-If the implementation supports IEEE floating-point arithmetic (IEC 60559), For
-the `std::round` function:
-
-- The current rounding mode has no effect.
-- If `num` is ±∞, it is returned, unmodified.
-- If `num` is ±0, it is returned, unmodified.
-- If `num` is NaN, NaN is returned.
-
-For `std::lround` and `std::llround` functions:
-
-- `FE_INEXACT` is never raised.
-- The current rounding mode has no effect.
-- If `num` is ±∞, `FE_INVALID` is raised and an implementation-defined value is
-  returned.
-- If the result of the rounding is outside the range of the return type,
-  `FE_INVALID` is raised and an implementation-defined value is returned.
-- If `num` is NaN, `FE_INVALID` is raised and an implementation-defined value is
-  returned.
-
-### Notes
-
-`FE_INEXACT` may be (but is not required to be) raised by `std::round` when
-rounding a non-integer finite value.
-
-The largest representable floating-point values are exact integers in all
-standard floating-point formats, so `std::round` never overflows on its own;
-however the result may overflow any integer type (including `std::intmax_t`),
-when stored in an integer variable.
-
-POSIX specifies that all cases where `std::lround` or `std::llround` raise
-`FE_INEXACT` are domain errors.
-
-The double version of `std::round` behaves as if implemented as follows:
-
-```cpp
-#include <cfenv>
-#include <cmath>
-
-#pragma STDC FENV_ACCESS ON
-
-double round(double x)
-{
-    std::fenv_t save_env;
-    std::feholdexcept(&save_env);
-    double result = std::rint(x);
-    if (std::fetestexcept(FE_INEXACT))
-    {
-        auto const save_round = std::fegetround();
-        std::fesetround(FE_TOWARDZERO);
-        result = std::rint(std::copysign(0.5 + std::fabs(x), x));
-        std::fesetround(save_round);
-    }
-    std::feupdateenv(&save_env);
-    return result;
-}
-```
-
-The additional overloads are not required to be provided exactly as (A-C). They
-only need to be sufficient to ensure that for their argument `num` of integer
-type:
-
-- `std::round(num)` has the same effect as
-  `std::round(static_cast<double>(num))`.
-- `std::lround(num)` has the same effect as
-  `std::lround(static_cast<double>(num))`.
-- `std::llround(num)` has the same effect as
-  `std::llround(static_cast<double>(num))`.
+- `lround`/`llround` don't throw on overflow — they set a floating-point
+  exception flag and return an implementation-defined value. Code that
+  expects an exception or a saturated value will silently get garbage
+  instead unless it explicitly tests `FE_INVALID`.
+- `round(-0.0)` prints as `-0`, and `round` on a value like `-0.4`
+  also yields `-0` — the sign is preserved even though the magnitude
+  rounds to zero.
+- "Rounds away from zero" is not "rounds up" — `round(-2.5)` is `-3`,
+  not `-2`.
 
 ### Example
 
 ```cpp
-#include <cfenv>
-#include <climits>
-#include <cmath>
 #include <iostream>
-
-// #pragma STDC FENV_ACCESS ON
+#include <cmath>
 
 int main()
 {
-    // round
     std::cout << "round(+2.3) = " << std::round(2.3)
               << "  round(+2.5) = " << std::round(2.5)
               << "  round(+2.7) = " << std::round(2.7) << '\n'
@@ -156,55 +64,63 @@ int main()
               << "  round(-2.5) = " << std::round(-2.5)
               << "  round(-2.7) = " << std::round(-2.7) << '\n';
 
-    std::cout << "round(-0.0) = " << std::round(-0.0)  << '\n'
-              << "round(-Inf) = " << std::round(-INFINITY) << '\n';
-
-    // lround
-    std::cout << "lround(+2.3) = " << std::lround(2.3)
-              << "  lround(+2.5) = " << std::lround(2.5)
-              << "  lround(+2.7) = " << std::lround(2.7) << '\n'
-              << "lround(-2.3) = " << std::lround(-2.3)
-              << "  lround(-2.5) = " << std::lround(-2.5)
-              << "  lround(-2.7) = " << std::lround(-2.7) << '\n';
-
-    std::cout << "lround(-0.0) = " << std::lround(-0.0)  << '\n'
-              << "lround(-Inf) = " << std::lround(-INFINITY) << '\n';
-
-    // error handling
-    std::feclearexcept(FE_ALL_EXCEPT);
-
-    std::cout << "std::lround(LONG_MAX+1.5) = "
-              << std::lround(LONG_MAX + 1.5) << '\n';
-    if (std::fetestexcept(FE_INVALID))
-        std::cout << "    FE_INVALID was raised\n";
+    std::cout << "lround(+2.5) = " << std::lround(2.5)
+              << "  lround(-2.5) = " << std::lround(-2.5) << '\n';
 }
 ```
-
-Possible output:
 
 ```text
 round(+2.3) = 2  round(+2.5) = 3  round(+2.7) = 3
 round(-2.3) = -2  round(-2.5) = -3  round(-2.7) = -3
-round(-0.0) = -0
-round(-Inf) = -inf
-lround(+2.3) = 2  lround(+2.5) = 3  lround(+2.7) = 3
-lround(-2.3) = -2  lround(-2.5) = -3  lround(-2.7) = -3
-lround(-0.0) = 0
-lround(-Inf) = -9223372036854775808
-std::lround(LONG_MAX+1.5) = -9223372036854775808
-    FE_INVALID was raised
+lround(+2.5) = 3  lround(-2.5) = -3
 ```
+
+### Reference
+
+```cpp skip
+float       round ( float num );
+double      round ( double num );
+long double round ( long double num );  // (until C++23)
+constexpr /* floating-point-type */
+            round ( /* floating-point-type */ num );  // (since C++23)
+float       roundf( float num );  // (since C++11) (constexpr since C++23)
+long double roundl( long double num );  // (since C++11) (constexpr since C++23)
+
+long lround ( float num );
+long lround ( double num );
+long lround ( long double num );  // (until C++23)
+constexpr long lround( /* floating-point-type */ num );  // (since C++23)
+long lroundf( float num );  // (since C++11) (constexpr since C++23)
+long lroundl( long double num );  // (since C++11) (constexpr since C++23)
+
+long long llround ( float num );
+long long llround ( double num );
+long long llround ( long double num );  // (until C++23)
+constexpr long long llround( /* floating-point-type */ num );  // (since C++23)
+long long llroundf( float num );  // (since C++11) (constexpr since C++23)
+long long llroundl( long double num );  // (since C++11) (constexpr since C++23)
+
+template< class Integer >
+double round( Integer num );  // (since C++11) (constexpr since C++23)
+template< class Integer >
+long lround( Integer num );  // (since C++11) (constexpr since C++23)
+template< class Integer >
+long long llround( Integer num );  // (since C++11) (constexpr since C++23)
+```
+
+POSIX additionally specifies that every case where `lround`/`llround`
+would raise `FE_INEXACT` is treated as a domain error. The integer
+overloads are only required to behave *as if* `num` were cast to
+`double` first, not to be implemented exactly as the template above.
 
 ### See also
 
-- **floorfloorffloorl (C++11)(C++11)** — nearest integer not greater than the
-  given value (function)
-- **ceilceilfceill (C++11)(C++11)** — nearest integer not less than the given
-  value (function)
-- **trunctruncftruncl (C++11)(C++11)(C++11)** — nearest integer not greater in
-  magnitude than the given value (function)
-
-**C documentation for `round`**
+- **floor** — nearest integer not greater than the given value
+  (`floorf`, `floorl`, C++11)
+- **ceil** — nearest integer not less than the given value (`ceilf`,
+  `ceill`, C++11)
+- **trunc** — nearest integer not greater in magnitude than the given
+  value (`truncf`, `truncl`, C++11)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/numeric/math/round*

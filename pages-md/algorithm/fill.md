@@ -1,70 +1,42 @@
 # std::fill
 
-```cpp
-template< class ForwardIt, class T >
-void fill( ForwardIt first, ForwardIt last, const T& value );  // (until C++20)
-template< class ForwardIt, class T >
-constexpr void fill( ForwardIt first, ForwardIt last, const T& value );  // (since C++20)
-template< class ExecutionPolicy, class ForwardIt, class T >
-void fill( ExecutionPolicy&& policy,
-           ForwardIt first, ForwardIt last, const T& value );  // (2) (since C++17)
+Assigns the same `value` to every element in `[first, last)`, in
+place. Reach for it whenever you'd otherwise write a hand-rolled loop
+that just overwrites a range with a constant — resetting a buffer,
+zeroing a `std::vector`, and similar.
+
+```cpp skip
+std::fill(first, last, value);                // assign to every element
+std::fill(policy, first, last, value);         // parallel (since C++17)
 ```
 
-1) Assigns the given `value` to the elements in the range
-   `[``first``,``last``)`.
+`constexpr` since C++20.
 
-2) Same as (1), but executed according to `policy`. This overload does not
-   participate in overload resolution unless
-   `std::is_execution_policy_v<std::decay_t<ExecutionPolicy>>` is `true`. (until
-   C++20) `std::is_execution_policy_v<std::remove_cvref_t<ExecutionPolicy>>` is
-   `true`. (since C++20)
+### What you provide
 
-### Parameters
+- **first, last** — forward iterators bounding the range to overwrite.
+- **value** — the value assigned to each element; must be writable to
+  `*first` (assignable to the iterator's value type).
+- **policy** — an execution policy (C++17) for parallel execution.
 
-- **first, last** — the range of elements to modify
-- **value** — the value to be assigned
-- **policy** — the execution policy to use. See execution policy for details.
+### Guarantees and costs
 
-**Type requirements**
+- Exactly `std::distance(first, last)` assignments.
+- No return value — the range is modified in place, size unchanged.
+- Parallel overload: if an assignment throws, `std::terminate` is
+  called; allocation failure throws `std::bad_alloc`.
 
-**-`ForwardIt` must meet the requirements of LegacyForwardIterator.**
+### Gotchas
 
-**-`value` must be writable to `first`.**
-
-### Return value
-
-(none)
-
-### Complexity
-
-Exactly `std::distance(first, last)` assignments.
-
-### Exceptions
-
-The overload with a template parameter named `ExecutionPolicy` reports errors as
-follows:
-
-- If execution of a function invoked as part of the algorithm throws an
-  exception and `ExecutionPolicy` is one of the standard policies,
-  `std::terminate` is called. For any other `ExecutionPolicy`, the behavior is
-  implementation-defined.
-- If the algorithm fails to allocate memory, `std::bad_alloc` is thrown.
-
-### Possible implementation
-
-```cpp
-template<class ForwardIt, class T>
-void fill(ForwardIt first, ForwardIt last, const T& value)
-{
-    for (; first != last; ++first)
-        *first = value;
-}
-```
+- `fill` overwrites existing elements; it does not grow the
+  container. Filling `[v.begin(), v.end())` on an empty vector writes
+  nothing — resize first, or use `std::fill_n` with a back-inserter
+  when you need to add elements.
+- Requires the value type to be writable to the iterator, not merely
+  CopyAssignable (LWG 283) — matters mostly for exotic proxy
+  iterators.
 
 ### Example
-
-The following code uses `fill()` to set all of the elements of a
-`std::vector<int>` to `-1`:
 
 ```cpp
 #include <algorithm>
@@ -73,7 +45,7 @@ The following code uses `fill()` to set all of the elements of a
 
 int main()
 {
-    std::vector<int> v {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    std::vector<int> v{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
     std::fill(v.begin(), v.end(), -1);
 
@@ -83,33 +55,36 @@ int main()
 }
 ```
 
-Output:
-
 ```text
 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+Full declarations:
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 283 | C++98 | `T` was required to be CopyAssignable, but `T` is not always
-      writable to `ForwardIt` | required to be writable instead
+```cpp skip
+template< class ForwardIt, class T >
+void fill( ForwardIt first, ForwardIt last, const T& value );  // (until C++20)
+template< class ForwardIt, class T >
+constexpr void fill( ForwardIt first, ForwardIt last, const T& value );  // (since C++20)
+template< class ExecutionPolicy, class ForwardIt, class T >
+void fill( ExecutionPolicy&& policy,
+           ForwardIt first, ForwardIt last, const T& value );  // (2) (since C++17)
+```
+
+`ForwardIt` must meet LegacyForwardIterator, and `value` must be
+writable to `first`. LWG 283 (applied retroactively to C++98): `T`
+was originally required to be CopyAssignable, which isn't always
+sufficient; "writable to `ForwardIt`" is the correct requirement.
 
 ### See also
 
-- **fill_n** — copy-assigns the given value to N elements in a range (function
-  template)
-- **copycopy_if (C++11)** — copies a range of elements to a new location
-  (function template)
-- **generate** — assigns the results of successive function calls to every
-  element in a range (function template)
-- **transform** — applies a function to a range of elements, storing results in
-  a destination range (function template)
-- **ranges::fill (C++20)** — assigns a range of elements a certain value
-  (niebloid)
+- **fill_n** — assigns a value to N elements, growable with an inserter
+- **copy** — copies a range of elements to a new location
+- **generate** — assigns the results of successive function calls
+- **transform** — applies a function, storing results in another range
+- **ranges::fill** — constrained version (C++20)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/algorithm/fill*

@@ -1,91 +1,50 @@
 # std::binary_search
 
-```cpp
-template< class ForwardIt, class T >
-bool binary_search( ForwardIt first, ForwardIt last, const T& value );  // (until C++20)
-template< class ForwardIt, class T >
-constexpr bool binary_search( ForwardIt first, ForwardIt last,
-                              const T& value );  // (since C++20)
-template< class ForwardIt, class T, class Compare >
-bool binary_search( ForwardIt first, ForwardIt last,
-                    const T& value, Compare comp );  // (until C++20)
-template< class ForwardIt, class T, class Compare >
-constexpr bool binary_search( ForwardIt first, ForwardIt last,
-                              const T& value, Compare comp );  // (since C++20)
+Answers a yes/no question — *does an element equivalent to `value` exist in
+this range?* — in O(log N), but only if the range is already sorted (or at
+least partitioned) with respect to `value`. If you need *where* it is, use
+`std::lower_bound`, `std::upper_bound`, or `std::equal_range` instead.
+
+```cpp skip
+std::binary_search(first, last, value);        // uses operator<
+std::binary_search(first, last, value, comp);   // your ordering
 ```
 
-Checks if an element equivalent to `value` appears within the range
-`[``first``,``last``)`.
+Since C++20 both overloads are `constexpr`.
 
-For `std::binary_search` to succeed, the range `[``first``,``last``)` must be at
-least partially ordered with respect to `value`, i.e. it must satisfy all of the
-following requirements:
+### What you provide
 
-- partitioned with respect to `element < value` or `comp(element, value)` (that
-  is, all elements for which the expression is `true` precede all elements for
-  which the expression is `false`).
-- partitioned with respect to `!(value < element)` or `!comp(value, element)`.
-- for all elements, if `element < value` or `comp(element, value)` is `true`
-  then `!(value < element)` or `!comp(value, element)` is also `true`.
+- **first, last** — forward iterators (works on `std::list` too, just not
+  in true O(log N) time — see below).
+- **value** — the value to look for.
+- **comp** — a callable answering *does `a` belong before `b`?*, taking two
+  arguments. It need not be a full ordering (`Compare`) — heterogeneous
+  comparisons against `value` are fine as long as the range stays
+  partitioned with respect to it.
 
-A fully-sorted range meets these criteria.
+### Guarantees and costs
 
-The first version uses operator< to compare the elements, the second version
-uses the given comparison function `comp`.
+- The range must be partitioned with respect to `element < value` (or
+  `comp(element, value)`) and with respect to `!(value < element)` (or
+  `!comp(value, element)`); a fully-sorted range always satisfies this. An
+  unpartitioned range gives no guarantees about the answer.
+- At most `log2(last - first) + O(1)` comparisons. On iterators that aren't
+  random-access, the number of iterator *increments* is still linear, so
+  the log-N comparison count doesn't translate into log-N wall-clock time
+  on something like `std::list`.
+- A defect report (LWG 270) relaxed the original requirement — early
+  wording demanded a strict weak ordering and `T` be LessThanComparable;
+  the corrected rule only requires the partitioning above, permitting
+  heterogeneous comparisons. Another (LWG 787) corrected the stated
+  comparison-count bound to the `log2(...) + O(1)` above.
 
-### Parameters
+### Gotchas
 
-- **first, last** — the range of elements to examine
-- **value** — value to compare the elements to
-- **comp** — binary predicate which returns ​`true` if the first argument is
-  *less* than (i.e. is ordered before) the second. The signature of the
-  predicate function should be equivalent to the following: `bool pred(const
-  Type1 &a, const Type2 &b);` While the signature does not need to have `const
-  &`, the function must not modify the objects passed to it and must be able to
-  accept all values of type (possibly const) `Type1` and `Type2` regardless of
-  value category (thus, `Type1 &` is not allowed, nor is `Type1` unless for
-  `Type1` a move is equivalent to a copy(since C++11)). The types Type1 and
-  Type2 must be such that an object of type T can be implicitly converted to
-  both Type1 and Type2, and an object of type ForwardIt can be dereferenced and
-  then implicitly converted to both Type1 and Type2. ​
-
-**Type requirements**
-
-**-`ForwardIt` must meet the requirements of LegacyForwardIterator.**
-
-**-`Compare` must meet the requirements of BinaryPredicate. It is not required to satisfy Compare.**
-
-### Return value
-
-`true` if an element equal to `value` is found, `false` otherwise.
-
-### Complexity
-
-The number of comparisons performed is logarithmic in the distance between
-`first` and `last` (at most log2(last - first) + O(1) comparisons). However, for
-non-LegacyRandomAccessIterators, number of iterator increments is linear.
-
-### Possible implementation
-
-See also the implementations in libstdc++ and libc++.
-
-```cpp
-template<class ForwardIt, class T>
-bool binary_search(ForwardIt first, ForwardIt last, const T& value)
-{
-    first = std::lower_bound(first, last, value);
-    return (!(first == last) and !(value < *first));
-}
-```
-
-```cpp
-template<class ForwardIt, class T, class Compare>
-bool binary_search(ForwardIt first, ForwardIt last, const T& value, Compare comp)
-{
-    first = std::lower_bound(first, last, value, comp);
-    return (!(first == last) and !(comp(value, *first)));
-}
-```
+- An unsorted (or unpartitioned) range doesn't throw or assert — it just
+  gives you a wrong `true`/`false` silently.
+- `binary_search` only tells you whether a match exists, not where — for
+  the position, or the full range of equal elements, use `lower_bound`,
+  `upper_bound`, or `equal_range`.
 
 ### Example
 
@@ -110,39 +69,44 @@ int main()
 }
 ```
 
-Output:
-
 ```text
 Searching for 1
 Found 1
 Searching for 2
-no dice!
+No dice!
 Searching for 3
 Found 3
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+Full declarations:
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 270 | C++98 | `Compare` was required to satisfy Compare and `T` was
-      required to be LessThanComparable (strict weak ordering required) | only a
-      partitioning is required; heterogeneous comparisons permitted
-  LWG 787 | C++98 | at most log(last - first) + 2 comparisons were allowed |
-      corrected to log2(last - first) + O(1)
+```cpp skip
+template< class ForwardIt, class T >
+bool binary_search( ForwardIt first, ForwardIt last, const T& value );  // (until C++20)
+template< class ForwardIt, class T >
+constexpr bool binary_search( ForwardIt first, ForwardIt last,
+                              const T& value );  // (since C++20)
+template< class ForwardIt, class T, class Compare >
+bool binary_search( ForwardIt first, ForwardIt last,
+                    const T& value, Compare comp );  // (until C++20)
+template< class ForwardIt, class T, class Compare >
+constexpr bool binary_search( ForwardIt first, ForwardIt last,
+                              const T& value, Compare comp );  // (since C++20)
+```
+
+`ForwardIt` must satisfy LegacyForwardIterator; `Compare` need only satisfy
+BinaryPredicate, not the full Compare requirements. It's implemented in
+terms of `lower_bound`: `first = std::lower_bound(first, last, value);
+return first != last && !(value < *first);`.
 
 ### See also
 
-- **equal_range** — returns range of elements matching a specific key (function
-  template)
-- **lower_bound** — returns an iterator to the first element *not less* than the
-  given value (function template)
-- **upper_bound** — returns an iterator to the first element *greater* than a
-  certain value (function template)
-- **ranges::binary_search (C++20)** — determines if an element exists in a
-  partially-ordered range (niebloid)
+- **equal_range** — the full range of elements equivalent to a value
+- **lower_bound** — first element not less than a given value
+- **upper_bound** — first element greater than a given value
+- **ranges::binary_search** — constrained version with projections (C++20)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/algorithm/binary_search*

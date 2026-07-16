@@ -1,6 +1,76 @@
 # std::adjacent_find
 
+Answers: *where's the first pair of equal (or predicate-matching)
+neighbors?* Scans a range and returns an iterator to the first of two
+consecutive elements that are equal — or, with a predicate, the first
+pair for which it returns `true`. Returns `last` if no such pair exists.
+
+```cpp skip
+std::adjacent_find(first, last);              // operator==
+std::adjacent_find(first, last, pred);        // custom "equal enough" test
+std::adjacent_find(policy, first, last, ...);  // parallel        (since C++17)
+```
+
+Since C++20 the non-policy overloads are `constexpr`.
+
+### What you provide
+
+- **first, last** — forward iterators (LegacyForwardIterator).
+- **pred** — a binary predicate: return `true` if two adjacent elements
+  should count as a match. It must not modify its arguments.
+- **policy** — an execution policy (C++17) to search with multiple
+  threads.
+
+### Guarantees and costs
+
+- Returns an iterator `it` such that `*it == *(it + 1)` (or
+  `pred(*it, *(it + 1))`); returns `last` if no such pair is found.
+- Complexity: exactly `min((result - first) + 1, (last - first) - 1)`
+  applications of the comparison for the non-policy overloads;
+  `O(last - first)` for the parallel overloads.
+- Parallel overloads: a predicate that throws calls `std::terminate` for
+  standard policies; allocation failure throws `std::bad_alloc`.
+
+### Gotchas
+
+- A custom predicate isn't limited to equality — e.g. `std::greater<>{}`
+  finds the first place a non-decreasing run breaks (see the example).
+- It only compares neighbors: it won't find two equal elements that
+  aren't adjacent. Sort first, or use `std::unique`'s approach, if that's
+  what you actually need.
+
+### Example
+
 ```cpp
+#include <algorithm>
+#include <functional>
+#include <iostream>
+#include <vector>
+
+int main()
+{
+    std::vector<int> v{0, 1, 2, 3, 40, 40, 41, 41, 5};
+
+    auto i1 = std::adjacent_find(v.begin(), v.end());
+    std::cout << "first equal pair at index "
+              << std::distance(v.begin(), i1) << ", value " << *i1 << '\n';
+
+    auto i2 = std::adjacent_find(v.begin(), v.end(), std::greater<int>());
+    std::cout << "first decrease at index "
+              << std::distance(v.begin(), i2) << ", value " << *i2 << '\n';
+}
+```
+
+```text
+first equal pair at index 4, value 40
+first decrease at index 7, value 41
+```
+
+### Reference
+
+Full declarations:
+
+```cpp skip
 template< class ForwardIt >
 ForwardIt adjacent_find( ForwardIt first, ForwardIt last );  // (until C++20)
 template< class ForwardIt >
@@ -18,154 +88,14 @@ ForwardIt adjacent_find( ExecutionPolicy&& policy,
                          ForwardIt first, ForwardIt last, BinaryPredicate p );  // (4) (since C++17)
 ```
 
-Searches the range `[``first``,``last``)` for two consecutive equal elements.
-
-1) Elements are compared using `operator==`.
-
-3) Elements are compared using the given binary predicate `p`.
-
-2,4) Same as (1,3), but executed according to `policy`. These overloads do not
-   participate in overload resolution unless
-   `std::is_execution_policy_v<std::decay_t<ExecutionPolicy>>` is `true`. (until
-   C++20) `std::is_execution_policy_v<std::remove_cvref_t<ExecutionPolicy>>` is
-   `true`. (since C++20)
-
-### Parameters
-
-- **first, last** — the range of elements to examine
-- **policy** — the execution policy to use. See execution policy for details.
-- **p** — binary predicate which returns ​`true` if the elements should be
-  treated as equal. The signature of the predicate function should be equivalent
-  to the following: `bool pred(const Type1 &a, const Type2 &b);` While the
-  signature does not need to have `const &`, the function must not modify the
-  objects passed to it and must be able to accept all values of type (possibly
-  const) `Type1` and `Type2` regardless of value category (thus, `Type1 &` is
-  not allowed, nor is `Type1` unless for `Type1` a move is equivalent to a
-  copy(since C++11)). The types Type1 and Type2 must be such that an object of
-  type ForwardIt can be dereferenced and then implicitly converted to both of
-  them. ​
-
-**Type requirements**
-
-**-`ForwardIt` must meet the requirements of LegacyForwardIterator.**
-
-### Return value
-
-An iterator to the first of the first pair of identical elements, that is, the
-first iterator `it` such that `*it == *(it + 1)` for (1,2) or `p(*it, *(it + 1))
-!= false` for (3,4).
-
-If no such elements are found, `last` is returned.
-
-### Complexity
-
-1,3) Exactly `std::min((result - first) + 1, (last - first) - 1)` applications
-   of the predicate where `result` is the return value.
-
-2,4) `O(last - first)` applications of the corresponding predicate.
-
-### Exceptions
-
-The overloads with a template parameter named `ExecutionPolicy` report errors as
-follows:
-
-- If execution of a function invoked as part of the algorithm throws an
-  exception and `ExecutionPolicy` is one of the standard policies,
-  `std::terminate` is called. For any other `ExecutionPolicy`, the behavior is
-  implementation-defined.
-- If the algorithm fails to allocate memory, `std::bad_alloc` is thrown.
-
-### Possible implementation
-
-```cpp
-template<class ForwardIt>
-ForwardIt adjacent_find(ForwardIt first, ForwardIt last)
-{
-    if (first == last)
-        return last;
-
-    ForwardIt next = first;
-    ++next;
-
-    for (; next != last; ++next, ++first)
-        if (*first == *next)
-            return first;
-
-    return last;
-}
-```
-
-```cpp
-template<class ForwardIt, class BinaryPredicate>
-ForwardIt adjacent_find(ForwardIt first, ForwardIt last, BinaryPredicate p)
-{
-    if (first == last)
-        return last;
-
-    ForwardIt next = first;
-    ++next;
-
-    for (; next != last; ++next, ++first)
-        if (p(*first, *next))
-            return first;
-
-    return last;
-}
-```
-
-### Example
-
-```cpp
-#include <algorithm>
-#include <functional>
-#include <iostream>
-#include <vector>
-
-int main()
-{
-    std::vector<int> v1 {0, 1, 2, 3, 40, 40, 41, 41, 5};
-
-    auto i1 = std::adjacent_find(v1.begin(), v1.end());
-
-    if (i1 == v1.end())
-        std::cout << "No matching adjacent elements\n";
-    else
-        std::cout << "The first adjacent pair of equal elements is at "
-                  << std::distance(v1.begin(), i1) << ", *i1 = "
-                  << *i1 << '\n';
-
-    auto i2 = std::adjacent_find(v1.begin(), v1.end(), std::greater<int>());
-    if (i2 == v1.end())
-        std::cout << "The entire vector is sorted in ascending order\n";
-    else
-        std::cout << "The last element in the non-decreasing subsequence is at "
-                  << std::distance(v1.begin(), i2) << ", *i2 = " << *i2 << '\n';
-}
-```
-
-Output:
-
-```text
-The first adjacent pair of equal elements is at 4, *i1 = 40
-The last element in the non-decreasing subsequence is at 7, *i2 = 41
-```
-
-### Defect reports
-
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
-
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 240 | C++98 | the predicate was applied `std::find` `(first, last, value)
-      - first` times for (1,3), where `value` was never defined | applied
-      `std::min(` `(result - first) + 1,` `(last - first) - 1)` times
+`ForwardIt` must meet LegacyForwardIterator; `BinaryPredicate` must meet
+the BinaryPredicate requirements.
 
 ### See also
 
-- **unique** — removes consecutive duplicate elements in a range (function
-  template)
-- **ranges::adjacent_find (C++20)** — finds the first two adjacent items that
-  are equal (or satisfy a given predicate) (niebloid)
+- **unique** — removes consecutive duplicate elements from a range
+- **ranges::adjacent_find** (C++20) — constrained version with
+  projections
 
 ---
 *Source: https://en.cppreference.com/w/cpp/algorithm/adjacent_find*
