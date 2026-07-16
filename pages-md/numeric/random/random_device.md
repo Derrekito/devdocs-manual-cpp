@@ -1,89 +1,92 @@
 # std::random_device
 
-```cpp
-class random_device;  // (since C++11)
+A nondeterministic source of randomness — hardware entropy, when the
+platform provides it. Use it once to **seed** a fast PRNG like
+`std::mt19937`, not as the generator itself: performance can degrade
+sharply once the OS's entropy pool is drained, and on some
+implementations it silently falls back to a deterministic pseudo-random
+sequence instead of true entropy. (C++11)
+
+```cpp skip
+std::random_device rd;
+std::mt19937 gen(rd());        // seed a fast PRNG from rd — do this
+unsigned int x = rd();         // avoid: calling rd() directly and often
 ```
 
-`std::random_device` is a uniformly-distributed integer random number generator
-that produces non-deterministic random numbers.
+### What you provide
 
-`std::random_device` may be implemented in terms of an implementation-defined
-pseudo-random number engine if a non-deterministic source (e.g. a hardware
-device) is not available to the implementation. In this case each
-`std::random_device` object may generate the same number sequence.
+Nothing — `random_device` is a concrete class, not a template. Its
+`result_type` is `unsigned int`.
 
-### Member types
+### Guarantees and costs
 
-- **`result_type` (C++11)** — unsigned int
+- `operator()` advances the device's state and returns one
+  nondeterministic value in `[min(), max()]`.
+- `entropy()` estimates the entropy of the underlying source; its
+  return value and exact meaning are implementation-defined.
+- If no genuine nondeterministic source is available, the implementation
+  may fall back to an implementation-defined pseudo-random engine — in
+  that case every `random_device` object in the program can produce the
+  *same* sequence. A real case of this: old MinGW-w64 builds were fully
+  deterministic (bug 338, fixed since GCC 9.2).
+- `operator=` is deleted — a `random_device` cannot be assigned.
 
-### Member functions
+### Gotchas
 
-**Construction**
-
-- **(constructor) (C++11)** — constructs the engine (public member function)
-- **operator= (deleted) (C++11)** — the assignment operator is deleted (public
-  member function)
-
-**Generation**
-
-- **operator() (C++11)** — advances the engine's state and returns the generated
-  value (public member function)
-
-**Characteristics**
-
-- **entropy (C++11)** — obtains the entropy estimate for the non-deterministic
-  random number generator (public member function)
-- **min [static] (C++11)** — gets the smallest possible value in the output
-  range (public static member function)
-- **max [static] (C++11)** — gets the largest possible value in the output range
-  (public static member function)
-
-### Notes
-
-A notable implementation where `std::random_device` is deterministic in old
-versions of MinGW-w64 (bug 338, fixed since GCC 9.2). The latest MinGW-w64
-versions can be downloaded from GCC with the MCF thread model.
+- Calling it repeatedly can be slow: many implementations degrade
+  sharply once the entropy pool is exhausted. Use it only to seed a
+  PRNG, never as the generator in a loop.
+- On some implementations it's deterministic despite the name — don't
+  assume real entropy without checking your target platform.
 
 ### Example
 
+`random_device` output is nondeterministic by design, so there's no
+fixed sequence to print. This seeds an engine and checks a deterministic
+fact about the result instead.
+
 ```cpp
 #include <iostream>
-#include <map>
 #include <random>
-#include <string>
 
 int main()
 {
-    std::random_device rd;
-    std::map<int, int> hist;
-    std::uniform_int_distribution<int> dist(0, 9);
+    std::random_device rd;    // nondeterministic seed source
+    std::mt19937 gen(rd());   // seed a PRNG, don't generate with rd directly
+    std::uniform_int_distribution<> dist(1, 6);
 
-    for (int n = 0; n != 20000; ++n)
-        ++hist[dist(rd)]; // note: demo only: the performance of many
-                          // implementations of random_device degrades sharply
-                          // once the entropy pool is exhausted. For practical use
-                          // random_device is generally only used to seed
-                          // a PRNG such as mt19937
-
-    for (auto [x, y] : hist)
-        std::cout << x << " : " << std::string(y / 100, '*') << '\n';
+    int value = dist(gen);
+    std::cout << "value in [1,6]: " << std::boolalpha
+              << (value >= 1 && value <= 6) << '\n';
 }
 ```
 
-Possible output:
-
 ```text
-0 : ********************
-1 : *******************
-2 : ********************
-3 : ********************
-4 : ********************
-5 : *******************
-6 : ********************
-7 : ********************
-8 : *******************
-9 : ********************
+value in [1,6]: true
 ```
+
+### Reference
+
+```cpp skip
+class random_device;  // (since C++11)
+```
+
+**Member types** — `result_type` (C++11): `unsigned int`.
+
+**Member functions** — constructor (C++11); `operator=` deleted
+(C++11); `operator()` (C++11, generation); `entropy()`, `min()`, `max()`
+(C++11, static `min`/`max`).
+
+### See also
+
+- **mersenne_twister_engine** (C++11) — the PRNG (via `mt19937`) that
+  this is normally used to seed
+- **seed_seq** (C++11) — combines several `random_device` outputs into
+  a single higher-quality seed
+- **uniform_int_distribution** (C++11) — shapes an engine's output into
+  a bounded integer range
+- **uniform_real_distribution** (C++11) — shapes it into a bounded
+  floating-point range
 
 ---
 *Source: https://en.cppreference.com/w/cpp/numeric/random/random_device*

@@ -1,121 +1,39 @@
 # std::advance
 
-```cpp
-template< class InputIt, class Distance >
-void advance( InputIt& it, Distance n );  // (until C++17)
-template< class InputIt, class Distance >
-constexpr void advance( InputIt& it, Distance n );  // (since C++17)
+Moves `it` forward (or backward, for negative `n`) by `n` elements
+**in place** and returns nothing. This is the mutating counterpart to
+**next**/**prev**, which leave the original iterator untouched and
+hand back an advanced copy instead — in fact both are implemented as a
+call to `advance` followed by returning the (copied) iterator.
+
+```cpp skip
+std::advance(it, n);  // it moves n elements in place, returns void
 ```
 
-Increments given iterator `it` by `n` elements.
+### What you provide
 
-If `n` is negative, the iterator is decremented. In this case, `InputIt` must
-meet the requirements of LegacyBidirectionalIterator, otherwise the behavior is
-undefined.
+- **it** — iterator to advance, taken by reference and mutated in
+  place; must meet LegacyInputIterator.
+- **n** — number of elements to move. If negative, `it` is
+  decremented instead, which requires `it` to also meet
+  LegacyBidirectionalIterator — otherwise the behavior is undefined.
 
-### Parameters
+### Guarantees and costs
 
-- **it** — iterator to be advanced
-- **n** — number of elements `it` should be advanced
+- No return value; the only effect is mutating `it`.
+- Linear in `n` in general; O(1) if `InputIt` additionally meets
+  LegacyRandomAccessIterator (implemented as `it += n`).
+- `constexpr` since C++17.
 
-**Type requirements**
+### Gotchas
 
-**-`InputIt` must meet the requirements of LegacyInputIterator.**
-
-### Return value
-
-(none)
-
-### Complexity
-
-Linear.
-
-However, if `InputIt` additionally meets the requirements of
-LegacyRandomAccessIterator, complexity is constant.
-
-### Notes
-
-The behavior is undefined if the specified sequence of increments or decrements
-would require that a non-incrementable iterator (such as the past-the-end
-iterator) is incremented, or that a non-decrementable iterator (such as the
-front iterator or the singular iterator) is decremented.
-
-### Possible implementation
-
-See also the implementations in libstdc++ and libc++.
-
-```cpp
-namespace detail
-{
-    template<class It>
-    void do_advance(It& it, typename std::iterator_traits<It>::difference_type n,
-                    std::input_iterator_tag)
-    {
-        while (n > 0)
-        {
-            --n;
-            ++it;
-        }
-    }
-
-    template<class It>
-    void do_advance(It& it, typename std::iterator_traits<It>::difference_type n,
-                    std::bidirectional_iterator_tag)
-    {
-        while (n > 0)
-        {
-            --n;
-            ++it;
-        }
-        while (n < 0)
-        {
-            ++n;
-            --it;
-        }
-    }
-
-    template<class It>
-    void do_advance(It& it, typename std::iterator_traits<It>::difference_type n,
-                    std::random_access_iterator_tag)
-    {
-        it += n;
-    }
-} // namespace detail
-
-template<class It, class Distance>
-void advance(It& it, Distance n)
-{
-    detail::do_advance(it, typename std::iterator_traits<It>::difference_type(n),
-                       typename std::iterator_traits<It>::iterator_category());
-}
-```
-
-```cpp
-template<class It, class Distance>
-constexpr void advance(It& it, Distance n)
-{
-    using category = typename std::iterator_traits<It>::iterator_category;
-    static_assert(std::is_base_of_v<std::input_iterator_tag, category>);
-
-    auto dist = typename std::iterator_traits<It>::difference_type(n);
-    if constexpr (std::is_base_of_v<std::random_access_iterator_tag, category>)
-        it += dist;
-    else
-    {
-        while (dist > 0)
-        {
-            --dist;
-            ++it;
-        }
-        if constexpr (std::is_base_of_v<std::bidirectional_iterator_tag, category>)
-            while (dist < 0)
-            {
-                ++dist;
-                --it;
-            }
-    }
-}
-```
+- Advancing past the valid range is undefined behavior: incrementing a
+  non-incrementable iterator (such as past-the-end) or decrementing a
+  non-decrementable one (such as before-begin) is UB. `advance` does
+  not check bounds.
+- Because it mutates in place and returns `void`, it can't be chained
+  or used inline in an expression — use `std::next`/`std::prev` when
+  you need the result as a value.
 
 ### Example
 
@@ -138,19 +56,32 @@ int main()
 }
 ```
 
-Output:
-
 ```text
 4 1
 ```
 
+### Reference
+
+```cpp skip
+template< class InputIt, class Distance >
+void advance( InputIt& it, Distance n );  // (until C++17)
+template< class InputIt, class Distance >
+constexpr void advance( InputIt& it, Distance n );  // (since C++17)
+```
+
+Dispatches on `it`'s iterator category: random-access iterators use
+`it += n` directly (O(1)); bidirectional iterators loop `++it`/`--it`
+depending on the sign of `n`; input iterators only loop `++it` (`n`
+must be non-negative). See the standard library implementations in
+libstdc++ or libc++ for the exact dispatch.
+
 ### See also
 
-- **next (C++11)** — increment an iterator (function template)
-- **prev (C++11)** — decrement an iterator (function template)
-- **distance** — returns the distance between two iterators (function template)
-- **ranges::advance (C++20)** — advances an iterator by given distance or to a
-  given bound (niebloid)
+- **next** — increment an iterator, returning a copy (C++11)
+- **prev** — decrement an iterator, returning a copy (C++11)
+- **distance** — the distance between two iterators
+- **ranges::advance** — constrained version; can advance to a bound
+  (C++20)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/iterator/advance*

@@ -1,288 +1,133 @@
 # std::basic_string<CharT,Traits,Allocator>::compare
 
-```cpp
-int compare( const basic_string& str ) const;  // (until C++11)
-int compare( const basic_string& str ) const noexcept;  // (since C++11) (until C++20)
-constexpr int compare( const basic_string& str ) const noexcept;  // (since C++20)
-int compare( size_type pos1, size_type count1,
-             const basic_string& str ) const;  // (until C++20)
-constexpr int compare( size_type pos1, size_type count1,
-                       const basic_string& str ) const;  // (since C++20)
-int compare( size_type pos1, size_type count1,
-             const basic_string& str,
-             size_type pos2, size_type count2 ) const;  // (until C++14)
-int compare( size_type pos1, size_type count1,
-             const basic_string& str,
-             size_type pos2, size_type count2 = npos ) const;  // (since C++14) (until C++20)
-constexpr int compare( size_type pos1, size_type count1,
-                       const basic_string& str,
-                       size_type pos2, size_type count2 = npos ) const;  // (since C++20)
-int compare( const CharT* s ) const;  // (until C++20)
-constexpr int compare( const CharT* s ) const;  // (since C++20)
-int compare( size_type pos1, size_type count1,
-             const CharT* s ) const;  // (until C++20)
-constexpr int compare( size_type pos1, size_type count1,
-                       const CharT* s ) const;  // (since C++20)
-int compare( size_type pos1, size_type count1,
-             const CharT* s, size_type count2 ) const;  // (until C++20)
-constexpr int compare( size_type pos1, size_type count1,
-                       const CharT* s, size_type count2 ) const;  // (since C++20)
-template< class StringViewLike >
-int compare( const StringViewLike& t ) const noexcept(/* see below */);  // (since C++17) (until C++20)
-template< class StringViewLike >
-constexpr int
-    compare( const StringViewLike& t ) const noexcept(/* see below */);  // (since C++20)
-template< class StringViewLike >
-int compare( size_type pos1, size_type count1,
-             const StringViewLike& t ) const;  // (since C++17) (until C++20)
-template< class StringViewLike >
-constexpr int compare( size_type pos1, size_type count1,
-                       const StringViewLike& t ) const;  // (since C++20)
-template< class StringViewLike >
-int compare( size_type pos1, size_type count1,
-             const StringViewLike& t,
-             size_type pos2, size_type count2 = npos) const;  // (since C++17) (until C++20)
-template< class StringViewLike >
-constexpr int compare( size_type pos1, size_type count1,
-                       const StringViewLike& t,
-                       size_type pos2, size_type count2 = npos) const;  // (since C++20)
+Lexicographically compares this string (or a slice of it) against
+another string, C string, or `string_view`-like object. Returns
+`< 0` if `*this` sorts before the argument, `0` if they're equal, and
+`> 0` if it sorts after — three-way, like `strcmp`. If you only need
+"are these equal?" or "is A less than B?", use `==` or `<` instead;
+they're simpler to read and don't require reasoning about sign.
+
+```cpp skip
+s.compare(other);                      // whole string vs whole string
+s.compare(pos1, count1, other);        // a slice of *this vs whole other
+s.compare(pos1, count1, other, pos2, count2);  // slice vs slice
+s.compare(cstr);                       // vs a C string
+s.compare(pos1, count1, cstr);         // slice vs a C string
+s.compare(pos1, count1, cstr, count2); // slice vs count2 chars of cstr
+s.compare(string_view_like);           // (since C++17)
 ```
 
-Compares two character sequences.
+### What you provide
 
-1) Compares this string to `str`.
-2) Compares a `[``pos1``,``pos1 + count1``)` substring of this string to `str`.
+- **pos1, count1** — optional slice `[pos1, pos1 + count1)` of
+  `*this`; an oversized `count1` clamps to `size()`.
+- **str / cstr / t** — what to compare against: another
+  `basic_string`, a null-terminated `const CharT*`, or (since C++17)
+  anything convertible to `std::basic_string_view`.
+- **pos2, count2** — optional slice of the argument, same clamping
+  rule.
 
-- If `count1 > size() - pos1`, the substring is `[``pos1``,``size()``)`.
+### Guarantees and costs
 
-3) Compares a `[``pos1``,``pos1 + count1``)` substring of this string to a
-substring `[``pos2``,``pos2 + count2``)` of `str`.
+- Returns negative/zero/positive exactly like `strcmp`: compares
+  `min(count1, count2)` characters first; if that's a tie, the
+  shorter sequence sorts first, and equal-length equal-content
+  sequences compare `0`.
+- Overloads taking a `pos1`/`pos2` throw `std::out_of_range` if that
+  position exceeds the corresponding string's size. Strong exception
+  safety throughout.
+- Not locale-sensitive with the default `char_traits`; for
+  locale-aware comparison use `std::collate::compare`.
+- `constexpr` since C++20; the whole-string overload is `noexcept`
+  since C++11.
 
-- If `count1 > size() - pos1`, the first substring is `[``pos1``,``size()``)`.
-- If `count2 > str.size() - pos2`, the second substring is
-  `[``pos2``,``str.size()``)`.
+### Gotchas
 
-4) Compares this string to the null-terminated character sequence beginning at
-   the character pointed to by `s` with length `Traits::length(s)`.
-5) Compares a `[``pos1``,``pos1 + count1``)` substring of this string to the
-null-terminated character sequence beginning at the character pointed to by `s`
-with length `Traits::length(s)`.
-
-- If `count1 > size() - pos1`, the substring is `[``pos1``,``size()``)`.
-
-6) Compares a `[``pos1``,``pos1 + count1``)` substring of this string to the
-characters in the range `[``s``,``s + count2``)`. The characters in `[``s``,``s
-+ count2``)` may include null characters.
-
-- If `count1 > size() - pos1`, the substring is `[``pos1``,``size()``)`.
-
-7-9) Implicitly converts `t` to a string view `sv` as if by
-   `std::basic_string_view<CharT, Traits> sv = t;`, then
-
-   7) compares this string to `sv`;
-
-   8) compares a `[``pos1``,``pos1 + count1``)` substring of this string to
-      `sv`, as if by `std::basic_string_view<CharT, Traits>(*this).substr(pos1,
-      count1).compare(sv)`;
-
-   9) compares a `[``pos1``,``pos1 + count1``)` substring of this string to a
-      substring `[``pos2``,``pos2 + count2``)` of `sv`, as if by
-      `std::basic_string_view<CharT, Traits>(*this) .substr(pos1,
-      count1).compare(sv.substr(pos2, count2))`.
-
-These overloads participate in overload resolution only if
-   `std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT,
-   Traits>>` is `true` and `std::is_convertible_v<const StringViewLike&, const
-   CharT*>` is `false`.
-
-A character sequence consisting of `count1` characters starting at `data1` is
-compared to a character sequence consisting of `count2` characters starting at
-`data2` as follows:
-
-- First, calculate the number of characters to compare, as if by `size_type rlen
-  = std::min(count1, count2)`.
-- Then compare the sequences by calling `Traits::compare(data1, data2, rlen)`.
-  For standard strings this function performs character-by-character
-  lexicographical comparison. If the result is zero (the character sequences are
-  equal so far), then their sizes are compared as follows:
-
-  Condition | Result | Return value
-  `Traits::compare(data1, data2, rlen) < 0` | data1 is *less* than data2 | `<0`
-  `Traits::compare(data1, data2, rlen) == 0` | size1 < size2 | data1 is *less*
-      than data2 | `<0`
-  size1 == size2 | data1 is *equal* to data2 | `​0​`
-  size1 > size2 | data1 is *greater* than data2 | `>0`
-  `Traits::compare(data1, data2, rlen) > 0` | data1 is *greater* than data2 |
-      `>0`
-
-### Parameters
-
-- **str** — other string to compare to
-- **s** — pointer to the character string to compare to
-- **count1** — number of characters of this string to compare
-- **pos1** — position of the first character in this string to compare
-- **count2** — number of characters of the given string to compare
-- **pos2** — position of the first character of the given string to compare
-- **t** — object (convertible to `std::basic_string_view`) to compare to
-
-### Return value
-
-- Negative value if `*this` appears before the character sequence specified by
-  the arguments, in lexicographical order.
-- Zero if both character sequences compare equivalent.
-- Positive value if `*this` appears after the character sequence specified by
-  the arguments, in lexicographical order.
-
-### Exceptions
-
-The overloads taking parameters named `pos1` or `pos2` throws
-`std::out_of_range` if the argument is out of range.
-
-7) `noexcept` specification: `noexcept(std::is_nothrow_convertible_v<const T&,
-   std::basic_string_view<CharT, Traits>>)`
-
-8,9) Throws anything thrown by the conversion to `std::basic_string_view`.
-
-If an exception is thrown for any reason, this function has no effect (strong
-exception safety guarantee).
-
-### Possible implementation
-
-```cpp
-template<class CharT, class Traits, class Alloc>
-int std::basic_string<CharT, Traits, Alloc>::compare
-    (const std::basic_string& s) const noexcept
-{
-    size_type lhs_sz = size();
-    size_type rhs_sz = s.size();
-    int result = traits_type::compare(data(), s.data(), std::min(lhs_sz, rhs_sz));
-    if (result != 0)
-        return result;
-    if (lhs_sz < rhs_sz)
-        return -1;
-    if (lhs_sz > rhs_sz)
-        return 1;
-    return 0;
-}
-```
-
-### Notes
-
-For the situations when three-way comparison is not required,
-`std::basic_string` provides the usual relational operators (`<`, `<=`, `==`,
-`>`, etc).
-
-By default (with the default `std::char_traits`), this function is not
-locale-sensitive. See `std::collate::compare` for locale-aware three-way string
-comparison.
+- The return value is a *sign*, not a distance — never treat it as a
+  character offset or a count of differing characters.
+- `compare` is the wrong tool for a simple equality check: `a == b`
+  is clearer and just as fast. Reach for `compare` when you need
+  ordering, a slice-vs-slice comparison, or a three-way result to
+  store.
+- With slices, an oversized `count1`/`count2` silently clamps to the
+  end of the string rather than erroring; only an out-of-range `pos`
+  throws.
 
 ### Example
 
 ```cpp
-#include <cassert>
-#include <iomanip>
 #include <iostream>
 #include <string>
-#include <string_view>
 
-void print_compare_result(std::string_view str1,
-                          std::string_view str2,
-                          int compare_result)
+void show(int id, int r)
 {
-    if (compare_result < 0)
-        std::cout << std::quoted(str1) << " comes before "
-                  << std::quoted(str2) << ".\n";
-    else if (compare_result > 0)
-        std::cout << std::quoted(str2) << " comes before "
-                  << std::quoted(str1) << ".\n";
-    else
-        std::cout << std::quoted(str1) << " and "
-                  << std::quoted(str2) << " are the same.\n";
+    std::cout << id << ") " << (r < 0 ? "less" : r > 0 ? "greater" : "equal")
+              << '\n';
 }
 
 int main()
 {
     std::string batman{"Batman"};
     std::string superman{"Superman"};
-    int compare_result{0};
 
-    // 1) Compare with other string
-    compare_result = batman.compare(superman);
-    std::cout << "1) ";
-    print_compare_result("Batman", "Superman", compare_result);
-
-    // 2) Compare substring with other string
-    compare_result = batman.compare(3, 3, superman);
-    std::cout << "2) ";
-    print_compare_result("man", "Superman", compare_result);
-
-    // 3) Compare substring with other substring
-    compare_result = batman.compare(3, 3, superman, 5, 3);
-    std::cout << "3) ";
-    print_compare_result("man", "man", compare_result);
-
-    // Compare substring with other substring
-    // defaulting to end of other string
-    assert(compare_result == batman.compare(3, 3, superman, 5));
-
-    // 4) Compare with char pointer
-    compare_result = batman.compare("Superman");
-    std::cout << "4) ";
-    print_compare_result("Batman", "Superman", compare_result);
-
-    // 5) Compare substring with char pointer
-    compare_result = batman.compare(3, 3, "Superman");
-    std::cout << "5) ";
-    print_compare_result("man", "Superman", compare_result);
-
-    // 6) Compare substring with char pointer substring
-    compare_result = batman.compare(0, 3, "Superman", 5);
-    std::cout << "6) ";
-    print_compare_result("Bat", "Super", compare_result);
+    show(1, batman.compare(superman));             // whole strings
+    show(2, batman.compare(3, 3, superman));        // "man" vs "Superman"
+    show(3, batman.compare(3, 3, superman, 5, 3));  // "man" vs "man"
+    show(4, batman.compare("Superman"));            // vs a C string
 }
 ```
 
-Output:
-
 ```text
-1) "Batman" comes before "Superman".
-2) "Superman" comes before "man".
-3) "man" and "man" are the same.
-4) "Batman" comes before "Superman".
-5) "Superman" comes before "man".
-6) "Bat" comes before "Super".
+1) less
+2) greater
+3) equal
+4) less
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+```cpp skip
+int compare( const basic_string& str ) const;
+int compare( size_type pos1, size_type count1,
+             const basic_string& str ) const;
+int compare( size_type pos1, size_type count1,
+             const basic_string& str,
+             size_type pos2, size_type count2 = npos ) const;  // count2 default since C++14
+int compare( const CharT* s ) const;
+int compare( size_type pos1, size_type count1,
+             const CharT* s ) const;
+int compare( size_type pos1, size_type count1,
+             const CharT* s, size_type count2 ) const;
+template< class StringViewLike >
+int compare( const StringViewLike& t ) const noexcept(/* see below */);  // (since C++17)
+template< class StringViewLike >
+int compare( size_type pos1, size_type count1,
+             const StringViewLike& t ) const;  // (since C++17)
+template< class StringViewLike >
+int compare( size_type pos1, size_type count1,
+             const StringViewLike& t,
+             size_type pos2, size_type count2 = npos ) const;  // (since C++17)
+```
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 5 | C++98 | the parameter `count2` of overload (6) had a default argument
-      `npos` | default argument removed, split to overloads (5) and (6)
-  LWG 847 | C++98 | there was no exception safety guarantee | added strong
-      exception safety guarantee
-  LWG 2946 | C++17 | overload (7) caused ambiguity in some cases | avoided by
-      making it a template
-  P1148R0 | C++17 | noexcept for overload (7) was accidently dropped by the
-      resolution of LWG2946 | restored
+All overloads `constexpr` since C++20. The `StringViewLike` overloads
+participate in overload resolution only if `t` converts to
+`std::basic_string_view<CharT, Traits>` but not to `const CharT*`.
+Formally: compute `rlen = min(count1, count2)`, compare the first
+`rlen` characters via `Traits::compare`; if that's `0`, the shorter
+operand (by total size) is *less*, and equal sizes give `0`.
+
+### Notes
+
+`std::basic_string` provides `<`, `<=`, `==`, `>`, `>=` for the common
+case where you don't need a three-way result.
 
 ### See also
 
-- **operator==operator!=operator<operator>operator<=operator>=operator<=>
-  (removed in C++20)(removed in C++20)(removed in C++20)(removed in
-  C++20)(removed in C++20)(C++20)** — lexicographically compares two strings
-  (function template)
-- **substr** — returns a substring (public member function)
-- **collate** — defines lexicographical comparison and hashing of strings (class
-  template)
-- **strcoll** — compares two strings in accordance to the current locale
-  (function)
-- **lexicographical_compare** — returns `true` if one range is lexicographically
-  less than another (function template)
-- **compare** — compares two views (public member function of
-  `std::basic_string_view<CharT,Traits>`)
+- **operator==**, **operator<**, **operator<=>** — simpler binary
+  comparisons (`<=>` gives ordering since C++20)
+- **substr** — returns a copy of a slice
+- **lexicographical_compare** — three-way compare over arbitrary ranges
+- **compare** — the non-owning `std::basic_string_view` equivalent
 
 ---
 *Source: https://en.cppreference.com/w/cpp/string/basic_string/compare*

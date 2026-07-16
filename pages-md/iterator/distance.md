@@ -1,105 +1,44 @@
 # std::distance
 
-```cpp
-template< class InputIt >
-typename std::iterator_traits<InputIt>::difference_type
-    distance( InputIt first, InputIt last );  // (constexpr since C++17)
+Counts the hops from `first` to `last`. On a LegacyRandomAccessIterator
+(`vector`, `deque`, `array`, `string`) this is O(1) — a single
+subtraction. On anything else (`list`, `forward_list`, input/output
+iterators) it walks the range one element at a time with `++`, so it's
+O(N) — the same cost as writing the loop yourself.
+
+```cpp skip
+std::distance(first, last)  // hops from first to last; O(1) random-access, else O(N)
 ```
 
-Returns the number of hops from `first` to `last`.
+### What you provide
 
-If `InputIt` is not LegacyRandomAccessIterator, the behavior is undefined if
-`last` is not reachable from `first`.
+- **first** — iterator to the first element.
+- **last** — iterator marking the end of the range (or, for
+  random-access iterators, any second point to measure against).
 
-If `InputIt` is LegacyRandomAccessIterator, the behavior is undefined if `first`
-and `last` are neither reachable from each other.
+### Guarantees and costs
 
-### Parameters
+- Linear in general — walks `first` to `last` incrementing. Constant
+  if `InputIt` additionally meets LegacyRandomAccessIterator (computed
+  as `last - first`).
+- Since C++11, the result may be negative — only possible with
+  random-access iterators, when `first` is reachable from `last`
+  (i.e. `last` comes before `first`).
+- `constexpr` since C++17.
 
-- **first** — iterator pointing to the first element
-- **last** — iterator pointing to the end of the range
+### Gotchas
 
-**Type requirements**
-
-**-`InputIt` must meet the requirements of LegacyInputIterator. The operation is more efficient if `InputIt` additionally meets the requirements of LegacyRandomAccessIterator.**
-
-### Return value
-
-The number of increments needed to go from `first` to `last`.
-
-The value may be negative if random-access iterators are used and `first` is
-reachable from `last`.
-*(since C++11)*
-
-### Complexity
-
-Linear.
-
-However, if `InputIt` additionally meets the requirements of
-LegacyRandomAccessIterator, complexity is constant.
-
-### Possible implementation
-
-See also the implementations in libstdc++ and libc++.
-
-```cpp
-namespace detail
-{
-    template<class It>
-    constexpr // required since C++17
-    typename std::iterator_traits<It>::difference_type
-        do_distance(It first, It last, std::input_iterator_tag)
-    {
-        typename std::iterator_traits<It>::difference_type result = 0;
-        while (first != last)
-        {
-            ++first;
-            ++result;
-        }
-        return result;
-    }
-
-    template<class It>
-    constexpr // required since C++17
-    typename std::iterator_traits<It>::difference_type
-        do_distance(It first, It last, std::random_access_iterator_tag)
-    {
-        return last - first;
-    }
-} // namespace detail
-
-template<class It>
-constexpr // since C++17
-typename std::iterator_traits<It>::difference_type
-    distance(It first, It last)
-{
-    return detail::do_distance(first, last,
-                               typename std::iterator_traits<It>::iterator_category());
-}
-```
-
-```cpp
-template<class It>
-constexpr typename std::iterator_traits<It>::difference_type
-    distance(It first, It last)
-{
-    using category = typename std::iterator_traits<It>::iterator_category;
-    static_assert(std::is_base_of_v<std::input_iterator_tag, category>);
-
-    if constexpr (std::is_base_of_v<std::random_access_iterator_tag, category>)
-        return last - first;
-    else
-    {
-        typename std::iterator_traits<It>::difference_type result = 0;
-        while (first != last)
-        {
-            ++first;
-            ++result;
-        }
-        return result;
-    }
-}
-```
+- For anything short of random-access (`list`, `forward_list`,
+  `istream_iterator`, ...), `last` must be reachable from `first` by
+  repeated `++`, or the call is undefined behavior — there is no way
+  to detect an unreachable `last` safely.
+- `std::distance(v.end(), v.begin())` on a non-random-access container
+  is UB; on a random-access one it is well-defined and returns a
+  negative count (e.g. `-3`) — this reachable-either-way case was
+  clarified by LWG 940.
+- Even to just check emptiness, `distance` walks the whole range on
+  non-random-access iterators; comparing `first != last` is enough and
+  doesn't pay that cost.
 
 ### Example
 
@@ -115,38 +54,38 @@ int main()
               << std::distance(v.begin(), v.end()) << '\n'
               << "distance(last, first) = "
               << std::distance(v.end(), v.begin()) << '\n';
-              // the behavior is undefined (until LWG940)
 
     static constexpr auto il = {3, 1, 4};
-    // Since C++17 `distance` can be used in constexpr context.
+    // Since C++17, distance can be used in a constexpr context.
     static_assert(std::distance(il.begin(), il.end()) == 3);
     static_assert(std::distance(il.end(), il.begin()) == -3);
 }
 ```
-
-Output:
 
 ```text
 distance(first, last) = 3
 distance(last, first) = -3
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+```cpp skip
+template< class InputIt >
+typename std::iterator_traits<InputIt>::difference_type
+    distance( InputIt first, InputIt last );  // (constexpr since C++17)
+```
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 940 | C++98 | the wording was unclear for the case where `first` is
-      reachable from `last` | made clear
+Random-access iterators compute `last - first` directly; all other
+LegacyInputIterators count via repeated `++first`. `InputIt` must meet
+LegacyInputIterator at minimum; the operation is only efficient (O(1))
+when it additionally meets LegacyRandomAccessIterator.
 
 ### See also
 
-- **advance** — advances an iterator by given distance (function template)
-- **countcount_if** — returns the number of elements satisfying specific
-  criteria (function template)
-- **ranges::distance (C++20)** — returns the distance between an iterator and a
-  sentinel, or between the beginning and end of a range (niebloid)
+- **advance** — moves an iterator by a given distance, in place
+- **count**, **count_if** — count elements matching a criterion
+- **ranges::distance** — constrained version; works with a sentinel
+  (C++20)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/iterator/distance*

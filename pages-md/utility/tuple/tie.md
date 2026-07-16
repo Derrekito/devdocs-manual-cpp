@@ -1,52 +1,50 @@
 # std::tie
 
-```cpp
-template< class... Types >
-std::tuple<Types&...> tie( Types&... args ) noexcept;  // (since C++11) (until C++14)
-template< class... Types >
-constexpr std::tuple<Types&...> tie( Types&... args ) noexcept;  // (since C++14)
+Builds a tuple of lvalue references to the variables you pass, so
+assigning a tuple- or pair-valued expression into it **unpacks that
+value into your existing variables**. Use `std::ignore` in any slot
+you want to discard. If you're introducing brand-new variable names
+rather than reusing ones you already have, structured bindings
+(C++17) are usually the clearer tool — `tie` earns its keep for
+reusing variables (e.g. across loop iterations) or for building a
+lexicographic comparison out of existing members.
+
+```cpp skip
+std::tie(a, b) = f();                    // unpack into existing a, b
+std::tie(std::ignore, ok) = m.insert(v); // discard the first slot
+std::tie(a, b) < std::tie(c, d);         // lexicographic comparison
 ```
 
-Creates a tuple of lvalue references to its arguments or instances of
-`std::ignore`.
+### What you provide
 
-### Parameters
+- **args** — zero or more lvalues to bind by reference, or
+  `std::ignore` in any position whose value you don't want.
 
-- **args** — zero or more lvalue arguments to construct the tuple from.
+### Guarantees and costs
 
-### Return value
+- `noexcept`; `constexpr` since C++14.
+- Returns `std::tuple<Types&...>` — references into `args`, not
+  copies. No allocation, no element construction.
+- `std::tuple` has a converting assignment from `std::pair`, so
+  `std::tie` also works to unpack a pair (e.g. the result of
+  `map::insert`), not just another tuple.
 
-A `std::tuple` object containing lvalue references.
+### Gotchas
 
-### Possible implementation
-
-```cpp
-template <typename... Args>
-constexpr // since C++14
-std::tuple<Args&...> tie(Args&... args) noexcept
-{
-    return {args...};
-}
-```
-
-### Notes
-
-`std::tie` may be used to unpack a `std::pair` because `std::tuple` has a
-converting assignment from pairs:
-
-```cpp
-bool result;
-std::tie(std::ignore, result) = set.insert(value);
-```
+- The returned tuple holds *references* — it must not outlive the
+  variables passed to `tie`, and reassigning through it (its usual
+  purpose) writes straight through to them.
+- `tie(a, b) = tie(a, b)` — self-tie-assignment involving overlapping
+  variables — behaves per normal tuple assignment order and can
+  surprise if you expect a simultaneous swap; use `std::swap` for
+  swapping instead.
+- For simply *creating* new named variables from a multi-value
+  return, structured bindings (`auto [a, b] = f();`, C++17) are more
+  direct than declaring variables first and `tie`-ing into them.
 
 ### Example
 
-1) `std::tie` can be used to introduce lexicographical comparison to a struct or
-to unpack a tuple;
-2) `std::tie` can work with structured bindings:
-
 ```cpp
-#include <cassert>
 #include <iostream>
 #include <set>
 #include <string>
@@ -56,59 +54,53 @@ struct S
 {
     int n;
     std::string s;
-    float d;
 
-    friend bool operator<(const S& lhs, const S& rhs) noexcept
+    friend bool operator<(const S& lhs, const S& rhs)
     {
-        // compares lhs.n to rhs.n,
-        // then lhs.s to rhs.s,
-        // then lhs.d to rhs.d
-        // in that order, first non-equal result is returned
-        // or false if all elements are equal
-        return std::tie(lhs.n, lhs.s, lhs.d) < std::tie(rhs.n, rhs.s, rhs.d);
+        // compare n first, then s, using existing members
+        return std::tie(lhs.n, lhs.s) < std::tie(rhs.n, rhs.s);
     }
 };
 
 int main()
 {
-    // Lexicographical comparison demo:
-    std::set<S> set_of_s;
+    std::set<S> items;
+    S value{42, "Test"};
 
-    S value{42, "Test", 3.14};
-    std::set<S>::iterator iter;
-    bool is_inserted;
+    std::set<S>::iterator it;
+    bool inserted;
+    std::tie(it, inserted) = items.insert(value);   // unpack the pair
+    std::cout << "inserted: " << std::boolalpha << inserted << '\n';
 
-    // Unpack a pair:
-    std::tie(iter, is_inserted) = set_of_s.insert(value);
-    assert(is_inserted);
-
-    // std::tie and structured bindings:
-    auto position = [](int w) { return std::tuple(1 * w, 2 * w); };
-
-    auto [x, y] = position(1);
-    assert(x == 1 && y == 2);
-    std::tie(x, y) = position(2); // reuse x, y with tie
-    assert(x == 2 && y == 4);
-
-    // Implicit conversions are permitted:
-    std::tuple<char, short> coordinates(6, 9);
-    std::tie(x, y) = coordinates;
-    assert(x == 6 && y == 9);
+    int x = 0, y = 0;
+    auto pos = [](int w) { return std::tuple(w, 2 * w); };
+    std::tie(x, y) = pos(3);   // reuse existing x, y
+    std::cout << "x=" << x << " y=" << y << '\n';
 }
+```
+
+```text
+inserted: true
+x=3 y=6
+```
+
+### Reference
+
+```cpp skip
+template< class... Types >
+std::tuple<Types&...> tie( Types&... args ) noexcept;  // (since C++11) (until C++14)
+template< class... Types >
+constexpr std::tuple<Types&...> tie( Types&... args ) noexcept;  // (since C++14)
 ```
 
 ### See also
 
-- **Structured binding (C++17)** — binds the specified names to sub-objects or
-  tuple elements of the initializer
-- **make_tuple (C++11)** — creates a `tuple` object of the type defined by the
-  argument types (function template)
-- **forward_as_tuple (C++11)** — creates a `tuple` of forwarding references
-  (function template)
-- **tuple_cat (C++11)** — creates a `tuple` by concatenating any number of
-  tuples (function template)
-- **ignore (C++11)** — placeholder to skip an element when unpacking a `tuple`
-  using **`tie`** (constant)
+- **Structured binding** — declares new names bound to sub-objects or
+  tuple elements of an initializer (C++17)
+- **make_tuple** — creates a `tuple` from argument types (C++11)
+- **forward_as_tuple** — creates a `tuple` of forwarding references (C++11)
+- **tuple_cat** — concatenates tuples (C++11)
+- **ignore** — placeholder that skips a slot when unpacking with `tie` (C++11)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/utility/tuple/tie*

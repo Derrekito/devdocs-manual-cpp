@@ -1,170 +1,137 @@
 # std::mersenne_twister_engine
 
+You almost always want one of the two predefined aliases,
+`std::mt19937` (32-bit) or `std::mt19937_64` (64-bit), not this template
+directly. Seed it once — from `std::random_device` for real randomness,
+or a fixed integer for reproducible output — then pass it to a
+distribution to turn its raw bits into a usable range. (C++11)
+
+```cpp skip
+std::mt19937 gen;              // default seed (5489u)          (since C++11)
+std::mt19937 gen(seed);        // fixed seed, reproducible       (since C++11)
+std::mt19937 gen(rd());        // seeded from a random_device    (since C++11)
+std::mt19937_64 gen64(seed);   // 64-bit variant                 (since C++11)
+gen();                         // advance state, return next value
+```
+
+### What you provide
+
+- Nobody writes out `mersenne_twister_engine<...>` by hand — its 13
+  tuning constants (`w, n, m, r, a, u, d, s, b, t, c, l, f`) pick a
+  specific Mersenne Twister variant. Use `std::mt19937` (period
+  2^19937−1) or `std::mt19937_64`; the full parameter list is preserved
+  in Reference for when you actually need it.
+- A **seed** — a single value convertible to `result_type`, passed to
+  the constructor or to `seed()`.
+
+### Guarantees and costs
+
+- Produces `UIntType` values uniformly over `[0, 2^w)`: high statistical
+  quality, but **not cryptographically secure**.
+- `operator()` advances the state and returns one value; `discard(z)`
+  advances the state by `z` steps without producing output.
+- Output is pinned down exactly by the standard: a default-constructed
+  engine's 10,000th value is required to be `4123659995` for `mt19937`
+  and `9981545732273789042` for `mt19937_64` — so, for a given seed,
+  results are portable across conforming implementations.
+- `operator==` compares two engines' full internal state (C++11); the
+  explicit `operator!=` overload was removed in C++20 in favor of the
+  compiler synthesizing it from `==`. Both engines are streamable with
+  `operator<<`/`operator>>`.
+
+### Gotchas
+
+- Not cryptographically secure — never use it for tokens, keys, or
+  anything security-sensitive, however random it looks.
+- The engine's state is `n` words of `UIntType` (624 for `mt19937`);
+  constructing a fresh, default-seeded engine inside a function that
+  runs repeatedly resets it to the same state every time and silently
+  reproduces the same sequence. Seed once, keep the engine around, and
+  reuse it.
+- Copying an engine copies its entire `n`-word state — fine once, but
+  avoid it in a hot path.
+
+### Example
+
 ```cpp
+#include <iostream>
+#include <random>
+
+int main()
+{
+    std::mt19937 gen32;      // default seed
+    std::mt19937_64 gen64;   // default seed
+
+    gen32.discard(10'000 - 1);
+    gen64.discard(10'000 - 1);
+
+    std::cout << gen32() << '\n';
+    std::cout << gen64() << '\n';
+}
+```
+
+```text
+4123659995
+9981545732273789042
+```
+
+### Reference
+
+Full declaration:
+
+```cpp skip
 template<
     class UIntType,
     std::size_t w, std::size_t n, std::size_t m, std::size_t r, UIntType a,
     std::size_t u, UIntType d, std::size_t s, UIntType b, std::size_t t, UIntType c,
     std::size_t l, UIntType f
 > class mersenne_twister_engine;  // (since C++11)
+
+using mt19937 = mersenne_twister_engine<
+    std::uint_fast32_t, 32, 624, 397, 31, 0x9908b0df,
+    11, 0xffffffff, 7, 0x9d2c5680, 15, 0xefc60000, 18, 1812433253>;
+
+using mt19937_64 = mersenne_twister_engine<
+    std::uint_fast64_t, 64, 312, 156, 31, 0xb5026f5aa96619e9,
+    29, 0x5555555555555555, 17, 0x71d67fffeda60000,
+    37, 0xfff7eee000000000, 43, 6364136223846793005>;
 ```
 
-`mersenne_twister_engine` is a random number engine based on Mersenne Twister
-algorithm. It produces high quality, but not cryptographically secure, unsigned
-integer random numbers of type `UIntType` on the interval \(\scriptsize
-{[0,2^w)}\)[0, 2w).
+**Template parameters** — `UIntType`: the unsigned result type (`unsigned
+short/int/long/long long`; anything else is UB). `w`: bit width of
+generated values. `n`: degree of recurrence (state size). `m`: middle
+word offset, `1 ≤ m < n`. `r`: lower bit-mask width (the twist value).
+`a`: conditional xor-mask (twist matrix coefficients). `u, d, s, b, t,
+c, l`: the seven components of the tempering (bit-scrambling) matrix.
+`f`: the initialization multiplier. The standard requires
+`0 < m ≤ n`, `2 < w`, and `r, u, s, t, l ≤ w ≤ numeric_limits<UIntType>::digits`,
+with `a, b, c, d, f ≤ 2^w − 1`.
 
-The following type aliases define the random number engine with two commonly
-used parameter sets:
+**Member types** — `result_type` (C++11): `UIntType`.
 
-- **`mt19937`(C++11)** — `std::mersenne_twister_engine<std::uint_fast32_t, 32,
-  624, 397, 31, 0x9908b0df, 11, 0xffffffff, 7, 0x9d2c5680, 15, 0xefc60000, 18,
-  1812433253>` 32-bit Mersenne Twister by Matsumoto and Nishimura, 1998
-- **`mt19937_64`(C++11)** — `std::mersenne_twister_engine<std::uint_fast64_t,
-  64, 312, 156, 31, 0xb5026f5aa96619e9, 29, 0x5555555555555555, 17,
-  0x71d67fffeda60000, 37, 0xfff7eee000000000, 43, 6364136223846793005>` 64-bit
-  Mersenne Twister by Matsumoto and Nishimura, 2000
+**Member functions** — constructor, `seed()` (C++11, sets the state);
+`operator()` (C++11, advances and returns); `discard()` (C++11, advances
+without output); `min()`/`max()` (C++11, static, output range bounds).
 
-### Template parameters
+**Member constants** (all C++11, static) — `word_size` = `w`,
+`state_size` = `n`, `shift_size` = `m`, `mask_bits` = `r`, `xor_mask` =
+`a`, `tempering_u/d/s/b/t/c/l` = `u/d/s/b/t/c/l`,
+`initialization_multiplier` = `f`, `default_seed` = `5489u`.
 
-- **UIntType** — The result type generated by the generator. The effect is
-  undefined if this is not one of `unsigned short`, `unsigned int`, `unsigned
-  long`, or `unsigned long long`.
-- **w** — the power of two that determines the range of values generated by the
-  engine
-- **n** — the degree of recurrence
-- **m** — the middle word, an offset used in the recurrence relation defining
-  the series `x`, `1 ≤ m < n`
-- **r** — the number of bits of the lower bit-mask, `0 ≤ r ≤ w-1`, also known as
-  the twist value
-- **a** — the conditional xor-mask, i.e. the coefficients of the rational normal
-  form twist matrix
-- **u** — 1st component of the bit-scrambling (tempering) matrix
-- **d** — 2nd component of the bit-scrambling (tempering) matrix
-- **s** — 3rd component of the bit-scrambling (tempering) matrix
-- **b** — 4th component of the bit-scrambling (tempering) matrix
-- **t** — 5th component of the bit-scrambling (tempering) matrix
-- **c** — 6th component of the bit-scrambling (tempering) matrix
-- **l** — 7th component of the bit-scrambling (tempering) matrix
-- **f** — the initialization multiplier
+**Non-member functions** — `operator==`/`operator!=` (C++11; `!=`
+removed C++20); `operator<<`/`operator>>` (C++11, stream I/O).
 
-The following relations shall hold:
+### See also
 
-- `0 < m ≤ n`
-- `2 < w`
-- `r ≤ w`
-- `u ≤ w`
-- `s ≤ w`
-- `t ≤ w`
-- `l ≤ w`
-- `w ≤` `std::numeric_limits<UIntType>::digits`
-- `a ≤ 2`w`-1`
-- `b ≤ 2`w`-1`
-- `c ≤ 2`w`-1`
-- `d ≤ 2`w`-1`
-- `f ≤ 2`w`-1`
-
-### Member types
-
-- **`result_type` (C++11)** — The integral type, `UIntType`, generated by the
-  engine. Results are undefined if this is not an unsigned integral type.
-
-### Member functions
-
-**Construction and Seeding**
-
-- **(constructor) (C++11)** — constructs the engine (public member function)
-- **seed (C++11)** — sets the current state of the engine (public member
-  function)
-
-**Generation**
-
-- **operator() (C++11)** — advances the engine's state and returns the generated
-  value (public member function)
-- **discard (C++11)** — advances the engine's state by a specified amount
-  (public member function)
-
-**Characteristics**
-
-- **min [static] (C++11)** — gets the smallest possible value in the output
-  range (public static member function)
-- **max [static] (C++11)** — gets the largest possible value in the output range
-  (public static member function)
-
-### Non-member functions
-
-- **operator==operator!= (C++11)(C++11)(removed in C++20)** — compares the
-  internal states of two pseudo-random number engines (function)
-- **operator<<operator>> (C++11)** — performs stream input and output on
-  pseudo-random number engine (function template)
-
-### Member constants
-
-- **constexpr size_t word_size [static] (C++11)** — the template parameter `w`,
-  determines the range of values generated by the engine (public static member
-  constant)
-- **constexpr size_t state_size [static] (C++11)** — the template parameter `n`.
-  The engine state is `n` values of `UIntType` (public static member constant)
-- **constexpr size_t shift_size [static] (C++11)** — the template parameter `m`
-  (public static member constant)
-- **constexpr size_t mask_bits [static] (C++11)** — the template parameter `r`,
-  also known as the twist value (public static member constant)
-- **constexpr UIntType xor_mask [static] (C++11)** — the template parameter `a`,
-  the conditional xor-mask (public static member constant)
-- **constexpr size_t tempering_u [static] (C++11)** — the template parameter
-  `u`, first component of the bit-scrambling (tempering) matrix (public static
-  member constant)
-- **constexpr UIntType tempering_d [static] (C++11)** — the template parameter
-  `d`, second component of the bit-scrambling (tempering) matrix (public static
-  member constant)
-- **constexpr size_t tempering_s [static] (C++11)** — the template parameter
-  `s`, third component of the bit-scrambling (tempering) matrix (public static
-  member constant)
-- **constexpr UIntType tempering_b [static] (C++11)** — the template parameter
-  `b`, fourth component of the bit-scrambling (tempering) matrix (public static
-  member constant)
-- **constexpr size_t tempering_t [static] (C++11)** — the template parameter
-  `t`, fifth component of the bit-scrambling (tempering) matrix (public static
-  member constant)
-- **constexpr UIntType tempering_c [static] (C++11)** — the template parameter
-  `c`, sixth component of the bit-scrambling (tempering) matrix (public static
-  member constant)
-- **constexpr size_t tempering_l [static] (C++11)** — the template parameter
-  `l`, seventh component of the bit-scrambling (tempering) matrix (public static
-  member constant)
-- **constexpr UIntType initialization_multiplier [static] (C++11)** — the
-  template parameter `f` (public static member constant)
-- **constexpr UIntType default_seed [static] (C++11)** — the constant value
-  `5489u` (public static member constant)
-
-### Notes
-
-The Nth consecutive invocation of a default-constructed engine is required to
-produce the following value:
-
-  `N` | The random engine type | The value to produce
-  `10000` | `std::mt19937` | 4123659995
-  `10000` | `std::mt19937_64` | 9981545732273789042
-
-This is to guarantee that the random engine is conforming to the standard (see
-N1398).
-
-```cpp
-#include <cassert>
-#include <random>
-
-int main()
-{
-    std::mt19937 gen32;
-    std::mt19937_64 gen64;
-
-    gen32.discard(10'000 - 1);
-    gen64.discard(10'000 - 1);
-
-    assert(gen32() == 4'123'659'995);
-    assert(gen64() == 9'981'545'732'273'789'042ull);
-}
-```
+- **random_device** (C++11) — a nondeterministic source to seed this
+  engine with
+- **seed_seq** (C++11) — combines several seed values into one
+- **uniform_int_distribution** (C++11) — shapes the engine's output
+  into a bounded integer range
+- **uniform_real_distribution** (C++11) — shapes the output into a
+  bounded floating-point range
+- **linear_congruential_engine** (C++11) — a simpler, cheaper, lower-
+  quality alternative engine
 
 ---
 *Source: https://en.cppreference.com/w/cpp/numeric/random/mersenne_twister_engine*

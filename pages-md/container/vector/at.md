@@ -1,31 +1,33 @@
 # std::vector<T,Allocator>::at
 
-```cpp
-reference at( size_type pos );  // (1) (constexpr since C++20)
-const_reference at( size_type pos ) const;  // (2) (constexpr since C++20)
+Returns a reference to the element at `pos`, checking bounds first:
+throws `std::out_of_range` if `pos` is out of range, instead of the
+undefined behavior `operator[]` invokes. Constant time either way — reach
+for it whenever `pos` might be untrusted.
+
+```cpp skip
+v.at(pos)   // throws std::out_of_range if pos >= size()
 ```
 
-Returns a reference to the element at specified location `pos`, with bounds
-checking.
+### What you provide
 
-If `pos` is not within the range of the container, an exception of type
-`std::out_of_range` is thrown.
+- **pos** — the index to access, checked against `size()` before use.
 
-### Parameters
+### Guarantees and costs
 
-- **pos** — position of the element to return
+- Constant time, including the bounds check.
+- Throws `std::out_of_range` if `pos >= size()`; otherwise returns a
+  reference to that element (const or non-const, matching the vector's
+  own constness).
 
-### Return value
+### Gotchas
 
-Reference to the requested element.
-
-### Exceptions
-
-`std::out_of_range` if `pos >= size()`.
-
-### Complexity
-
-Constant.
+- The check costs real time on every call — in a proven-safe hot loop
+  where indices are already validated, `operator[]` is faster; use
+  `at()` when the index comes from input, a computation, or anywhere
+  else it isn't already known to be in range.
+- The thrown `what()` message is implementation-defined — don't parse
+  it; catch `std::out_of_range` and act on that instead.
 
 ### Example
 
@@ -34,37 +36,22 @@ Constant.
 #include <vector>
 #include <stdexcept>
 
-#ifdef __GNUG__
-[[gnu::noinline]]
-#endif
-unsigned int runtime_six() // Emulate runtime input
-{
-    return 6u;
-}
-
 int main()
 {
     std::vector<int> data = {1, 2, 4, 5, 5, 6};
 
-    // Set element 1
     data.at(1) = 88;
-
-    // Read element 2
-    std::cout << "Element at index 2 has value " << data.at(2) << '\n';
-
-    std::cout << "data size = " << data.size() << '\n';
+    std::cout << "element 2: " << data.at(2) << '\n';
 
     try
     {
-        // Set element 6, where the index is determined at runtime
-        data.at(runtime_six()) = 666;
+        data.at(6) = 666;
     }
-    catch (std::out_of_range const& exc)
+    catch (std::out_of_range const&)
     {
-        std::cout << exc.what() << '\n';
+        std::cout << "at(6) threw std::out_of_range\n";
     }
 
-    // Print final values
     std::cout << "data:";
     for (int elem : data)
         std::cout << ' ' << elem;
@@ -72,18 +59,23 @@ int main()
 }
 ```
 
-Possible output:
-
 ```text
-Element at index 2 has value 4
-data size = 6
-vector::_M_range_check: __n (which is 6) >= this->size() (which is 6)
+element 2: 4
+at(6) threw std::out_of_range
 data: 1 88 4 5 5 6
+```
+
+### Reference
+
+```cpp skip
+reference at( size_type pos );  // (1) (constexpr since C++20)
+const_reference at( size_type pos ) const;  // (2) (constexpr since C++20)
 ```
 
 ### See also
 
-- **operator[]** — access specified element (public member function)
+- **operator[]** — same access, no bounds check (undefined behavior if
+  out of range)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/container/vector/at*

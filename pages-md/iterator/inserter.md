@@ -1,37 +1,47 @@
 # std::inserter
 
-```cpp
-template< class Container >
-std::insert_iterator<Container>
-    inserter( Container& c, typename Container::iterator i );  // (until C++20)
-template< class Container >
-constexpr std::insert_iterator<Container>
-    inserter( Container& c, ranges::iterator_t<Container> i );  // (since C++20)
+Wraps a container and a position in an output iterator that calls
+`c.insert(pos, x)` for each write, then moves `pos` past the newly
+inserted element. Reach for it where **back_inserter** doesn't apply:
+containers without `push_back` (`set`, `map`, `multiset`, `multimap`),
+or inserting into the middle of a sequence instead of always
+appending at the end.
+
+```cpp skip
+std::inserter(c, i)   // c.insert(i, x) each write; i advances  // (until C++20)
+std::inserter(c, i)   // same, constexpr                        // (since C++20)
 ```
 
-`inserter` is a convenience function template that constructs a
-`std::insert_iterator` for the container `c` and its iterator `i` with the type
-deduced from the type of the argument.
+### What you provide
 
-### Parameters
+- **c** — a container with an `insert(iterator, value)` member: any
+  sequence container, or an associative container (`set`, `map`,
+  `multiset`, `multimap`).
+- **i** — iterator marking the insertion point. For a sequence
+  container this is where each element lands; for an associative
+  container it is only a positional hint, since the actual position is
+  determined by the container's order.
 
-- **c** — container that supports an `insert` operation
-- **i** — iterator in `c` indicating the insertion position
+### Guarantees and costs
 
-### Return value
+- Each write inserts one element at (or, for associative containers,
+  near) the tracked position, then advances that internal position
+  past what was just inserted — so repeated writes lay elements down
+  in sequence instead of always hitting the original spot.
+- Cost is whatever `c.insert` costs there: near O(1) amortized for a
+  `set`/`map` insertion with a correct hint, but O(N) per call for
+  `vector`/`deque` since later elements must shift.
+- Since C++20 the iterator type is deduced as
+  `ranges::iterator_t<Container>` rather than `Container::iterator`
+  (matters for iterator adaptors and views); `constexpr` since C++20.
 
-A `std::insert_iterator` which can be used to insert elements into the container
-`c` at the position indicated by `i`.
+### Gotchas
 
-### Possible implementation
-
-```cpp
-template<class Container>
-std::insert_iterator<Container> inserter(Container& c, typename Container::iterator i)
-{
-    return std::insert_iterator<Container>(c, i);
-}
-```
+- On a `vector` or `deque`, each insertion can shift every following
+  element — repeated use is O(N) per call, O(N²) overall. If you only
+  need to append, `back_inserter` is far cheaper.
+- The type of `i` is tied to `Container` (fixed by LWG 561; earlier
+  wording left it independent) — pass an iterator from `c` itself.
 
 ### Example
 
@@ -46,7 +56,7 @@ int main()
 {
     std::multiset<int> s{1, 2, 3};
 
-    // std::inserter is commonly used with multi-sets
+    // inserter is commonly used with associative containers
     std::fill_n(std::inserter(s, s.end()), 5, 2);
 
     for (int n : s)
@@ -56,8 +66,8 @@ int main()
     std::vector<int> d{100, 200, 300};
     std::vector<int> v{1, 2, 3, 4, 5};
 
-    // when inserting in a sequence container, insertion point advances
-    // because each std::insert_iterator::operator= updates the target iterator
+    // in a sequence container, the insertion point advances because
+    // each write updates the tracked position
     std::copy(d.begin(), d.end(), std::inserter(v, std::next(v.begin())));
 
     for (int n : v)
@@ -66,30 +76,29 @@ int main()
 }
 ```
 
-Output:
-
 ```text
-1 2 2 2 2 2 2 3
+1 2 2 2 2 2 2 3 
 1 100 200 300 2 3 4 5
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+```cpp skip
+template< class Container >
+std::insert_iterator<Container>
+    inserter( Container& c, typename Container::iterator i );  // (until C++20)
+template< class Container >
+constexpr std::insert_iterator<Container>
+    inserter( Container& c, ranges::iterator_t<Container> i );  // (since C++20)
+```
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 561 | C++98 | the type of `i` was independent of `Container` | it is the
-      iterator type of `Container`
+Equivalent to `return std::insert_iterator<Container>(c, i);`.
 
 ### See also
 
-- **insert_iterator** — iterator adaptor for insertion into a container (class
-  template)
-- **back_inserter** — creates a `std::back_insert_iterator` of type inferred
-  from the argument (function template)
-- **front_inserter** — creates a `std::front_insert_iterator` of type inferred
-  from the argument (function template)
+- **insert_iterator** — the iterator type `inserter` builds
+- **back_inserter** — append via `push_back`, no position argument
+- **front_inserter** — prepend via `push_front`
 
 ---
 *Source: https://en.cppreference.com/w/cpp/iterator/inserter*

@@ -1,193 +1,96 @@
 # std::vector<T,Allocator>::reserve
 
-```cpp
-void reserve( size_type new_cap );  // (until C++20)
-constexpr void reserve( size_type new_cap );  // (since C++20)
+Ensures `capacity()` is at least `new_cap`, allocating once up front so
+later `push_back`/`insert` calls up to that size don't reallocate. It
+never changes `size()`, and it never *shrinks* capacity — for that, use
+`shrink_to_fit()`. If it does reallocate, every iterator, pointer, and
+reference is invalidated; if `new_cap <= capacity()`, it's a no-op and
+nothing is invalidated.
+
+```cpp skip
+v.reserve(new_cap);
 ```
 
-Increase the capacity of the vector (the total number of elements that the
-vector can hold without requiring reallocation) to a value that's greater or
-equal to `new_cap`. If `new_cap` is greater than the current `capacity()`, new
-storage is allocated, otherwise the function does nothing.
+### What you provide
 
-`reserve()` does not change the size of the vector.
+- **new_cap** — the minimum capacity to guarantee, in elements. Values
+  `<= capacity()` are accepted and do nothing.
 
-If `new_cap` is greater than `capacity()`, all iterators, including the `end()`
-iterator, and all references to the elements are invalidated. Otherwise, no
-iterators or references are invalidated.
+### Guarantees and costs
 
-After a call to `reserve()`, insertions will not trigger reallocation unless the
-insertion would make the size of the vector greater than the value of
-`capacity()`.
+- At most linear in `size()` (existing elements must be moved or copied
+  to the new storage when it does reallocate).
+- Does not change `size()`; only ever grows `capacity()`, never shrinks
+  it.
+- `new_cap > capacity()`: reallocates — all iterators, pointers, and
+  references, `end()` included, are invalidated.
+- `new_cap <= capacity()`: does nothing — no iterators or references are
+  invalidated.
+- Throws `std::length_error` if `new_cap > max_size()`, or whatever the
+  allocator throws (typically `std::bad_alloc`) on allocation failure;
+  either way the vector is left unchanged (strong exception guarantee).
+  *(Since C++11)* same move-constructor fallback caveat as `push_back`:
+  if `T`'s move constructor isn't `noexcept` and `T` isn't
+  CopyInsertable, a throw during the fallback leaves effects
+  unspecified.
 
-### Parameters
+### Gotchas
 
-- **new_cap** — new capacity of the vector, in number of elements
-
-**Type requirements**
-
-**-`T` must meet the requirements of MoveInsertable into `*this`. (since C++11)**
-
-### Return value
-
-(none)
-
-### Exceptions
-
-- `std::length_error` if `new_cap > max_size()`.
-- Any exception thrown by `Allocator::allocate()` (typically `std::bad_alloc`).
-
-If an exception is thrown, this function has no effect (strong exception
-guarantee).
-
-If `T`'s move constructor is not noexcept and T is not CopyInsertable into
-`*this`, vector will use the throwing move constructor. If it throws, the
-guarantee is waived and the effects are unspecified.
-*(since C++11)*
-
-### Complexity
-
-At most linear in the `size()` of the container.
-
-### Notes
-
-Correctly using `reserve()` can prevent unnecessary reallocations, but
-inappropriate uses of `reserve()` (for instance, calling it before every
-`push_back()` call) may actually increase the number of reallocations (by
-causing the capacity to grow linearly rather than exponentially) and result in
-increased computational complexity and decreased performance. For example, a
-function that receives an arbitrary vector by reference and appends elements to
-it should usually *not* call `reserve()` on the vector, since it does not know
-of the vector's usage characteristics.
-
-When inserting a range, the range version of `insert()` is generally preferable
-as it preserves the correct capacity growth behavior, unlike `reserve()`
-followed by a series of `push_back()`s.
-
-`reserve()` cannot be used to reduce the capacity of the container; to that end
-`shrink_to_fit()` is provided.
+- Calling `reserve()` before every `push_back()` defeats the vector's
+  exponential growth strategy and can *increase* the total number of
+  reallocations — reserve once, for a size you actually know, not per
+  element.
+- Can't be used to shrink: `reserve(n)` with `n < capacity()` does
+  nothing; call `shrink_to_fit()` to release unused capacity.
+- About to insert a whole range? Prefer the range `insert()` overload
+  over `reserve()` plus repeated `push_back()` — it gets the growth
+  behavior right on its own.
 
 ### Example
 
 ```cpp
-#include <cstddef>
 #include <iostream>
-#include <new>
 #include <vector>
-
-// minimal C++11 allocator with debug output
-template<class Tp>
-struct NAlloc
-{
-    typedef Tp value_type;
-
-    NAlloc() = default;
-    template<class T>
-    NAlloc(const NAlloc<T>&) {}
-
-    Tp* allocate(std::size_t n)
-    {
-        n *= sizeof(Tp);
-        Tp* p = static_cast<Tp*>(::operator new(n));
-        std::cout << "allocating " << n << " bytes @ " << p << '\n';
-        return p;
-    }
-
-    void deallocate(Tp* p, std::size_t n)
-    {
-        std::cout << "deallocating " << n * sizeof *p << " bytes @ " << p << "\n\n";
-        ::operator delete(p);
-    }
-};
-
-template<class T, class U>
-bool operator==(const NAlloc<T>&, const NAlloc<U>&) { return true; }
-
-template<class T, class U>
-bool operator!=(const NAlloc<T>&, const NAlloc<U>&) { return false; }
 
 int main()
 {
-    constexpr int max_elements = 32;
+    std::vector<int> v;
+    v.reserve(4);
+    const int* const p = v.data();
 
-    std::cout << "using reserve: \n";
-    {
-        std::vector<int, NAlloc<int>> v1;
-        v1.reserve(max_elements); // reserves at least max_elements * sizeof(int) bytes
+    for (int i = 0; i < 4; ++i)
+        v.push_back(i);
 
-        for (int n = 0; n < max_elements; ++n)
-            v1.push_back(n);
-    }
-
-    std::cout << "not using reserve: \n";
-    {
-        std::vector<int, NAlloc<int>> v1;
-
-        for (int n = 0; n < max_elements; ++n)
-        {
-            if (v1.size() == v1.capacity())
-                std::cout << "size() == capacity() == " << v1.size() << '\n';
-            v1.push_back(n);
-        }
-    }
+    std::cout << "size == 4: " << (v.size() == 4) << '\n';
+    std::cout << "capacity >= 4: " << (v.capacity() >= 4) << '\n';
+    std::cout << "no reallocation: " << (v.data() == p) << '\n';
 }
 ```
 
-Possible output:
-
 ```text
-using reserve:
-allocating 128 bytes @ 0xa6f840
-deallocating 128 bytes @ 0xa6f840
-
-not using reserve:
-size() == capacity() == 0
-allocating 4 bytes @ 0xa6f840
-
-size() == capacity() == 1
-allocating 8 bytes @ 0xa6f860
-deallocating 4 bytes @ 0xa6f840
-
-size() == capacity() == 2
-allocating 16 bytes @ 0xa6f840
-deallocating 8 bytes @ 0xa6f860
-
-size() == capacity() == 4
-allocating 32 bytes @ 0xa6f880
-deallocating 16 bytes @ 0xa6f840
-
-size() == capacity() == 8
-allocating 64 bytes @ 0xa6f8b0
-deallocating 32 bytes @ 0xa6f880
-
-size() == capacity() == 16
-allocating 128 bytes @ 0xa6f900
-deallocating 64 bytes @ 0xa6f8b0
-
-deallocating 128 bytes @ 0xa6f900
+size == 4: 1
+capacity >= 4: 1
+no reallocation: 1
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+```cpp skip
+void reserve( size_type new_cap );  // (until C++20)
+constexpr void reserve( size_type new_cap );  // (since C++20)
+```
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 329 | C++98 | reallocation might be triggered if an insertion makes the
-      size of the vector greater than the size specified in the most recent call
-      to `reserve()` | only triggers if the size of the vector becomes greater
-      than `capacity()`
-  LWG 2033 | C++11 | `T` was not required to be MoveInsertable | required
+Requires `T` to be MoveInsertable *(since C++11)*. Defect reports: LWG
+329 clarified that reallocation is triggered only by `capacity()`, not
+by the size last passed to `reserve()`; LWG 2033 added the MoveInsertable
+requirement.
 
 ### See also
 
-- **capacity** — returns the number of elements that can be held in currently
-  allocated storage (public member function)
-- **max_size** — returns the maximum possible number of elements (public member
-  function)
-- **resize** — changes the number of elements stored (public member function)
-- **shrink_to_fit (DR*)** — reduces memory usage by freeing unused memory
-  (public member function)
+- **capacity** — the number of elements the current storage can hold
+- **max_size** — the largest size the container could ever reach
+- **resize** — changes `size()` (and may also change capacity)
+- **shrink_to_fit** — the inverse: releases unused capacity
 
 ---
 *Source: https://en.cppreference.com/w/cpp/container/vector/reserve*

@@ -1,57 +1,42 @@
 # std::prev
 
-```cpp
-template< class BidirIt >
-BidirIt prev( BidirIt it, typename std::iterator_traits<BidirIt>::difference_type n = 1 );  // (since C++11) (until C++17)
-template< class BidirIt >
-constexpr
-BidirIt prev( BidirIt it, typename std::iterator_traits<BidirIt>::difference_type n = 1 );  // (since C++17)
+Returns a **copy** of `it` moved `n` steps backward (or `-n` forward
+if `n` is negative) — `it` itself is left untouched. This is the
+value-returning counterpart to **advance**, which mutates its argument
+in place and returns nothing. Reach for `prev` when you want the
+predecessor as a value without disturbing the iterator you already
+have.
+
+```cpp skip
+std::prev(it)      // copy of it, moved back by 1                // (since C++11)
+std::prev(it, n)   // copy of it, moved back by n (or forward)    // (since C++11)
 ```
 
-Return the `n`th predecessor (or `-n`th successor if `n` is negative) of
-iterator `it`.
+### What you provide
 
-### Parameters
+- **it** — an iterator meeting LegacyBidirectionalIterator. Unlike
+  `next`, this is required regardless of the sign of `n`, since moving
+  backward is only well-defined for bidirectional iterators.
+- **n** — number of elements to move backward; negative moves forward.
+  Defaults to 1.
 
-- **it** — an iterator
-- **n** — number of elements `it` should be descended
+### Guarantees and costs
 
-**Type requirements**
+- Returns a new iterator holding the `n`th predecessor of `it`; `it`
+  itself is not modified.
+- Linear in `n` in general; O(1) if `BidirIt` additionally meets
+  LegacyRandomAccessIterator.
+- `constexpr` since C++17.
 
-**-`BidirIt` must meet the requirements of LegacyBidirectionalIterator.**
+### Gotchas
 
-### Return value
-
-An iterator of type `BidirIt` that holds the `n`th predecessor (or `-n`th
-successor if `n` is negative) of iterator `it`.
-
-### Complexity
-
-Linear.
-
-However, if `BidirIt` additionally meets the requirements of
-LegacyRandomAccessIterator, complexity is constant.
-
-### Possible implementation
-
-```cpp
-template<class BidirIt>
-constexpr // since C++17
-BidirIt prev(BidirIt it, typename std::iterator_traits<BidirIt>::difference_type n = 1)
-{
-    std::advance(it, -n);
-    return it;
-}
-```
-
-### Notes
-
-Although the expression `--c.end()` often compiles, it is not guaranteed to do
-so: `c.end()` is an rvalue expression, and there is no iterator requirement that
-specifies that decrement of an rvalue is guaranteed to work. In particular, when
-iterators are implemented as pointers or its `operator--` is
-lvalue-ref-qualified, `--c.end()` does not compile, while `std::prev(c.end())`
-does.
+- `std::prev` does not mutate `it`. If you meant to move a loop
+  iterator backward in place, that's `std::advance(it, -n)`, not
+  `std::prev`.
+- `--c.end()` is not guaranteed to compile — `c.end()` is an rvalue,
+  and no iterator requirement guarantees that decrementing an rvalue
+  works. `std::prev(c.end())` always works; that's part of why it
+  exists.
 
 ### Example
 
@@ -74,20 +59,30 @@ int main()
 }
 ```
 
-Output:
-
 ```text
 1
 4
 ```
 
+### Reference
+
+```cpp skip
+template< class BidirIt >
+BidirIt prev( BidirIt it, typename std::iterator_traits<BidirIt>::difference_type n = 1 );  // (since C++11) (until C++17)
+template< class BidirIt >
+constexpr
+BidirIt prev( BidirIt it, typename std::iterator_traits<BidirIt>::difference_type n = 1 );  // (since C++17)
+```
+
+Equivalent to `std::advance(it, -n); return it;`.
+
 ### See also
 
-- **next (C++11)** — increment an iterator (function template)
-- **advance** — advances an iterator by given distance (function template)
-- **distance** — returns the distance between two iterators (function template)
-- **ranges::prev (C++20)** — decrement an iterator by a given distance or to a
-  bound (niebloid)
+- **next** — increment an iterator, returning a copy (C++11)
+- **advance** — mutates an iterator in place by a given distance
+- **distance** — the distance between two iterators
+- **ranges::prev** — constrained version; can move back to a bound
+  (C++20)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/iterator/prev*

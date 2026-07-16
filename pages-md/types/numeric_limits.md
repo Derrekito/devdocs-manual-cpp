@@ -1,190 +1,58 @@
 # std::numeric_limits
 
-```cpp
-template< class T > class numeric_limits;
+Compile-time facts about a numeric type: its largest value, whether it
+has infinity, how many decimal digits it can represent, and more.
+Every property is a `static` member of `std::numeric_limits<T>`, so
+`std::numeric_limits<int>::max()` is a constant, not a function call.
+
+**The classic trap:** for floating-point types, `min()` is the
+smallest *positive* representable value, not the most negative one —
+`std::numeric_limits<float>::min()` is about `1.18e-38`, a tiny
+positive number. The true bottom of the range is `lowest()`
+(C++11): `std::numeric_limits<float>::lowest()` is about `-3.4e+38`.
+For integer types the two agree, which is exactly what makes the
+float case surprising the first time you hit it.
+
+```cpp skip
+std::numeric_limits<int>::max();       // largest int
+std::numeric_limits<int>::min();       // smallest int (== lowest() for integers)
+std::numeric_limits<float>::min();     // smallest POSITIVE float, NOT the bottom
+std::numeric_limits<float>::lowest();  // true bottom of the range   (since C++11)
+std::numeric_limits<float>::epsilon(); // gap above 1.0
 ```
 
-The `std::numeric_limits` class template provides a standardized way to query
-various properties of arithmetic types (e.g. the largest possible value for type
-int is `std::numeric_limits<int>::max()`).
+### What you provide
 
-This information is provided via specializations of the `std::numeric_limits`
-template. The standard library makes available specializations for all
-arithmetic types (only lists the specializations for cv-unqualified arithmetic
-types):
+- **T** — the type to query, one of the built-in arithmetic types.
+  The library specializes `numeric_limits` for all of them (`bool`,
+  the char types, the integer types, `float`/`double`/`long double`);
+  cv-qualified `T` gives the same values as unqualified `T`. Type
+  aliases such as `std::size_t` work too. Non-arithmetic types (e.g.
+  `std::complex<T>`) have no specialization.
 
-```cpp
-template<> class numeric_limits<bool>;
-template<> class numeric_limits<char>;
-template<> class numeric_limits<signed char>;
-template<> class numeric_limits<unsigned char>;
-template<> class numeric_limits<wchar_t>;
-template<> class numeric_limits<char8_t>;  // (since C++20)
-template<> class numeric_limits<char16_t>;  // (since C++11)
-template<> class numeric_limits<char32_t>;  // (since C++11)
-template<> class numeric_limits<short>;
-template<> class numeric_limits<unsigned short>;
-template<> class numeric_limits<int>;
-template<> class numeric_limits<unsigned int>;
-template<> class numeric_limits<long>;
-template<> class numeric_limits<unsigned long>;
-template<> class numeric_limits<long long>;  // (since C++11)
-template<> class numeric_limits<unsigned long long>;  // (since C++11)
-template<> class numeric_limits<float>;
-template<> class numeric_limits<double>;
-template<> class numeric_limits<long double>;
-```
+### Guarantees and costs
 
-The value of each member of a specialization of `std::numeric_limits` on a
-cv-qualified type *cv* `T` is equal to the value of the corresponding member of
-the specialization on the unqualified type `T`. For example,
-`std::numeric_limits<int>::digits` is equal to `std::numeric_limits<const
-int>::digits`.
+- Every member is a compile-time constant or `constexpr` function —
+  no runtime cost, usable in constant expressions.
+- `is_specialized` is `false` for any type without a real
+  specialization; querying an unspecialized type gives all
+  zero/false/default values rather than an error, so check
+  `is_specialized` before trusting the rest for an unfamiliar `T`.
+- Library authors may specialize `numeric_limits` for their own
+  arithmetic-like types (e.g. a 128-bit int or a half-float) so
+  generic code can query them the same way.
 
-Aliases of arithmetic types (such as `std::size_t` or `std::streamsize`) may
-also be examined with the `std::numeric_limits` type traits.
+### Gotchas
 
-Non-arithmetic standard types, such as std::complex<T> or `std::nullptr_t`, do
-not have specializations.
-
-If the implementation defines any integer-class types, specializations of
-`std::numeric_limits` must also be provided for them.
-*(since C++20)*
-
-Implementations may provide specializations of `std::numeric_limits` for
-implementation-specific types: e.g. GCC provides
-`std::numeric_limits<__int128>`. Non-standard libraries may add specializations
-for library-provided types, e.g. OpenEXR provides `std::numeric_limits<half>`
-for a 16-bit floating-point type.
-
-### Template parameters
-
-- **T** — a type to retrieve numeric properties for
-
-### Member constants
-
-- **is_specialized [static]** — identifies types for which `std::numeric_limits`
-  is specialized (public static member constant)
-- **is_signed [static]** — identifies signed types (public static member
-  constant)
-- **is_integer [static]** — identifies integer types (public static member
-  constant)
-- **is_exact [static]** — identifies exact types (public static member constant)
-- **has_infinity [static]** — identifies floating-point types that can represent
-  the special value "positive infinity" (public static member constant)
-- **has_quiet_NaN [static]** — identifies floating-point types that can
-  represent the special value "quiet not-a-number" (NaN) (public static member
-  constant)
-- **has_signaling_NaN [static]** — identifies floating-point types that can
-  represent the special value "signaling not-a-number" (NaN) (public static
-  member constant)
-- **has_denorm [static]** — identifies the denormalization style used by the
-  floating-point type (public static member constant)
-- **has_denorm_loss [static]** — identifies the floating-point types that detect
-  loss of precision as denormalization loss rather than inexact result (public
-  static member constant)
-- **round_style [static]** — identifies the rounding style used by the type
-  (public static member constant)
-- **is_iec559 [static]** — identifies the IEC 559/IEEE 754 floating-point types
-  (public static member constant)
-- **is_bounded [static]** — identifies types that represent a finite set of
-  values (public static member constant)
-- **is_modulo [static]** — identifies types that handle overflows with modulo
-  arithmetic (public static member constant)
-- **digits [static]** — number of `radix` digits that can be represented without
-  change (public static member constant)
-- **digits10 [static]** — number of decimal digits that can be represented
-  without change (public static member constant)
-- **max_digits10 [static] (C++11)** — number of decimal digits necessary to
-  differentiate all values of this type (public static member constant)
-- **radix [static]** — the radix or integer base used by the representation of
-  the given type (public static member constant)
-- **min_exponent [static]** — one more than the smallest negative power of the
-  radix that is a valid normalized floating-point value (public static member
-  constant)
-- **min_exponent10 [static]** — the smallest negative power of ten that is a
-  valid normalized floating-point value (public static member constant)
-- **max_exponent [static]** — one more than the largest integer power of the
-  radix that is a valid finite floating-point value (public static member
-  constant)
-- **max_exponent10 [static]** — the largest integer power of 10 that is a valid
-  finite floating-point value (public static member constant)
-- **traps [static]** — identifies types which can cause arithmetic operations to
-  trap (public static member constant)
-- **tinyness_before [static]** — identifies floating-point types that detect
-  tinyness before rounding (public static member constant)
-
-### Member functions
-
-- **min [static]** — returns the smallest finite value of the given type (public
-  static member function)
-- **lowest [static] (C++11)** — returns the lowest finite value of the given
-  type (public static member function)
-- **max [static]** — returns the largest finite value of the given type (public
-  static member function)
-- **epsilon [static]** — returns the difference between `1.0` and the next
-  representable value of the given floating-point type (public static member
-  function)
-- **round_error [static]** — returns the maximum rounding error of the given
-  floating-point type (public static member function)
-- **infinity [static]** — returns the positive infinity value of the given
-  floating-point type (public static member function)
-- **quiet_NaN [static]** — returns a quiet NaN value of the given floating-point
-  type (public static member function)
-- **signaling_NaN [static]** — returns a signaling NaN value of the given
-  floating-point type (public static member function)
-- **denorm_min [static]** — returns the smallest positive subnormal value of the
-  given floating-point type (public static member function)
-
-### Helper classes
-
-- **float_round_style** — indicates floating-point rounding modes (enum)
-- **float_denorm_style** — indicates floating-point denormalization modes (enum)
-
-### Relationship with C library macro constants
-
-  Specialization `std::numeric_limits<T>` where `T` is | Members
-  `min()` | `lowest()` (C++11) | `max()` | `radix`
-  bool | `false` | `false` | `true` | `2`
-  char | `CHAR_MIN` | `CHAR_MIN` | `CHAR_MAX` | `2`
-  signed char | `SCHAR_MIN` | `SCHAR_MIN` | `SCHAR_MAX` | `2`
-  unsigned char | `​0​` | `​0​` | `UCHAR_MAX` | `2`
-  wchar_t | `WCHAR_MIN` | `WCHAR_MIN` | `WCHAR_MAX` | `2`
-  char8_t | `​0​` | `​0​` | `UCHAR_MAX` | `2`
-  char16_t | `​0​` | `​0​` | `UINT_LEAST16_MAX` | `2`
-  char32_t | `​0​` | `​0​` | `UINT_LEAST32_MAX` | `2`
-  short | `SHRT_MIN` | `SHRT_MIN` | `SHRT_MAX` | `2`
-  signed short
-  unsigned short | `​0​` | `​0​` | `USHRT_MAX` | `2`
-  int | `INT_MIN` | `INT_MIN` | `INT_MAX` | `2`
-  signed int
-  unsigned int | `​0​` | `​0​` | `UINT_MAX` | `2`
-  long | `LONG_MIN` | `LONG_MIN` | `LONG_MAX` | `2`
-  signed long
-  unsigned long | `​0​` | `​0​` | `ULONG_MAX` | `2`
-  long long | `LLONG_MIN` | `LLONG_MIN` | `LLONG_MAX` | `2`
-  signed long long
-  unsigned long long | `​0​` | `​0​` | `ULLONG_MAX` | `2`
-
-  Specialization `std::numeric_limits<T>` where `T` is | Members
-  `denorm_min()` | `min()` | `lowest()` (C++11) | `max()` | `epsilon()` |
-      `digits` | `digits10`
-  float | `FLT_TRUE_MIN` | `FLT_MIN` | `-FLT_MAX` | `FLT_MAX` | `FLT_EPSILON` |
-      `FLT_MANT_DIG` | `FLT_DIG`
-  double | `DBL_TRUE_MIN` | `DBL_MIN` | `-DBL_MAX` | `DBL_MAX` | `DBL_EPSILON` |
-      `DBL_MANT_DIG` | `DBL_DIG`
-  long double | `LDBL_TRUE_MIN` | `LDBL_MIN` | `-LDBL_MAX` | `LDBL_MAX` |
-      `LDBL_EPSILON` | `LDBL_MANT_DIG` | `LDBL_DIG`
-
-  Specialization `std::numeric_limits<T>` where `T` is | Members (continue)
-  `min_exponent` | `min_exponent10` | `max_exponent` | `max_exponent10` |
-      `radix`
-  float | `FLT_MIN_EXP` | `FLT_MIN_10_EXP` | `FLT_MAX_EXP` | `FLT_MAX_10_EXP` |
-      `FLT_RADIX`
-  double | `DBL_MIN_EXP` | `DBL_MIN_10_EXP` | `DBL_MAX_EXP` | `DBL_MAX_10_EXP` |
-      `FLT_RADIX`
-  long double | `LDBL_MIN_EXP` | `LDBL_MIN_10_EXP` | `LDBL_MAX_EXP` |
-      `LDBL_MAX_10_EXP` | `FLT_RADIX`
+- `min()` vs `lowest()` — see above. Reaching for `min()` when you
+  meant "most negative" is the most common misuse of this class.
+- `epsilon()` is the gap above `1.0`, not a general-purpose "close
+  enough" tolerance for arbitrary-magnitude floating-point
+  comparisons.
+- Comparing against `max()`/`lowest()` to detect overflow only works
+  if the arithmetic that produced the value didn't already overflow
+  (which is UB for signed integers) — check before the operation, not
+  just the result.
 
 ### Example
 
@@ -194,61 +62,87 @@ for a 16-bit floating-point type.
 
 int main()
 {
-    std::cout << "type\t│ lowest()\t│ min()\t\t│ max()\n"
-              << "bool\t│ "
-              << std::numeric_limits<bool>::lowest() << "\t\t│ "
-              << std::numeric_limits<bool>::min() << "\t\t│ "
-              << std::numeric_limits<bool>::max() << '\n'
-              << "uchar\t│ "
-              << +std::numeric_limits<unsigned char>::lowest() << "\t\t│ "
-              << +std::numeric_limits<unsigned char>::min() << "\t\t│ "
-              << +std::numeric_limits<unsigned char>::max() << '\n'
-              << "int\t│ "
-              << std::numeric_limits<int>::lowest() << "\t│ "
-              << std::numeric_limits<int>::min() << "\t│ "
-              << std::numeric_limits<int>::max() << '\n'
-              << "float\t│ "
-              << std::numeric_limits<float>::lowest() << "\t│ "
-              << std::numeric_limits<float>::min() << "\t│ "
-              << std::numeric_limits<float>::max() << '\n'
-              << "double\t│ "
-              << std::numeric_limits<double>::lowest() << "\t│ "
-              << std::numeric_limits<double>::min() << "\t│ "
-              << std::numeric_limits<double>::max() << '\n';
+    std::cout << "int:   min=" << std::numeric_limits<int>::min()
+              << " lowest=" << std::numeric_limits<int>::lowest()
+              << " max=" << std::numeric_limits<int>::max() << '\n';
+
+    std::cout << "float: min=" << std::numeric_limits<float>::min()
+              << " lowest=" << std::numeric_limits<float>::lowest()
+              << " max=" << std::numeric_limits<float>::max() << '\n';
 }
 ```
 
-Possible output:
-
 ```text
-type        │ lowest()        │ min()                │ max()
-bool        │ 0                │ 0                │ 1
-uchar        │ 0                │ 0                │ 255
-int        │ -2147483648        │ -2147483648        │ 2147483647
-float        │ -3.40282e+38        │ 1.17549e-38        │ 3.40282e+38
-double        │ -1.79769e+308        │ 2.22507e-308        │ 1.79769e+308
+int:   min=-2147483648 lowest=-2147483648 max=2147483647
+float: min=1.17549e-38 lowest=-3.40282e+38 max=3.40282e+38
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+```cpp skip
+template< class T > class numeric_limits;
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 201 | C++98 | specializations for all fundamental types need to be
-      provided | excluded non-arithmetic types
-  LWG 559 | C++98 | it was unclear whether the `std::numeric_limits`
-      specialization for a cv-qualified type behaves as the same as the
-      corresponding specialization for the cv-unqualified type | they have the
-      same behavior
+template<> class numeric_limits<bool>;
+template<> class numeric_limits<char>;
+template<> class numeric_limits<signed char>;
+template<> class numeric_limits<unsigned char>;
+template<> class numeric_limits<wchar_t>;
+template<> class numeric_limits<char8_t>;              // (since C++20)
+template<> class numeric_limits<char16_t>;              // (since C++11)
+template<> class numeric_limits<char32_t>;              // (since C++11)
+template<> class numeric_limits<short>;
+template<> class numeric_limits<unsigned short>;
+template<> class numeric_limits<int>;
+template<> class numeric_limits<unsigned int>;
+template<> class numeric_limits<long>;
+template<> class numeric_limits<unsigned long>;
+template<> class numeric_limits<long long>;              // (since C++11)
+template<> class numeric_limits<unsigned long long>;      // (since C++11)
+template<> class numeric_limits<float>;
+template<> class numeric_limits<double>;
+template<> class numeric_limits<long double>;
+```
+
+Member constants (all `public static`, condensed):
+
+- **is_specialized** — true if this `T` has a real specialization
+- **is_signed / is_integer / is_exact** — basic classification of `T`
+- **has_infinity / has_quiet_NaN / has_signaling_NaN** — can `T`
+  represent those special values
+- **has_denorm / has_denorm_loss** — subnormal-value support and
+  whether their precision loss is reported distinctly
+- **round_style / is_iec559** — rounding mode; whether `T` is IEEE 754
+- **is_bounded / is_modulo** — finite range; wraps on overflow
+- **digits / digits10 / max_digits10 (C++11)** — representable digits
+  in `radix`, in decimal, and needed to round-trip a value
+- **radix** — base of the representation (usually `2`)
+- **min_exponent / min_exponent10 / max_exponent / max_exponent10** —
+  bounds on the normalized exponent range
+- **traps / tinyness_before** — trapping on arithmetic; rounding
+  detail for subnormals
+
+Member functions (all `public static`):
+
+- **min()** — smallest finite value; smallest *positive* value for
+  floating-point types
+- **lowest()** (C++11) — most negative finite value
+- **max()** — largest finite value
+- **epsilon()** — gap between `1.0` and the next representable value
+- **round_error()** — maximum rounding error
+- **infinity()** — positive infinity, if `has_infinity`
+- **quiet_NaN() / signaling_NaN()** — NaN values, if supported
+- **denorm_min()** — smallest positive subnormal value
+
+Helper classes: **float_round_style** and **float_denorm_style**
+(enums describing rounding/denormalization modes). The C `<climits>`
+/ `<cfloat>` macros (`INT_MAX`, `FLT_MIN`, ...) mirror these members
+for the corresponding built-in type.
 
 ### See also
 
-- Fixed width integer types
-- Arithmetic types
-- C++ type system overview
-- Type support (basic types, RTTI, type traits)
-- C numeric limits interface
+- **Fixed width integer types** — `int32_t` and friends
+- **numeric_limits::min** — the smallest-positive-value trap in detail
+- **numeric_limits::lowest** — the true bottom of the range
 
 ---
 *Source: https://en.cppreference.com/w/cpp/types/numeric_limits*

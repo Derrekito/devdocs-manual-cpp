@@ -1,102 +1,48 @@
 # std::begin, std::cbegin
 
-```cpp
-template< class C >
-auto begin( C& c ) -> decltype(c.begin());  // (since C++11) (until C++17)
-template< class C >
-constexpr auto begin( C& c ) -> decltype(c.begin());  // (since C++17)
-template< class C >
-auto begin( const C& c ) -> decltype(c.begin());  // (since C++11) (until C++17)
-template< class C >
-constexpr auto begin( const C& c ) -> decltype(c.begin());  // (since C++17)
-template< class T, std::size_t N >
-T* begin( T (&array)[N] );  // (since C++11) (until C++14)
-template< class T, std::size_t N >
-constexpr T* begin( T (&array)[N] ) noexcept;  // (since C++14)
-template< class C >
-constexpr auto cbegin( const C& c ) noexcept(/* see below */)
-    -> decltype(std::begin(c));  // (3) (since C++14)
+Free functions that return an iterator to the start of a range. For
+anything with a `begin()` member, `std::begin(c)` is just `c.begin()`
+— but `std::begin` also works on a plain C array, returning a pointer
+to its first element, which `array.begin()` cannot do. That's the
+whole point of reaching for the free function instead of the member:
+write one call and it works for both containers and C arrays, which
+matters in generic (template) code. `std::cbegin` (C++14) always
+returns a `const_iterator`, even when `c` itself is non-const.
+
+```cpp skip
+std::begin(c)      // c.begin()                          // (since C++11)
+std::begin(array)  // pointer to array[0]                 // (since C++11)
+std::cbegin(c)     // std::begin(c), c treated as const   // (since C++14)
 ```
 
-Returns an iterator to the beginning of the given range.
+### What you provide
 
-1) Returns exactly `c.begin()`, which is typically an iterator to the beginning
-   of the sequence represented by `c`. If `C` is a standard Container, this
-   returns `C::iterator` when `c` is not const-qualified, and
-   `C::const_iterator` otherwise.
+- **c** — a container or view with a `begin()` member.
+- **array** — a C array (`T (&)[N]`) of any element type and size.
 
-2) Returns a pointer to the beginning of the `array`.
+### Guarantees and costs
 
-3) Returns exactly `std::begin(c)`, with `c` always treated as const-qualified.
-   If `C` is a standard Container, this always returns `C::const_iterator`.
+- `std::begin(c)` returns exactly `c.begin()`: `C::iterator` if `c` is
+  non-const, `C::const_iterator` if `c` is const — same type and cost
+  as calling the member directly.
+- `std::begin(array)` returns a pointer to the first element in O(1).
+- `std::cbegin(c)` returns exactly `std::begin(c)` with `c` treated as
+  const, so it always yields `C::const_iterator` regardless of `c`'s
+  own constness.
+- Container overloads are `constexpr` since C++17; the array overload
+  is `constexpr` (and `noexcept`) since C++14.
 
-### Parameters
+### Gotchas
 
-- **c** — a container or view with a `begin` member function
-- **array** — an array of arbitrary type
-
-### Return value
-
-An iterator to the beginning of the range.
-
-### Exceptions
-
-3) `noexcept` specification: `noexcept(noexcept(std::begin(c)))`
-
-### Overloads
-
-Custom overloads of `begin` may be provided for classes and enumerations that do
-not expose a suitable `begin()` member function, yet can be iterated. The
-following overloads are already provided by the standard library:
-
-- **std::begin(std::initializer_list) (C++11)** — overloads `std::begin`
-  (function template)
-- **std::begin(std::valarray) (C++11)** — overloads `std::begin` (function
-  template)
--
-  **begin(std::filesystem::directory_iterator)end(std::filesystem::directory_iterator)
-  (C++17)** — range-based for loop support (function)
--
-  **begin(std::filesystem::recursive_directory_iterator)end(std::filesystem::recursive_directory_iterator)**
-  — range-based for loop support (function)
-
-Similar to the use of `swap` (described in Swappable), typical use of the
-`begin` function in generic context is an equivalent of `using std::begin;
-begin(arg);`, which allows both the ADL-selected overloads for user-defined
-types and the standard library function templates to appear in the same overload
-set.
-
-```cpp
-template<typename Container, typename Function>
-void for_each(Container&& cont, Function f)
-{
-    using std::begin;
-    auto it = begin(cont);
-    using std::end;
-    auto end_it = end(cont);
-    while (it != end_it)
-    {
-        f(*it);
-        ++it;
-    }
-}
-```
-
-Overloads of `begin` found by argument-dependent lookup can be used to customize
-the behavior of `std::ranges::begin`, `std::ranges::cbegin`, and other
-customization pointer objects depending on `std::ranges::begin`.
-*(since C++20)*
-
-### Notes
-
-(1,3) exactly reflect the behavior of `C::begin()`. Their effects may be
-surprising if the member function does not have a reasonable implementation.
-
-`std::cbegin` is introduced for unification of member and non-member range
-accesses. See also LWG issue 2128.
-
-If `C` is a shallow-const view, `std::cbegin` may return a mutable iterator.
-Such behavior is unexpected for some users. See also P2276 and P2278.
+- Custom types without a `begin()` member can still work with
+  `std::begin` via a free `begin()` overload found by argument-
+  dependent lookup — this is how `std::begin` supports
+  `std::initializer_list` and `std::valarray`.
+- In generic code, prefer `using std::begin; begin(arg);` over calling
+  `std::begin` directly, so ADL-found overloads for user types and the
+  standard templates both stay in the candidate set.
+- On a shallow-const view, `std::cbegin` can still return a mutable
+  iterator — surprising, but noted upstream (see P2276, P2278).
 
 ### Example
 
@@ -117,21 +63,45 @@ int main()
 }
 ```
 
-Output:
-
 ```text
 +3
 -5
 ```
 
+### Reference
+
+```cpp skip
+template< class C >
+auto begin( C& c ) -> decltype(c.begin());  // (since C++11) (until C++17)
+template< class C >
+constexpr auto begin( C& c ) -> decltype(c.begin());  // (since C++17)
+template< class C >
+auto begin( const C& c ) -> decltype(c.begin());  // (since C++11) (until C++17)
+template< class C >
+constexpr auto begin( const C& c ) -> decltype(c.begin());  // (since C++17)
+template< class T, std::size_t N >
+T* begin( T (&array)[N] );  // (since C++11) (until C++14)
+template< class T, std::size_t N >
+constexpr T* begin( T (&array)[N] ) noexcept;  // (since C++14)
+template< class C >
+constexpr auto cbegin( const C& c ) noexcept(/* see below */)
+    -> decltype(std::begin(c));  // (since C++14)
+```
+
+`cbegin`'s `noexcept` specification is
+`noexcept(noexcept(std::begin(c)))`. The standard library also
+supplies `begin`/`cbegin` overloads for `std::initializer_list`,
+`std::valarray`, and the filesystem directory-iterator types, so they
+work in range-based `for` and with the free-function idiom above.
+Since C++20, ADL-found `begin` overloads also customize
+`std::ranges::begin` and `std::ranges::cbegin`.
+
 ### See also
 
-- **endcend (C++11)(C++14)** — returns an iterator to the end of a container or
-  array (function template)
-- **ranges::begin (C++20)** — returns an iterator to the beginning of a range
-  (customization point object)
-- **ranges::cbegin (C++20)** — returns an iterator to the beginning of a
-  read-only range (customization point object)
+- **end**, **cend** — iterator or pointer past the last element
+  (C++11, cend C++14)
+- **ranges::begin** — constrained, customization-point version (C++20)
+- **ranges::cbegin** — read-only constrained version (C++20)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/iterator/begin*

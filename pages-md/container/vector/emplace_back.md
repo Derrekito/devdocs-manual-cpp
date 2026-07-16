@@ -1,6 +1,98 @@
 # std::vector<T,Allocator>::emplace_back
 
+Constructs a new element in place at the end, forwarding `args` straight
+to `T`'s constructor — unlike `push_back`, no separate object is built
+and then copied or moved in. Amortized O(1); the same invalidation rule
+as `push_back` applies (reallocation invalidates everything, otherwise
+only `end()`). Since C++17 it returns a reference to the new element;
+before that, it returns nothing.
+
+```cpp skip
+v.emplace_back(args...);              // (until C++17) returns void
+auto& r = v.emplace_back(args...);    // (since C++17) returns the element
+```
+
+### What you provide
+
+- **args** — arguments forwarded to `T`'s constructor as
+  `std::forward<Args>(args)...`. `T` must be MoveInsertable (needed in
+  case of reallocation) and EmplaceConstructible from `args`.
+
+### Guarantees and costs
+
+- Amortized constant time.
+- Reallocation (new `size()` > old `capacity()`): all iterators,
+  pointers, and references are invalidated, `end()` included. Otherwise,
+  only `end()` is invalidated.
+- Strong exception guarantee, with the same move-constructor caveat as
+  `push_back`: if `T`'s move constructor isn't `noexcept` and `T` isn't
+  CopyInsertable, the throwing move constructor is used, and a throw
+  from it leaves the effects unspecified.
+- *(until C++17)* return type is `void`. *(since C++17)* returns a
+  reference to the newly constructed element.
+
+### Gotchas
+
+- `emplace_back` only avoids the copy/move of *the new* element — a
+  reallocation still move-constructs every existing element into the new
+  storage, same as `push_back`.
+- Before C++17 you can't chain off the call (`emplace_back(...).foo()`)
+  since the return type is `void`.
+
+### Example
+
+`emplace_back` forwards its arguments straight to `President`'s
+constructor, avoiding the extra move that `push_back` needs when handed
+an already-built temporary.
+
 ```cpp
+#include <vector>
+#include <iostream>
+#include <string>
+
+struct President
+{
+    std::string name;
+    int year;
+
+    President(std::string p_name, int p_year)
+        : name(std::move(p_name)), year(p_year)
+    {
+        std::cout << "constructed\n";
+    }
+
+    President(President&& other)
+        : name(std::move(other.name)), year(other.year)
+    {
+        std::cout << "moved\n";
+    }
+};
+
+int main()
+{
+    std::vector<President> elections;
+    std::cout << "emplace_back:\n";
+    auto& ref = elections.emplace_back("Nelson Mandela", 1994);
+    std::cout << "returned reference: " << (ref.year == 1994) << '\n';
+
+    std::vector<President> reElections;
+    std::cout << "push_back:\n";
+    reElections.push_back(President("F. D. Roosevelt", 1936));
+}
+```
+
+```text
+emplace_back:
+constructed
+returned reference: 1
+push_back:
+constructed
+moved
+```
+
+### Reference
+
+```cpp skip
 template< class... Args >
 void emplace_back( Args&&... args );  // (since C++11) (until C++17)
 template< class... Args >
@@ -9,124 +101,14 @@ template< class... Args >
 constexpr reference emplace_back( Args&&... args );  // (since C++20)
 ```
 
-Appends a new element to the end of the container. The element is constructed
-through `std::allocator_traits::construct`, which typically uses placement-new
-to construct the element in-place at the location provided by the container. The
-arguments `args...` are forwarded to the constructor as
-`std::forward<Args>(args)...`.
-
-If after the operation the new `size()` is greater than old `capacity()` a
-reallocation takes place, in which case all iterators (including the `end()`
-iterator) and all references to the elements are invalidated. Otherwise only the
-`end()` iterator is invalidated.
-
-### Parameters
-
-- **args** — arguments to forward to the constructor of the element
-
-**Type requirements**
-
-**-`T (the container's element type)` must meet the requirements of MoveInsertable and EmplaceConstructible.**
-
-### Return value
-
-(none)
-*(until C++17)*
-
-A reference to the inserted element.
-*(since C++17)*
-
-### Complexity
-
-Amortized constant.
-
-### Exceptions
-
-If an exception is thrown, this function has no effect (strong exception
-guarantee). If `T`'s move constructor is not `noexcept` and is not
-CopyInsertable into `*this`, vector will use the throwing move constructor. If
-it throws, the guarantee is waived and the effects are unspecified.
-
-### Notes
-
-Since reallocation may take place, `emplace_back` requires the element type to
-be MoveInsertable for vectors.
-
-### Example
-
-The following code uses `emplace_back` to append an object of type `President`
-to a `std::vector`. It demonstrates how `emplace_back` forwards parameters to
-the `President` constructor and shows how using `emplace_back` avoids the extra
-copy or move operation required when using `push_back`.
-
-```cpp
-#include <vector>
-#include <cassert>
-#include <iostream>
-#include <string>
-
-struct President
-{
-    std::string name;
-    std::string country;
-    int year;
-
-    President(std::string p_name, std::string p_country, int p_year)
-        : name(std::move(p_name)), country(std::move(p_country)), year(p_year)
-    {
-        std::cout << "I am being constructed.\n";
-    }
-
-    President(President&& other)
-        : name(std::move(other.name)), country(std::move(other.country)), year(other.year)
-    {
-        std::cout << "I am being moved.\n";
-    }
-
-    President& operator=(const President& other) = default;
-};
-
-int main()
-{
-    std::vector<President> elections;
-    std::cout << "emplace_back:\n";
-    auto& ref = elections.emplace_back("Nelson Mandela", "South Africa", 1994);
-    assert(ref.year == 1994 && "uses a reference to the created object (C++17)");
-
-    std::vector<President> reElections;
-    std::cout << "\npush_back:\n";
-    reElections.push_back(President("Franklin Delano Roosevelt", "the USA", 1936));
-
-    std::cout << "\nContents:\n";
-    for (President const& president: elections)
-        std::cout << president.name << " was elected president of "
-                  << president.country << " in " << president.year << ".\n";
-
-    for (President const& president: reElections)
-        std::cout << president.name << " was re-elected president of "
-                  << president.country << " in " << president.year << ".\n";
-}
-```
-
-Output:
-
-```text
-emplace_back:
-I am being constructed.
-
-push_back:
-I am being constructed.
-I am being moved.
-
-Contents:
-Nelson Mandela was elected president of South Africa in 1994.
-Franklin Delano Roosevelt was re-elected president of the USA in 1936.
-```
+The element is constructed through `std::allocator_traits::construct`,
+typically placement-new at the location the container provides.
 
 ### See also
 
-- **push_back** — adds an element to the end (public member function)
-- **emplace (C++11)** — constructs element in-place (public member function)
+- **push_back** — appends a copy or move of an existing object
+- **emplace** (C++11) — constructs an element in place at an arbitrary
+  position
 
 ---
 *Source: https://en.cppreference.com/w/cpp/container/vector/emplace_back*

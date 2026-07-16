@@ -1,115 +1,106 @@
 # std::mutex
 
-```cpp
-class mutex;  // (since C++11)
+`std::mutex` (C++11) is the basic mutual-exclusion primitive: whichever
+thread successfully calls `lock()` *owns* the mutex until it calls
+`unlock()`, and every other thread trying to lock it blocks (or gets
+`false` from `try_lock()`) until then. Don't call `lock()`/`unlock()`
+by hand — a single missed `unlock()` on an exception path or an early
+`return` leaves the mutex locked forever. Use `std::lock_guard`,
+`std::unique_lock`, or `std::scoped_lock` (C++17) instead; they release
+the mutex in their destructor no matter how the scope is exited.
+
+```cpp skip
+std::mutex m;
+{
+    std::lock_guard<std::mutex> lk(m);  // preferred: exception-safe
+    // ... access data shared across threads ...
+}                                         // released here, always
+
+m.try_lock();  // non-blocking attempt; returns bool, still manual unlock
 ```
-
-The `mutex` class is a synchronization primitive that can be used to protect
-shared data from being simultaneously accessed by multiple threads.
-
-`mutex` offers exclusive, non-recursive ownership semantics:
-
-- A calling thread *owns* a `mutex` from the time that it successfully calls
-  either `lock` or `try_lock` until it calls `unlock`.
-- When a thread owns a `mutex`, all other threads will block (for calls to
-  `lock`) or receive a `false` return value (for `try_lock`) if they attempt to
-  claim ownership of the `mutex`.
-- A calling thread must not own the `mutex` prior to calling `lock` or
-  `try_lock`.
-
-The behavior of a program is undefined if a `mutex` is destroyed while still
-owned by any threads, or a thread terminates while owning a `mutex`. The `mutex`
-class satisfies all requirements of Mutex and StandardLayoutType.
-
-`std::mutex` is neither copyable nor movable.
-
-### Member types
-
-- **`native_handle_type`(not always present)** — *implementation-defined*
 
 ### Member functions
 
-- **(constructor)** — constructs the mutex (public member function)
-- **(destructor)** — destroys the mutex (public member function)
-- **operator= [deleted]** — not copy-assignable (public member function)
+| Member | What it does |
+| --- | --- |
+| (constructor) | constructs an unlocked mutex |
+| (destructor) | destroys the mutex; UB if any thread still owns it |
+| `lock()` | blocks until this thread owns the mutex |
+| `try_lock()` | attempts to lock without blocking; returns success |
+| `unlock()` | releases ownership |
+| `native_handle()` | implementation-defined OS handle |
 
-**Locking**
+### Guarantees and costs
 
-- **lock** — locks the mutex, blocks if the mutex is not available (public
-  member function)
-- **try_lock** — tries to lock the mutex, returns if the mutex is not available
-  (public member function)
-- **unlock** — unlocks the mutex (public member function)
+- Exclusive and **non-recursive**: a thread must not already own the
+  mutex when it calls `lock()` or `try_lock()` — doing so is undefined
+  behavior (see `recursive_mutex` if you need to re-lock from the same
+  thread).
+- `try_lock()` is allowed to fail spuriously even when the mutex is
+  free; treat a `false` return as "didn't get it," not as proof it was
+  contended.
+- `mutex` is neither copyable nor movable.
 
-**Native handle**
+### Gotchas
 
-- **native_handle** — returns the underlying implementation-defined native
-  handle object (public member function)
-
-### Notes
-
-`std::mutex` is usually not accessed directly: `std::unique_lock`,
-`std::lock_guard`, or `std::scoped_lock`(since C++17) manage locking in a more
-exception-safe manner.
+- Destroying a `mutex` while a thread still owns it, or exiting a
+  thread while it owns a `mutex`, is undefined behavior — every lock
+  must be released before either happens.
+- Locking a `mutex` you already hold on the same thread (e.g. two
+  nested `lock_guard`s on the same mutex) deadlocks immediately; it
+  will not detect or throw.
+- Manual `lock()`/`unlock()` pairs don't survive exceptions — any
+  throw between them leaves the mutex locked. This is the whole reason
+  the RAII wrappers exist.
 
 ### Example
 
-This example shows how a `mutex` can be used to protect an `std::map` shared
-between two threads.
-
 ```cpp
-#include <chrono>
 #include <iostream>
-#include <map>
 #include <mutex>
-#include <string>
 #include <thread>
 
-std::map<std::string, std::string> g_pages;
-std::mutex g_pages_mutex;
+int counter = 0;
+std::mutex counter_mutex;
 
-void save_page(const std::string& url)
+void increment(int times)
 {
-    // simulate a long page fetch
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-    std::string result = "fake content";
-
-    std::lock_guard<std::mutex> guard(g_pages_mutex);
-    g_pages[url] = result;
+    std::lock_guard<std::mutex> lock(counter_mutex);
+    for (int i = 0; i < times; ++i)
+        ++counter;
 }
 
 int main()
 {
-    std::thread t1(save_page, "http://foo");
-    std::thread t2(save_page, "http://bar");
+    std::thread t1(increment, 1000);
+    std::thread t2(increment, 1000);
     t1.join();
     t2.join();
 
-    // safe to access g_pages without lock now, as the threads are joined
-    for (const auto& pair : g_pages)
-        std::cout << pair.first << " => " << pair.second << '\n';
+    std::cout << counter << '\n';
 }
 ```
 
-Output:
-
 ```text
-http://bar => fake content
-http://foo => fake content
+2000
 ```
+
+### Reference
+
+```cpp skip
+class mutex;  // (since C++11)
+```
+
+Formally: `mutex` satisfies the Mutex and StandardLayoutType
+requirements.
 
 ### See also
 
-- **recursive_mutex (C++11)** — provides mutual exclusion facility which can be
-  locked recursively by the same thread (class)
-- **lock_guard (C++11)** — implements a strictly scope-based mutex ownership
-  wrapper (class template)
-- **unique_lock (C++11)** — implements movable mutex ownership wrapper (class
-  template)
-- **scoped_lock (C++17)** — deadlock-avoiding RAII wrapper for multiple mutexes
-  (class template)
-- **condition_variable (C++11)** — provides a condition variable associated with
-  a `std::unique_lock` (class)
+- **lock_guard** — simplest RAII wrapper: locks, then unlocks at scope exit
+- **unique_lock** — movable wrapper supporting deferred/timed locking
+- **scoped_lock** (C++17) — RAII wrapper locking several mutexes, deadlock-free
+- **recursive_mutex** — mutex a thread may lock more than once
+- **condition_variable** — blocks until notified, waits on a `unique_lock`
 
 ---
 *Source: https://en.cppreference.com/w/cpp/thread/mutex*

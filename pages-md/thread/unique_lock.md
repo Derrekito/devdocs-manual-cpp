@@ -1,75 +1,72 @@
 # std::unique_lock
 
-```cpp
-template< class Mutex >
-class unique_lock;  // (since C++11)
+`std::unique_lock<Mutex>` (C++11) is the general-purpose RAII mutex
+wrapper: like `lock_guard` it releases its mutex in the destructor, but
+it can also unlock and re-lock mid-scope, defer locking to later, try
+with a timeout, and be moved between scopes. Reach for it specifically
+when you need one of those — unlocking early, deferred locking, or
+using a `condition_variable` (which requires a `unique_lock<mutex>`).
+Otherwise `lock_guard` is simpler and just as safe.
+
+```cpp skip
+std::unique_lock<std::mutex> lk(m);                    // locks now
+std::unique_lock<std::mutex> lk(m, std::defer_lock);    // don't lock yet
+std::unique_lock<std::mutex> lk(m, std::try_to_lock);   // try once, don't block
+std::unique_lock<std::mutex> lk(m, std::adopt_lock);    // already locked
+lk.unlock();   lk.lock();                    // release / reacquire mid-scope
 ```
 
-The class `unique_lock` is a general-purpose mutex ownership wrapper allowing
-deferred locking, time-constrained attempts at locking, recursive locking,
-transfer of lock ownership, and use with condition variables.
+### What you provide
 
-The class `unique_lock` is movable, but not copyable -- it meets the
-requirements of MoveConstructible and MoveAssignable but not of
-CopyConstructible or CopyAssignable.
-
-The class `unique_lock` meets the BasicLockable requirements. If **Mutex** meets
-the Lockable requirements, `unique_lock` also meets the Lockable requirements
-(ex.: can be used in `std::lock`); if **Mutex** meets the TimedLockable
-requirements, `unique_lock` also meets the TimedLockable requirements.
-
-### Template parameters
-
-- **Mutex** — the type of the mutex to lock. The type must meet the
-  BasicLockable requirements
-
-### Member types
-
-- **`mutex_type`** — `Mutex`
+- **Mutex** — the mutex type; must meet BasicLockable. If it also
+  meets Lockable, so does `unique_lock<Mutex>` (usable with
+  `std::lock`); if it meets TimedLockable, so does `unique_lock`
+  (enabling `try_lock_for`/`try_lock_until`).
+- **tag** (optional second constructor argument) — `std::defer_lock`
+  (don't lock yet), `std::try_to_lock` (non-blocking attempt), or
+  `std::adopt_lock` (this thread already holds the lock).
 
 ### Member functions
 
-- **(constructor)** — constructs a `unique_lock`, optionally locking (i.e.,
-  taking ownership of) the supplied mutex (public member function)
-- **(destructor)** — unlocks (i.e., releases ownership of) the associated mutex,
-  if owned (public member function)
-- **operator=** — unlocks (i.e., releases ownership of) the mutex, if owned, and
-  acquires ownership of another (public member function)
+| Member | What it does |
+| --- | --- |
+| (constructor) | optionally locks/adopts the given mutex, per tag |
+| (destructor) | unlocks the mutex, if owned |
+| `operator=` | unlocks current mutex if owned, takes ownership of another |
+| `lock()` | locks the associated mutex |
+| `try_lock()` | attempts to lock without blocking |
+| `try_lock_for(dur)` | tries to lock within a duration (TimedLockable) |
+| `try_lock_until(tp)` | tries to lock until a time point (TimedLockable) |
+| `unlock()` | releases the mutex, if owned |
+| `swap(other)` | exchanges state with another `unique_lock` |
+| `release()` | detaches the mutex **without** unlocking it |
+| `mutex()` | pointer to the associated mutex |
+| `owns_lock()`, `operator bool` | whether this lock currently owns its mutex |
 
-**Locking**
+### Guarantees and costs
 
-- **lock** — locks (i.e., takes ownership of) the associated mutex (public
-  member function)
-- **try_lock** — tries to lock (i.e., takes ownership of) the associated mutex
-  without blocking (public member function)
-- **try_lock_for** — attempts to lock (i.e., takes ownership of) the associated
-  TimedLockable mutex, returns if the mutex has been unavailable for the
-  specified time duration (public member function)
-- **try_lock_until** — tries to lock (i.e., takes ownership of) the associated
-  TimedLockable mutex, returns if the mutex has been unavailable until specified
-  time point has been reached (public member function)
-- **unlock** — unlocks (i.e., releases ownership of) the associated mutex
-  (public member function)
+- Movable, not copyable: MoveConstructible and MoveAssignable but not
+  CopyConstructible or CopyAssignable — ownership of a lock can be
+  transferred (e.g. returned from a function) but never duplicated.
+- With `std::defer_lock`, the constructor takes no lock at all —
+  `owns_lock()` is false until you call `lock()` yourself.
+- `release()` gives up tracking the mutex without unlocking it — the
+  caller becomes responsible for unlocking it through some other
+  means; this is different from `unlock()`, which does unlock.
 
-**Modifiers**
+### Gotchas
 
-- **swap** — swaps state with another `std::unique_lock` (public member
-  function)
-- **release** — disassociates the associated mutex without unlocking (i.e.,
-  releasing ownership of) it (public member function)
-
-**Observers**
-
-- **mutex** — returns a pointer to the associated mutex (public member function)
-- **owns_lock** — tests whether the lock owns (i.e., has locked) its associated
-  mutex (public member function)
-- **operator bool** — tests whether the lock owns (i.e., has locked) its
-  associated mutex (public member function)
-
-### Non-member functions
-
-- **std::swap(std::unique_lock) (C++11)** — specialization of `std::swap` for
-  `unique_lock` (function template)
+- Calling `lock()`/`unlock()`/`try_lock()` when the lock already
+  does/doesn't own the mutex throws `std::system_error` — a
+  `unique_lock` tracks ownership precisely and enforces the state
+  machine.
+- Same beginner trap as `lock_guard`: forgetting to name the variable
+  (`std::unique_lock<std::mutex>(m);`) silently fails to hold the
+  lock.
+- Locking two mutexes with two separate `unique_lock(m, ...)` calls,
+  each blocking, can deadlock against another thread locking them in
+  the opposite order — use `std::lock(lk1, lk2)` (as shown below) or
+  `scoped_lock` to acquire several at once safely.
 
 ### Example
 
@@ -80,68 +77,57 @@ requirements, `unique_lock` also meets the TimedLockable requirements.
 
 struct Box
 {
-    explicit Box(int num) : num_things{num} {}
-
+    explicit Box(int n) : num_things{n} {}
     int num_things;
     std::mutex m;
 };
 
-void transfer(Box& from, Box& to, int num)
+void transfer(Box& from, Box& to, int n)
 {
-    // don't actually take the locks yet
     std::unique_lock lock1{from.m, std::defer_lock};
     std::unique_lock lock2{to.m, std::defer_lock};
+    std::lock(lock1, lock2);  // locks both, no deadlock
 
-    // lock both unique_locks without deadlock
-    std::lock(lock1, lock2);
-
-    from.num_things -= num;
-    to.num_things += num;
-
-    // 'from.m' and 'to.m' mutexes unlocked in 'unique_lock' dtors
+    from.num_things -= n;
+    to.num_things += n;
 }
 
 int main()
 {
-    Box acc1{100};
-    Box acc2{50};
+    Box a{100}, b{50};
 
-    std::thread t1{transfer, std::ref(acc1), std::ref(acc2), 10};
-    std::thread t2{transfer, std::ref(acc2), std::ref(acc1), 5};
-
+    std::thread t1{transfer, std::ref(a), std::ref(b), 10};
+    std::thread t2{transfer, std::ref(b), std::ref(a), 5};
     t1.join();
     t2.join();
 
-    std::cout << "acc1: " << acc1.num_things << "\n"
-                 "acc2: " << acc2.num_things << '\n';
+    std::cout << a.num_things << ' ' << b.num_things << '\n';
 }
 ```
 
-Output:
-
 ```text
-acc1: 95
-acc2: 55
+95 55
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+```cpp skip
+template< class Mutex >
+class unique_lock;  // (since C++11)
+```
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 2981 | C++17 | redundant deduction guide from `unique_lock<Mutex>` was
-      provided | removed
+Formally: `unique_lock` meets BasicLockable unconditionally, Lockable
+when `Mutex` does, and TimedLockable when `Mutex` does. LWG 2981
+(applied to C++17) removed a redundant deduction guide from
+`unique_lock<Mutex>`.
 
 ### See also
 
-- **lock (C++11)** — locks specified mutexes, blocks if any are unavailable
-  (function template)
-- **lock_guard (C++11)** — implements a strictly scope-based mutex ownership
-  wrapper (class template)
-- **scoped_lock (C++17)** — deadlock-avoiding RAII wrapper for multiple mutexes
-  (class template)
-- **mutex (C++11)** — provides basic mutual exclusion facility (class)
+- **lock_guard** — simplest RAII wrapper: locks, then unlocks at scope exit
+- **scoped_lock** (C++17) — RAII wrapper locking several mutexes, deadlock-free
+- **lock** — locks several mutexes together, avoiding deadlock
+- **condition_variable** — waits using a `unique_lock<mutex>`
+- **mutex** — the basic mutual-exclusion primitive
 
 ---
 *Source: https://en.cppreference.com/w/cpp/thread/unique_lock*

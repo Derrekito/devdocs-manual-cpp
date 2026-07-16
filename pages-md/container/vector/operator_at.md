@@ -1,35 +1,34 @@
 # std::vector<T,Allocator>::operator[]
 
-```cpp
-reference operator[]( size_type pos );  // (1) (constexpr since C++20)
-const_reference operator[]( size_type pos ) const;  // (2) (constexpr since C++20)
+Returns a reference to the element at `pos` with **no bounds checking**
+— an out-of-range `pos` is undefined behavior, not an exception.
+Constant time. Unlike `std::map::operator[]`, it never inserts anything.
+
+```cpp skip
+v[pos]   // no bounds check; UB if pos >= size()
 ```
 
-Returns a reference to the element at specified location `pos`. No bounds
-checking is performed.
+### What you provide
 
-### Parameters
+- **pos** — the index to access. The caller is responsible for
+  `pos < size()`.
 
-- **pos** — position of the element to return
+### Guarantees and costs
 
-### Return value
+- Constant time — no bounds check at all.
+- Returns a reference (const or non-const, matching the vector's own
+  constness) to the element at `pos`.
+- *(Since C++20)* usable in a `constexpr` context.
 
-Reference to the requested element.
+### Gotchas
 
-### Complexity
-
-Constant.
-
-### Notes
-
-Unlike `std::map::operator[]`, this operator never inserts a new element into
-the container. Accessing a nonexistent element through this operator is
-undefined behavior.
+- `pos >= size()` is undefined behavior, not an exception and not a
+  guaranteed crash — it may silently read or write past the buffer.
+- Unlike `std::map::operator[]`, this never inserts; indexing past the
+  end is never a way to "create" an element.
+- On an empty vector, *any* index — including `0` — is out of range.
 
 ### Example
-
-The following code uses `operator[]` to read from and write to a
-`std::vector<int>`:
 
 ```cpp
 #include <vector>
@@ -44,56 +43,27 @@ int main()
     numbers[0] = 5;
 
     std::cout << "All numbers:";
-    for (auto i : numbers)
+    for (int i : numbers)
         std::cout << ' ' << i;
     std::cout << '\n';
 }
-
-// Since C++20 std::vector can be used in constexpr context:
-#if defined(__cpp_lib_constexpr_vector) and defined(__cpp_consteval)
-// Gets the sum of all primes in [0, N) using sieve of Eratosthenes
-consteval auto sum_of_all_primes_up_to(unsigned N)
-{
-    if (N < 2)
-        return 0ULL;
-
-    std::vector<bool> is_prime(N, true);
-    is_prime[0] = is_prime[1] = false;
-
-    auto propagate_non_primality = [&](decltype(N) n)
-    {
-        for (decltype(N) m = n + n; m < is_prime.size(); m += n)
-            is_prime[m] = false;
-    };
-
-    auto sum{0ULL};
-    for (decltype(N) n{2}; n != N; ++n)
-        if (is_prime[n])
-        {
-            sum += n;
-            propagate_non_primality(n);
-        }
-
-    return sum;
-} //< vector's memory is released here
-
-static_assert(sum_of_all_primes_up_to(42) == 0xEE);
-static_assert(sum_of_all_primes_up_to(100) == 0x424);
-static_assert(sum_of_all_primes_up_to(1001) == 76127);
-#endif
 ```
-
-Output:
 
 ```text
 Second element: 4
 All numbers: 5 4 6 8
 ```
 
+### Reference
+
+```cpp skip
+reference operator[]( size_type pos );  // (1) (constexpr since C++20)
+const_reference operator[]( size_type pos ) const;  // (2) (constexpr since C++20)
+```
+
 ### See also
 
-- **at** — access specified element with bounds checking (public member
-  function)
+- **at** — bounds-checked access; throws `std::out_of_range`
 
 ---
 *Source: https://en.cppreference.com/w/cpp/container/vector/operator_at*

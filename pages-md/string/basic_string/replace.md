@@ -1,154 +1,140 @@
 # std::basic_string<CharT,Traits,Allocator>::replace
 
-```cpp
-basic_string& replace( size_type pos, size_type count,
-                       const basic_string& str );  // (1) (constexpr since C++20)
-basic_string& replace( const_iterator first, const_iterator last,
-                       const basic_string& str );  // (2) (constexpr since C++20)
-basic_string& replace( size_type pos, size_type count,
-                       const basic_string& str,
-                       size_type pos2, size_type count2 );  // (until C++14)
-basic_string& replace( size_type pos, size_type count,
-                       const basic_string& str,
-                       size_type pos2, size_type count2 = npos );  // (since C++14) (constexpr since C++20)
-basic_string& replace( size_type pos, size_type count,
-                       const CharT* cstr, size_type count2 );  // (4) (constexpr since C++20)
-basic_string& replace( const_iterator first, const_iterator last,
-                       const CharT* cstr, size_type count2 );  // (5) (constexpr since C++20)
-basic_string& replace( size_type pos, size_type count,
-                       const CharT* cstr );  // (6) (constexpr since C++20)
-basic_string& replace( const_iterator first, const_iterator last,
-                       const CharT* cstr );  // (7) (constexpr since C++20)
-basic_string& replace( size_type pos, size_type count,
-                       size_type count2, CharT ch );  // (8) (constexpr since C++20)
-basic_string& replace( const_iterator first, const_iterator last,
-                       size_type count2, CharT ch );  // (9) (constexpr since C++20)
-template< class InputIt >
-basic_string& replace( const_iterator first, const_iterator last,
-                       InputIt first2, InputIt last2 );  // (10) (constexpr since C++20)
-basic_string& replace( const_iterator first, const_iterator last,
-                       std::initializer_list<CharT> ilist );  // (11) (since C++11) (constexpr since C++20)
-template< class StringViewLike >
-basic_string& replace( size_type pos, size_type count,
-                       const StringViewLike& t );  // (12) (since C++17) (constexpr since C++20)
-template< class StringViewLike >
-basic_string& replace( const_iterator first, const_iterator last,
-                       const StringViewLike& t );  // (13) (since C++17) (constexpr since C++20)
-template< class StringViewLike >
-basic_string& replace( size_type pos, size_type count,
-                       const StringViewLike& t,
-                       size_type pos2, size_type count2 = npos );  // (14) (since C++17) (constexpr since C++20)
+Replaces a run of characters with new ones and returns `*this`. Two
+independent choices combine into the overload set: how you name the
+run to replace — `(pos, count)` or an iterator range
+`(first, last)` — and what to replace it with — another string, a
+slice of one, a C string, a repeated character, an iterator range, an
+initializer list, or a `string_view`-like object.
+
+```cpp skip
+s.replace(pos, count, str);              // pos/count target, whole str
+s.replace(first, last, str);             // iterator target, whole str
+s.replace(pos, count, str, pos2, count2);// pos/count target, slice of str
+s.replace(pos, count, cstr, count2);     // target replaced with count2 chars
+s.replace(pos, count, cstr);             // target replaced with a C string
+s.replace(pos, count, count2, ch);       // target replaced with count2 copies of ch
+s.replace(first, last, first2, last2);   // both sides given as iterators
+s.replace(first, last, {a, b, c});       // target replaced with an init list
+s.replace(pos, count, string_view_like); // (since C++17)
 ```
 
-Replaces the characters in the range `[``begin() + pos``,``begin() +
-std::min(pos + count, size())``)` or `[``first``,``last``)` with given
-characters.
+### What you provide
 
-1,2) Those characters are replaced with `str`.
+- **pos, count** — the run to replace, as `[pos, pos + count)`
+  (clamped to `size()`); `pos > size()` throws `std::out_of_range`.
+- **first, last** — the run to replace, as a `const_iterator` range
+  instead of `pos`/`count`. Must be a valid range into `*this`.
+- **str, pos2, count2** — the replacement source, optionally sliced;
+  an oversized `count2` clamps to `str.size()`.
+- **cstr, count2 / cstr** — a raw buffer of `count2` characters (may
+  hold embedded nulls), or a null-terminated C string.
+- **count2, ch** — `count2` copies of `ch` as the replacement.
+- **first2, last2 / ilist / t** — an iterator range, initializer
+  list, or (since C++17) a `string_view`-convertible object as the
+  replacement.
 
-3) Those characters are replaced with a substring `[``pos2``,``std::min(pos2 +
-   count2, str.size())``)` of `str`.
+### Guarantees and costs
 
-4,5) Those characters are replaced with the characters in the range
-   `[``cstr``,``cstr + count2``)`.
+- Returns `*this`.
+- Throws `std::out_of_range` for an out-of-bounds `pos` (or `pos2`),
+  and `std::length_error` if the result would exceed `max_size()`.
+  Strong exception safety: on throw, the string is unchanged.
+- `[first, last)` (and `[begin(), first)`) must be a valid range —
+  violating that is undefined behavior, not a thrown exception.
+- All overloads `constexpr` since C++20.
 
-If `[``cstr``,``cstr + count2``)` is not a valid range, the behavior is
-   undefined.
+### Gotchas
 
-6,7) Those characters are replaced with the characters in the range
-   `[``cstr``,``cstr + Traits::length(cstr)``)`.
-
-8,9) Those characters are replaced with `count2` copies of `ch`.
-
-10) Those characters are replaced with the characters in the range
-   `[``first2``,``last2``)` as if by `replace(first, last, basic_string(first2,
-   last2, get_allocator()))`.
-
-11) Those characters are replaced with the characters in `ilist`.
-
-12,13) Implicitly converts `t` to a string view `sv` as if by
-   `std::basic_string_view<CharT, Traits> sv = t;`, then those characters are
-   replaced with the characters from `sv`.
-
-These overloads participate in overload resolution only if
-   `std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT,
-   Traits>>` is `true` and `std::is_convertible_v<const StringViewLike&, const
-   CharT*>` is `false`.
-
-14) Implicitly converts `t` to a string view `sv` as if by
-   `std::basic_string_view<CharT, Traits> sv = t;`, then those characters are
-   replaced with the characters from the subview `sv.substr(pos2, count2)`.
-
-This overload participates in overload resolution only if
-   `std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT,
-   Traits>>` is `true` and `std::is_convertible_v<const StringViewLike&, const
-   CharT*>` is `false`.
-
-If `[``begin()``,``first``)` or `[``first``,``last``)` is not a valid range, the
-behavior is undefined.
-
-### Parameters
-
-- **pos** — start of the substring that is going to be replaced
-- **count** — length of the substring that is going to be replaced
-- **first, last** — range of characters that is going to be replaced
-- **str** — string to use for replacement
-- **pos2** — start of the substring to replace with
-- **count2** — number of characters to replace with
-- **cstr** — pointer to the character string to use for replacement
-- **ch** — character value to use for replacement
-- **first2, last2** — range of characters to use for replacement
-- **ilist** — initializer list with the characters to use for replacement
-- **t** — object (convertible to `std::basic_string_view`) with the characters
-  to use for replacement
-
-**Type requirements**
-
-**-`InputIt` must meet the requirements of LegacyInputIterator.**
-
-### Return value
-
-`*this`.
-
-### Exceptions
-
-1) Throws `std::out_of_range` if `pos > size()`.
-
-3) Throws `std::out_of_range` if `pos > size()` or `pos2 > str.size()`.
-
-4,6,8) Throws `std::out_of_range` if `pos > size()`.
-
-12,14) Throws `std::out_of_range` if `pos > size()`.
-
-If the operation would result in `size() > max_size()`, throws
-`std::length_error`.
-
-If an exception is thrown for any reason, these functions have no effect (strong
-exception safety guarantee).
+- Mixing the two target styles is a common slip: `replace(pos, count,
+  ...)` takes indices, `replace(first, last, ...)` takes iterators —
+  passing an iterator where an index is expected won't compile, but
+  passing the wrong *kind* of range (e.g. iterators into a different
+  string) is UB, not a diagnosed error.
+- As with `append`, an oversized `count`/`count2` clamps silently;
+  only an out-of-range `pos`/`pos2` throws.
+- Replacing invalidates iterators/pointers/references into the string
+  when the length changes or a reallocation occurs.
 
 ### Example
 
-### Defect reports
+```cpp
+#include <iostream>
+#include <string>
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+int main()
+{
+    std::string s = "The quick brown fox";
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 847 | C++98 | there was no exception safety guarantee | added strong
-      exception safety guarantee
-  LWG 1323 | C++98 | the types of `first` and `last` were `iterator` | changed
-      to `const_iterator`
-  LWG 2946 | C++17 | overloads (12,13) caused ambiguity in some cases | avoided
-      by making them templates
+    s.replace(4, 5, "slow");                 // pos/count target
+    std::cout << s << '\n';
+
+    auto it = s.begin() + s.find("brown");
+    s.replace(it, it + 5, "red");            // iterator target
+    std::cout << s << '\n';
+
+    s.replace(s.size() - 3, 3, 2, '!');      // replace "fox" with "!!"
+    std::cout << s << '\n';
+}
+```
+
+```text
+The slow brown fox
+The slow red fox
+The slow red !!
+```
+
+### Reference
+
+```cpp skip
+basic_string& replace( size_type pos, size_type count,
+                       const basic_string& str );
+basic_string& replace( const_iterator first, const_iterator last,
+                       const basic_string& str );
+basic_string& replace( size_type pos, size_type count,
+                       const basic_string& str,
+                       size_type pos2, size_type count2 = npos );  // count2 default since C++14
+basic_string& replace( size_type pos, size_type count,
+                       const CharT* cstr, size_type count2 );
+basic_string& replace( const_iterator first, const_iterator last,
+                       const CharT* cstr, size_type count2 );
+basic_string& replace( size_type pos, size_type count,
+                       const CharT* cstr );
+basic_string& replace( const_iterator first, const_iterator last,
+                       const CharT* cstr );
+basic_string& replace( size_type pos, size_type count,
+                       size_type count2, CharT ch );
+basic_string& replace( const_iterator first, const_iterator last,
+                       size_type count2, CharT ch );
+template< class InputIt >
+basic_string& replace( const_iterator first, const_iterator last,
+                       InputIt first2, InputIt last2 );
+basic_string& replace( const_iterator first, const_iterator last,
+                       std::initializer_list<CharT> ilist );  // (since C++11)
+template< class StringViewLike >
+basic_string& replace( size_type pos, size_type count,
+                       const StringViewLike& t );  // (since C++17)
+template< class StringViewLike >
+basic_string& replace( const_iterator first, const_iterator last,
+                       const StringViewLike& t );  // (since C++17)
+template< class StringViewLike >
+basic_string& replace( size_type pos, size_type count,
+                       const StringViewLike& t,
+                       size_type pos2, size_type count2 = npos );  // (since C++17)
+```
+
+All overloads `constexpr` since C++20. `InputIt` must meet
+LegacyInputIterator. The `StringViewLike` overloads participate in
+overload resolution only if `t` converts to
+`std::basic_string_view<CharT, Traits>` but not to `const CharT*`.
 
 ### See also
 
-- **replace_with_range (C++23)** — replaces specified portion of a string with a
-  range of characters (public member function)
-- **regex_replace (C++11)** — replaces occurrences of a regular expression with
-  formatted replacement text (function template)
-- **replacereplace_if** — replaces all values satisfying specific criteria with
-  another value (function template)
+- **replace_with_range** — replaces a slice with a range (C++23)
+- **regex_replace** — replaces regex matches with formatted text (C++11)
+- **replace_if** — replaces values satisfying a predicate (algorithm)
+- **substr** — returns a copy of a slice
+- **append** — grows the string instead of replacing a slice
 
 ---
 *Source: https://en.cppreference.com/w/cpp/string/basic_string/replace*

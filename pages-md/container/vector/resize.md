@@ -1,121 +1,116 @@
 # std::vector<T,Allocator>::resize
 
-```cpp
-void resize( size_type count );  // (1) (constexpr since C++20)
-void resize( size_type count, const value_type& value );  // (2) (constexpr since C++20)
+Changes `size()` to `count`: default-inserting or copying `value` to
+fill new elements when growing, destroying the trailing elements when
+shrinking. Unlike `reserve()`, this changes `size()` — and growing past
+`capacity()` still reallocates exactly as `push_back` would; shrinking
+never reduces capacity.
+
+```cpp skip
+v.resize(count);         // grow: default-insert; shrink: drop the tail
+v.resize(count, value);  // grow: append copies of value
 ```
 
-Resizes the container to contain `count` elements, does nothing if `count ==
-size()`.
+### What you provide
 
-If the current size is greater than `count`, the container is reduced to its
-first `count` elements.
+- **count** — the new `size()`.
+- **value** — *(overload 2)* what to copy into any newly added elements;
+  overload 1 default-inserts them instead.
 
-If the current size is less than `count`,
+### Guarantees and costs
 
-1) additional default-inserted elements are appended.
+- Linear in the difference between the old `size()` and `count`; growing
+  past `capacity()` adds a reallocation on top.
+- Growing (`count > size()`): appends `count - size()` new elements
+  (default-inserted, or copies of `value`); may reallocate exactly like
+  `insert`/`push_back` if that exceeds `capacity()`.
+- Shrinking (`count < size()`): destroys the trailing elements; capacity
+  is never reduced — invalidation-wise this is equivalent to that many
+  `pop_back()` calls, not to a reallocation.
+- `count == size()`: no-op.
+- Strong exception guarantee. Although not explicitly specified,
+  `std::length_error` is typically thrown if the required capacity would
+  exceed `max_size()`. Overload 1 has the same *(since C++11)*
+  move-constructor fallback caveat as `push_back`: if `T`'s move
+  constructor isn't `noexcept` and `T` isn't CopyInsertable, a throw
+  during the fallback leaves effects unspecified.
 
-2) additional copies of `value` are appended.
+### Gotchas
 
-### Parameters
-
-- **count** — new size of the container
-- **value** — the value to initialize the new elements with
-
-**Type requirements**
-
-**-`T` must meet the requirements of MoveInsertable and DefaultInsertable in order to use overload (1).**
-
-**-`T` must meet the requirements of CopyInsertable in order to use overload (2).**
-
-### Return value
-
-(none)
-
-### Complexity
-
-Linear in the difference between the current size and `count`. Additional
-complexity possible due to reallocation if capacity is less than `count`.
-
-### Exceptions
-
-If an exception is thrown for any reason, these functions have no effect (strong
-exception safety guarantee). Although not explicitly specified,
-`std::length_error` is thrown if the capacity required by the new vector would
-exceed `max_size()`.
-
-In overload (1), if `T`'s move constructor is not noexcept and T is not
-CopyInsertable into `*this`, vector will use the throwing move constructor. If
-it throws, the guarantee is waived and the effects are unspecified.
-*Template:mark since 11*
-
-### Notes
-
-If value-initialization in overload (1) is undesirable, for example, if the
-elements are of non-class type and zeroing out is not needed, it can be avoided
-by providing a custom `Allocator::construct`.
-Vector capacity is never reduced when resizing to smaller size because that
-would invalidate all iterators, rather than only the ones that would be
-invalidated by the equivalent sequence of `pop_back()` calls.
+- Overload 1's default-insertion value-initializes elements — zeroing
+  scalars, default-constructing class types. If you need to skip that
+  initialization for scalars, `resize()` can't; you'd need a custom
+  allocator.
+- Growing reallocates exactly as `push_back` would — the same
+  "everything invalidated" rule applies, so don't hold iterators across
+  a `resize()` call that might grow.
+- Shrinking keeps the old capacity — `resize()` cannot be used to
+  release memory; call `shrink_to_fit()` afterward if you want that.
 
 ### Example
 
 ```cpp
-#include <vector>
 #include <iostream>
+#include <vector>
 
-void print(auto rem, const std::vector<int>& c)
+void print(const char* label, const std::vector<int>& c)
 {
-    for (std::cout << rem; const int el : c)
-        std::cout << el << ' ';
+    std::cout << label;
+    bool first = true;
+    for (int x : c)
+    {
+        if (!first)
+            std::cout << ' ';
+        std::cout << x;
+        first = false;
+    }
     std::cout << '\n';
 }
 
 int main()
 {
     std::vector<int> c = {1, 2, 3};
-    print("The vector holds: ", c);
+    print("holds: ", c);
 
     c.resize(5);
-    print("After resize up to 5: ", c);
+    print("resize(5): ", c);
 
     c.resize(2);
-    print("After resize down to 2: ", c);
+    print("resize(2): ", c);
 
     c.resize(6, 4);
-    print("After resize up to 6 (initializer = 4): ", c);
+    print("resize(6, 4): ", c);
 }
 ```
 
-Output:
-
 ```text
-The vector holds: 1 2 3
-After resize up to 5: 1 2 3 0 0
-After resize down to 2: 1 2
-After resize up to 6 (initializer = 4): 1 2 4 4 4 4
+holds: 1 2 3
+resize(5): 1 2 3 0 0
+resize(2): 1 2
+resize(6, 4): 1 2 4 4 4 4
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+```cpp skip
+void resize( size_type count );  // (1) (constexpr since C++20)
+void resize( size_type count, const value_type& value );  // (2) (constexpr since C++20)
+```
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 679 | C++98 | `resize()` passed `value` by value | passes by const
-      reference
-  LWG 1525 | C++98 | the behavior of `resize(size())` was not specified |
-      specified
-  LWG 2033 | C++11 | 1. elements were removed by using `erase()` 2. the type
-      requirements of `T` were incorrect | 1. uses `pop_back()` 2. corrected
-  LWG 2066 | C++11 | overload (1) did not have the exception safety guarantee of
-      overload (2) | added
+Overload 1 requires `T` to be MoveInsertable and DefaultInsertable;
+overload 2 requires `T` to be CopyInsertable. Defect reports: LWG 679
+changed `value` to be passed by const reference instead of by value; LWG
+1525 specified the previously-unspecified behavior of `resize(size())`;
+LWG 2033 switched element removal to use `pop_back()` (previously
+`erase()`) and corrected `T`'s type requirements; LWG 2066 gave overload
+1 the same exception-safety guarantee as overload 2.
 
 ### See also
 
-- **size** — returns the number of elements (public member function)
-- **insert** — inserts elements (public member function)
-- **erase** — erases elements (public member function)
+- **size** — the current number of elements
+- **reserve** — grows capacity without changing size
+- **insert** — adds elements at an arbitrary position
+- **erase** — removes elements at an arbitrary position
 
 ---
 *Source: https://en.cppreference.com/w/cpp/container/vector/resize*

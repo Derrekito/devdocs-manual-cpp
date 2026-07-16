@@ -1,196 +1,121 @@
 # std::visit
 
-```cpp
-template< class Visitor, class... Variants >
-constexpr /* see below */ visit( Visitor&& vis, Variants&&... vars );  // (1) (since C++17)
-template< class R, class Visitor, class... Variants >
-constexpr R visit( Visitor&& vis, Variants&&... vars );  // (2) (since C++20)
-template< class... Ts >
-auto&& as-variant( std::variant<Ts...>& var );  // (3) (exposition only*)
-template< class... Ts >
-auto&& as-variant( const std::variant<Ts...>& var );  // (4) (exposition only*)
-template< class... Ts >
-auto&& as-variant( std::variant<Ts...>&& var );  // (5) (exposition only*)
-template< class... Ts >
-auto&& as-variant( const std::variant<Ts...>&& var );  // (6) (exposition only*)
+Calls one function with whatever alternative a `std::variant`
+currently holds, dispatching to the right handling automatically —
+you write one visitor that knows how to handle every possible
+alternative, and `visit` picks the right code path at runtime. The
+visitor must be callable with *every* alternative type in *every*
+variant passed, or the call fails to compile; that exhaustiveness is
+the whole point. If a variant is left `valueless_by_exception` (only
+possible after a throwing assignment), `visit` throws
+`std::bad_variant_access` instead of calling the visitor.
+
+```cpp skip
+std::visit(vis, var);          // call vis with whatever var holds
+std::visit(vis, var1, var2);   // one call per combination of alternatives
+std::visit<R>(vis, var);       // explicit common return type   (since C++20)
 ```
 
-Applies the visitor `vis` (a Callable that can be called with any combination of
-types from variants) to the variants `vars`.
+### What you provide
 
-Given `VariantBases` as decltype(`as-variant`(std::forward<Variants>(vars))...
-(a pack of `sizeof...(Variants)` types):
+- **vis** — a callable (lambda, function object, or a set of lambdas
+  combined via the `overloaded` idiom) that accepts every alternative
+  type from every variant passed in, in any combination.
+- **vars** — one or more `std::variant`s to inspect.
+- **R** — (C++20) an explicit return type every visitor result is
+  converted to; without it, every code path in `vis` must produce the
+  same type.
 
-1) Invokes `vis` as if by `INVOKE(std::forward<Visitor>(vis),
-   std::get<indices>(std::forward<VariantBases>(vars))...)`, where `indices` is
-   `as-variant(vars).index()...`.
+### Guarantees and costs
 
-2) Invokes `vis` as if by `INVOKE<R>(std::forward<Visitor>(vis),
-   std::get<indices>(std::forward<VariantBases>(vars))...)`, where `indices` is
-   `as-variant(vars).index()...`.
+- Visiting a single variant dispatches in constant time regardless of
+  how many alternatives it holds — implementations typically build a
+  jump table or switch statement per `visit` instantiation, similar
+  to how virtual calls dispatch.
+- Visiting multiple variants at once has no complexity guarantee.
+- Throws `std::bad_variant_access` if any variant argument is
+  `valueless_by_exception()`.
 
-These overloads participate in overload resolution only if every type in
-`VariantBases` is a valid type. If the expression denoted by `INVOKE` or
-`INVOKE<R>`(since C++20) is invalid, or the results of `INVOKE` or
-`INVOKE<R>`(since C++20) have different types or value categories for different
-`indices`, the program is ill-formed.
+### Gotchas
 
-3-6) The exposition-only `as-variant` function templates accept a value whose
-   type can be deduced for `std::variant<Ts...>` (i.e. either
-   `std::variant<Ts...>` or a type derived from `std::variant<Ts...>`), and
-   return the `std::variant` value with the same const-qualification and value
-   category.
-
-   3,4) Returns `var`.
-
-   5,6) Returns `std::move(var)`.
-
-### Parameters
-
-- **vis** — a Callable that accepts every possible alternative from every
-  variant
-- **vars** — list of variants to pass to the visitor
-
-### Return value
-
-1) The result of the `INVOKE` operation. The return type is the type obtained
-   from applying `decltype` to the result.
-
-2) Nothing if `R` is (possibly cv-qualified) `void`; otherwise the result of the
-   `INVOKE<R>` operation.
-
-3-6) A `std::variant` value converted from `var`.
-
-### Exceptions
-
-Throws `std::bad_variant_access` if
-`as-variant(vars_i).valueless_by_exception()` is `true` for any variant `vars_i`
-in `vars`.
-
-### Complexity
-
-When the number of variants is zero or one, the invocation of the callable
-object is implemented in constant time, i.e. it does not depend on the number of
-types can be stored in the variant.
-
-If the number of variants is larger than one, the invocation of the callable
-object has no complexity requirements.
-
-### Notes
-
-Let `n` be `(1 * ... *
-std::variant_size_v<std::remove_reference_t<VariantBases>>)`, implementations
-usually generate a table equivalent to an (possibly multidimensional) array of
-`n` function pointers for every specialization of `std::visit`, which is similar
-to the implementation of virtual functions.
-
-Implementations may also generate a switch statement with `n` branches for
-`std::visit` (e.g. the MSVC STL implementation uses a switch statement when `n`
-is not greater than 256).
-
-On typical implementations, the time complexity of the invocation of `vis` can
-be considered equal to that of access to an element in an (possibly
-multidimensional) array or execution of a switch statement.
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_variant` | 202102L | (C++17) (DR) | `std::visit` for classes
-      derived from `std::variant`
+- The visitor must handle *every* alternative, in *every* variant, in
+  *every* combination — a generic lambda using `if constexpr` chains
+  needs a trailing `else` with `static_assert(false, ...)` (via a
+  dependent trait like `always_false_v<T>`) so a genuinely missed
+  type fails to compile instead of silently doing nothing.
+- Combining several single-type lambdas into one visitor is the
+  `overloaded` pattern: a struct that inherits every lambda's
+  `operator()` via `using Ts::operator()...`, with a deduction guide
+  (unneeded since C++20).
+- Watch implicit conversions with non-generic overloads: a lambda
+  taking `double` will also silently bind `int` or `long`
+  alternatives unless a matching overload intercepts them first.
 
 ### Example
 
-```cpp
-#include <iomanip>
+```cpp c++20
 #include <iostream>
 #include <string>
-#include <type_traits>
 #include <variant>
-#include <vector>
 
-// the variant to visit
-using var_t = std::variant<int, long, double, std::string>;
+using var_t = std::variant<int, double, std::string>;
 
-// helper constant for the visitor #3
-template<class>
-inline constexpr bool always_false_v = false;
-
-// helper type for the visitor #4
+// combine several single-type lambdas into one visitor
 template<class... Ts>
 struct overloaded : Ts... { using Ts::operator()...; };
-// explicit deduction guide (not needed as of C++20)
 template<class... Ts>
 overloaded(Ts...) -> overloaded<Ts...>;
 
 int main()
 {
-    std::vector<var_t> vec = {10, 15l, 1.5, "hello"};
+    var_t v = 15;
 
-    for (auto& v: vec)
-    {
-        // 1. void visitor, only called for side-effects (here, for I/O)
-        std::visit([](auto&& arg){ std::cout << arg; }, v);
+    // side-effecting visitor
+    std::visit([](auto&& arg) { std::cout << arg << ' '; }, v);
 
-        // 2. value-returning visitor, demonstrates the idiom of returning another variant
-        var_t w = std::visit([](auto&& arg) -> var_t { return arg + arg; }, v);
+    // value-returning visitor: double whatever the variant holds
+    var_t doubled = std::visit([](auto&& arg) -> var_t { return arg + arg; }, v);
+    std::visit([](auto&& arg) { std::cout << arg << ' '; }, doubled);
 
-        // 3. type-matching visitor: a lambda that handles each type differently
-        std::cout << ". After doubling, variant holds ";
-        std::visit([](auto&& arg)
-        {
-            using T = std::decay_t<decltype(arg)>;
-            if constexpr (std::is_same_v<T, int>)
-                std::cout << "int with value " << arg << '\n';
-            else if constexpr (std::is_same_v<T, long>)
-                std::cout << "long with value " << arg << '\n';
-            else if constexpr (std::is_same_v<T, double>)
-                std::cout << "double with value " << arg << '\n';
-            else if constexpr (std::is_same_v<T, std::string>)
-                std::cout << "std::string with value " << std::quoted(arg) << '\n';
-            else
-                static_assert(always_false_v<T>, "non-exhaustive visitor!");
-        }, w);
-    }
-
-    for (auto& v: vec)
-    {
-        // 4. another type-matching visitor: a class with 3 overloaded operator()'s
-        // Note: The `(auto arg)` template operator() will bind to `int` and `long`
-        //       in this case, but in its absence the `(double arg)` operator()
-        //       *will also* bind to `int` and `long` because both are implicitly
-        //       convertible to double. When using this form, care has to be taken
-        //       that implicit conversions are handled correctly.
-        std::visit(overloaded{
-            [](auto arg) { std::cout << arg << ' '; },
-            [](double arg) { std::cout << std::fixed << arg << ' '; },
-            [](const std::string& arg) { std::cout << std::quoted(arg) << ' '; }
-        }, v);
-    }
+    // type-matching visitor via overloaded{}
+    v = "hi";
+    std::visit(overloaded{
+        [](int i) { std::cout << "int " << i; },
+        [](double d) { std::cout << "double " << d; },
+        [](const std::string& s) { std::cout << "string " << s; }
+    }, v);
+    std::cout << '\n';
 }
 ```
 
-Output:
-
 ```text
-10. After doubling, variant holds int with value 20
-15. After doubling, variant holds long with value 30
-1.5. After doubling, variant holds double with value 3
-hello. After doubling, variant holds std::string with value "hellohello"
-10 15 1.500000 "hello"
+15 30 string hi
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+```cpp skip
+template< class Visitor, class... Variants >
+constexpr /* see below */ visit( Visitor&& vis, Variants&&... vars );  // (1) (since C++17)
+template< class R, class Visitor, class... Variants >
+constexpr R visit( Visitor&& vis, Variants&&... vars );  // (2) (since C++20)
+```
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 2970 | C++17 | the return type of overload (1) did not preserve the value
-      category of the result of the `INVOKE` operation | preserves
-  LWG 3052 (P2162R2) | C++17 | the effects were unspecified if any type in
-      `Variants` is not a `std::variant` | specified
+Formally, `visit` invokes `vis` with the alternatives currently held
+by each variant (obtained via `std::get`, using each variant's
+`index()`); overload (2) converts the result to `R` (or discards it
+if `R` is `void`). Both overloads participate in overload resolution
+only if that invocation is well-formed for every combination of
+alternatives and, for overload (1), every combination yields the same
+result type and value category — otherwise the program is ill-formed.
+Also accepts values of classes publicly and unambiguously derived from
+`std::variant`.
 
 ### See also
 
-- **swap** — swaps with another variant (public member function)
+- **variant** — the class template `visit` operates on
+- **holds_alternative** — checks the currently active alternative
+- **get** — accesses a specific alternative directly
 
 ---
 *Source: https://en.cppreference.com/w/cpp/utility/variant/visit*
