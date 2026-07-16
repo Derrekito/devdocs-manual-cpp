@@ -1,0 +1,188 @@
+# std::shift_left, std::shift_right
+
+```cpp
+template< class ForwardIt >
+constexpr ForwardIt
+    shift_left( ForwardIt first, ForwardIt last,
+                typename std::iterator_traits<ForwardIt>::difference_type n );  // (1) (since C++20)
+template< class ExecutionPolicy, class ForwardIt >
+ForwardIt
+    shift_left( ExecutionPolicy&& policy, ForwardIt first, ForwardIt last,
+                typename std::iterator_traits<ForwardIt>::difference_type n );  // (2) (since C++20)
+template< class ForwardIt >
+constexpr ForwardIt
+    shift_right( ForwardIt first, ForwardIt last,
+                 typename std::iterator_traits<ForwardIt>::difference_type n );  // (3) (since C++20)
+template< class ExecutionPolicy, class ForwardIt >
+ForwardIt
+    shift_right( ExecutionPolicy&& policy, ForwardIt first, ForwardIt last,
+                 typename std::iterator_traits<ForwardIt>::difference_type n );  // (4) (since C++20)
+```
+
+Shifts the elements in the range `[``first``,``last``)` by `n` positions.
+
+1) Shifts the elements towards the beginning of the range. If `n == 0 || n >=
+   last - first`, there are no effects. If `n < 0`, the behavior is undefined.
+   Otherwise, for every integer `i` in `[``​0​``,``last - first - n``)`, moves
+   the element originally at position `first + n + i` to position `first + i`.
+   The moves are performed in increasing order of `i` starting from `​0​`.
+
+3) Shifts the elements towards the end of the range. If `n == 0 || n >= last -
+   first`, there are no effects. If `n < 0`, the behavior is undefined.
+   Otherwise, for every integer `i` in `[``​0​``,``last - first - n``)`, moves
+   the element originally at position `first + i` to position `first + n + i`.
+   If `ForwardIt` meets the LegacyBidirectionalIterator requirements, then the
+   moves are performed in decreasing order of `i` starting from `last - first -
+   n - 1`.
+
+2,4) Same as (1) and (3), respectively, but executed according to `policy` and
+   the moves may be performed in any order. This overload participates in
+   overload resolution only if
+   `std::is_execution_policy_v<std::remove_cvref_t<ExecutionPolicy>>` is `true`.
+
+Elements that are in the original range but not the new range are left in a
+valid but unspecified state.
+
+### Parameters
+
+- **first** — the beginning of the original range
+- **last** — the end of the original range
+- **n** — the number of positions to shift
+- **policy** — the execution policy to use. See execution policy for details.
+
+**Type requirements**
+
+**-`ForwardIt` must meet the requirements of LegacyForwardIterator.**
+
+**-`ForwardIt` must meet either the requirements of LegacyBidirectionalIterator or the requirements of ValueSwappable for overloads (3,4).**
+
+**-The type of dereferenced `ForwardIt` must meet the requirements of MoveAssignable.**
+
+### Return value
+
+1,2) The end of the resulting range. If `n` is less than `last - first`, returns
+   `first + (last - first - n)`. Otherwise, returns `first`.
+
+3,4) The beginning of the resulting range. If `n` is less than `last - first`,
+   returns `first + n`. Otherwise, returns `last`.
+
+### Complexity
+
+1,2) At most `std::distance(first, last) - n` assignments.
+
+3,4) At most `std::distance(first, last) - n` assignment or swaps.
+
+### Exceptions
+
+The overloads with a template parameter named `ExecutionPolicy` report errors as
+follows:
+
+- If execution of a function invoked as part of the algorithm throws an
+  exception and `ExecutionPolicy` is one of the standard policies,
+  `std::terminate` is called. For any other `ExecutionPolicy`, the behavior is
+  implementation-defined.
+- If the algorithm fails to allocate memory, `std::bad_alloc` is thrown.
+
+### Notes
+
+  Feature-test macro | Value | Std | Feature
+  `__cpp_lib_shift` | 201806L | (C++20) | `std::shift_left` and
+      `std::shift_right`
+
+### Example
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <string>
+#include <type_traits>
+#include <vector>
+
+struct S
+{
+    int value{0};
+    bool specified_state{true};
+
+    S(int v = 0) : value{v} {}
+    S(S const& rhs) = default;
+    S(S&& rhs) { *this = std::move(rhs); }
+    S& operator=(S const& rhs) = default;
+    S& operator=(S&& rhs)
+    {
+        if (this != &rhs)
+        {
+            value = rhs.value;
+            specified_state = rhs.specified_state;
+            rhs.specified_state = false;
+        }
+        return *this;
+    }
+};
+
+template<typename T>
+std::ostream& operator<<(std::ostream& os, std::vector<T> const& v)
+{
+    for (const auto& s : v)
+    {
+        if constexpr (std::is_same_v<T, S>)
+            s.specified_state ? os << s.value << ' ' : os << ". ";
+        else if constexpr (std::is_same_v<T, std::string>)
+            os << (s.empty() ? "." : s) << ' ';
+        else
+            os << s << ' ';
+    }
+    return os;
+}
+
+int main()
+{
+    std::cout << std::left;
+
+    std::vector<S>           a{1, 2, 3, 4, 5, 6, 7};
+    std::vector<int>         b{1, 2, 3, 4, 5, 6, 7};
+    std::vector<std::string> c{"α", "β", "γ", "δ", "ε", "ζ", "η"};
+
+    std::cout << "vector<S> \tvector<int> \tvector<string>\n";
+    std::cout << a << "  " << b << "  " << c << '\n';
+
+    std::shift_left(begin(a), end(a), 3);
+    std::shift_left(begin(b), end(b), 3);
+    std::shift_left(begin(c), end(c), 3);
+    std::cout << a << "  " << b << "  " << c << '\n';
+
+    std::shift_right(begin(a), end(a), 2);
+    std::shift_right(begin(b), end(b), 2);
+    std::shift_right(begin(c), end(c), 2);
+    std::cout << a << "  " << b << "  " << c << '\n';
+
+    std::shift_left(begin(a), end(a), 8); // has no effect: n >= last - first
+    std::shift_left(begin(b), end(b), 8); // ditto
+    std::shift_left(begin(c), end(c), 8); // ditto
+    std::cout << a << "  " << b << "  " << c << '\n';
+
+//  std::shift_left(begin(a), end(a), -3); // UB, e.g. segfault.)
+}
+```
+
+Possible output:
+
+```text
+vector<S>       vector<int>     vector<string>
+1 2 3 4 5 6 7   1 2 3 4 5 6 7   α β γ δ ε ζ η
+4 5 6 7 . . .   4 5 6 7 5 6 7   δ ε ζ η . . .
+. . 4 5 6 7 .   4 5 4 5 6 7 5   . . δ ε ζ η .
+. . 4 5 6 7 .   4 5 4 5 6 7 5   . . δ ε ζ η .
+```
+
+### See also
+
+- **move (C++11)** — moves a range of elements to a new location (function
+  template)
+- **move_backward (C++11)** — moves a range of elements to a new location in
+  backwards order (function template)
+- **rotate** — rotates the order of elements in a range (function template)
+- **ranges::shift_leftranges::shift_right (C++23)** — shifts elements in a range
+  (niebloid)
+
+---
+*Source: https://en.cppreference.com/w/cpp/algorithm/shift*

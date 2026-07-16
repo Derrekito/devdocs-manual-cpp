@@ -1,0 +1,147 @@
+# std::counting_semaphore, std::binary_semaphore
+
+```cpp
+template< std::ptrdiff_t LeastMaxValue = /* implementation-defined */ >
+class counting_semaphore;  // (1) (since C++20)
+using binary_semaphore = std::counting_semaphore<1>;  // (2) (since C++20)
+```
+
+1) A `counting_semaphore` is a lightweight synchronization primitive that can
+   control access to a shared resource. Unlike a `std::mutex`, a
+   `counting_semaphore` allows more than one concurrent access to the same
+   resource, for at least `LeastMaxValue` concurrent accessors. The program is
+   ill-formed if `LeastMaxValue` is negative.
+
+2) `binary_semaphore` is an alias for specialization of
+   `std::counting_semaphore` with `LeastMaxValue` being `1`. Implementations may
+   implement `binary_semaphore` more efficiently than the default implementation
+   of `std::counting_semaphore`.
+
+A `counting_semaphore` contains an internal counter initialized by the
+constructor. This counter is decremented by calls to `acquire()` and related
+methods, and is incremented by calls to `release()`. When the counter is zero,
+`acquire()` blocks until the counter is incremented, but `try_acquire()` does
+not block; `try_acquire_for()` and `try_acquire_until()` block until the counter
+is incremented or a timeout is reached.
+
+Similar to `std::condition_variable::wait()`, `counting_semaphore`'s
+`try_acquire()` can spuriously fail.
+
+Specializations of `std::counting_semaphore` are not DefaultConstructible,
+CopyConstructible, MoveConstructible, CopyAssignable, or MoveAssignable.
+
+### Member functions
+
+- **(constructor)** — constructs a `counting_semaphore` (public member function)
+- **(destructor)** — destructs the `counting_semaphore` (public member function)
+- **operator= [deleted]** — `counting_semaphore` is not assignable (public
+  member function)
+
+**Operations**
+
+- **release** — increments the internal counter and unblocks acquirers (public
+  member function)
+- **acquire** — decrements the internal counter or blocks until it can (public
+  member function)
+- **try_acquire** — tries to decrement the internal counter without blocking
+  (public member function)
+- **try_acquire_for** — tries to decrement the internal counter, blocking for up
+  to a duration time (public member function)
+- **try_acquire_until** — tries to decrement the internal counter, blocking
+  until a point in time (public member function)
+
+**Constants**
+
+- **max [static]** — returns the maximum possible value of the internal counter
+  (public static member function)
+
+### Notes
+
+As its name indicates, the `LeastMaxValue` is the *minimum* max value, not the
+*actual* max value. Thus `max()` can yield a number larger than `LeastMaxValue`.
+
+Unlike `std::mutex` a `counting_semaphore` is not tied to threads of execution -
+acquiring a semaphore can occur on a different thread than releasing the
+semaphore, for example. All operations on `counting_semaphore` can be performed
+concurrently and without any relation to specific threads of execution, with the
+exception of the destructor which cannot be performed concurrently but can be
+performed on a different thread.
+
+Semaphores are also often used for the semantics of signaling/notifying rather
+than mutual exclusion, by initializing the semaphore with `​0​` and thus
+blocking the receiver(s) that try to `acquire()`, until the notifier "signals"
+by invoking `release(n)`. In this respect semaphores can be considered
+alternatives to `std::condition_variable`s, often with better performance.
+
+  Feature-test macro | Value | Std | Feature
+  `__cpp_lib_semaphore` | 201907L | (C++20) | `std::counting_semaphore`,
+      `std::binary_semaphore`
+
+### Example
+
+```cpp
+#include <chrono>
+#include <iostream>
+#include <semaphore>
+#include <thread>
+
+// global binary semaphore instances
+// object counts are set to zero
+// objects are in non-signaled state
+std::binary_semaphore
+    smphSignalMainToThread{0},
+    smphSignalThreadToMain{0};
+
+void ThreadProc()
+{
+    // wait for a signal from the main proc
+    // by attempting to decrement the semaphore
+    smphSignalMainToThread.acquire();
+
+    // this call blocks until the semaphore's count
+    // is increased from the main proc
+
+    std::cout << "[thread] Got the signal\n"; // response message
+
+    // wait for 3 seconds to imitate some work
+    // being done by the thread
+    using namespace std::literals;
+    std::this_thread::sleep_for(3s);
+
+    std::cout << "[thread] Send the signal\n"; // message
+
+    // signal the main proc back
+    smphSignalThreadToMain.release();
+}
+
+int main()
+{
+    // create some worker thread
+    std::thread thrWorker(ThreadProc);
+
+    std::cout << "[main] Send the signal\n"; // message
+
+    // signal the worker thread to start working
+    // by increasing the semaphore's count
+    smphSignalMainToThread.release();
+
+    // wait until the worker thread is done doing the work
+    // by attempting to decrement the semaphore's count
+    smphSignalThreadToMain.acquire();
+
+    std::cout << "[main] Got the signal\n"; // response message
+    thrWorker.join();
+}
+```
+
+Output:
+
+```text
+[main] Send the signal
+[thread] Got the signal
+[thread] Send the signal
+[main] Got the signal
+```
+
+---
+*Source: https://en.cppreference.com/w/cpp/thread/counting_semaphore*

@@ -1,0 +1,121 @@
+# std::ranges::end
+
+```cpp
+inline namespace /* unspecified */ {
+    inline constexpr /* unspecified */ end = /* unspecified */;
+}  // (since C++20) (customization point object)
+Call signature
+template< class T >
+    requires /* see below */
+constexpr std::sentinel_for<ranges::iterator_t<T>> auto end( T&& t );  // (since C++20)
+```
+
+Returns a sentinel indicating the end of a range.
+
+If the argument is an lvalue or
+`ranges::enable_borrowed_range<std::remove_cv_t<T>>` is `true`, then a call to
+`ranges::end` is expression-equivalent to:
+
+1. `t + std::extent_v<T>` if `t` has an array type of known bound. If
+   std::remove_all_extents_t<std::remove_reference_t<T>> is incomplete, then the
+   call to `ranges::end` is ill-formed, no diagnostic required.
+1. Otherwise, `decay-copy(t.end())`(until C++23)`auto(t.end())`(since C++23), if
+   that expression is valid, and its type models
+   `std::sentinel_for<ranges::iterator_t<T>>`.
+1. Otherwise, `decay-copy(end(t))`(until C++23)`auto(end(t))`(since C++23), if
+   `T` is a class or enumeration type, that expression is valid and its
+   converted type models `std::sentinel_for<ranges::iterator_t<T>>`, where the
+   meaning of `end` is established as if by performing argument-dependent lookup
+   only.
+
+In all other cases, a call to `ranges::end` is ill-formed, which can result in
+substitution failure when the call to `ranges::end` appears in the immediate
+context of a template instantiation.
+
+### Customization point objects
+
+The name `ranges::end` denotes a *customization point object*, which is a const
+function object of a literal `semiregular` class type. For exposition purposes,
+the cv-unqualified version of its type is denoted as `__end_fn`.
+
+All instances of `__end_fn` are equal. The effects of invoking different
+instances of type `__end_fn` on the same arguments are equivalent, regardless of
+whether the expression denoting the instance is an lvalue or rvalue, and is
+const-qualified or not (however, a volatile-qualified instance is not required
+to be invocable). Thus, `ranges::end` can be copied freely and its copies can be
+used interchangeably.
+
+Given a set of types `Args...`, if `std::declval<Args>()...` meet the
+requirements for arguments to `ranges::end` above, `__end_fn` models
+
+- `std::invocable<__end_fn, Args...>`,
+- `std::invocable<const __end_fn, Args...>`,
+- `std::invocable<__end_fn&, Args...>`, and
+- `std::invocable<const __end_fn&, Args...>`.
+
+Otherwise, no function call operator of `__end_fn` participates in overload
+resolution.
+
+### Notes
+
+If the argument is an rvalue (i.e. `T` is an object type) and
+`ranges::enable_borrowed_range<std::remove_cv_t<T>>` is `false`, or if it is of
+an array type of unknown bound, the call to `ranges::end` is ill-formed, which
+also results in substitution failure.
+
+If `ranges::end(std::forward<T>(t))` is valid, then
+decltype(ranges::end(std::forward<T>(t))) and
+decltype(ranges::begin(std::forward<T>(t))) model `std::sentinel_for` in all
+cases, while `T` models `std::ranges::range`.
+
+The C++20 standard requires that if the underlying `end` function call returns a
+prvalue, the return value is move-constructed from the materialized temporary
+object. All implementations directly return the prvalue instead. The requirement
+is corrected by the post-C++20 proposal P0849R8 to match the implementations.
+
+### Example
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <ranges>
+#include <vector>
+
+int main()
+{
+    std::vector<int> vec{3, 1, 4};
+    if (std::ranges::find(vec, 5) != std::ranges::end(vec))
+        std::cout << "found a 5 in vector vec!\n";
+
+    int arr[]{5, 10, 15};
+    if (std::ranges::find(arr, 5) != std::ranges::end(arr))
+        std::cout << "found a 5 in array arr!\n";
+}
+```
+
+Output:
+
+```text
+found a 5 in array arr!
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  P2602R2 | C++20 | there's machinery to prohibit certain non-member `end` found
+      by ADL | removed such machinery
+
+### See also
+
+- **ranges::cend (C++20)** — returns a sentinel indicating the end of a
+  read-only range (customization point object)
+- **ranges::begin (C++20)** — returns an iterator to the beginning of a range
+  (customization point object)
+- **endcend (C++11)(C++14)** — returns an iterator to the end of a container or
+  array (function template)
+
+---
+*Source: https://en.cppreference.com/w/cpp/ranges/end*

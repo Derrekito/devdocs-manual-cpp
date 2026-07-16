@@ -1,0 +1,123 @@
+# std::log, std::logf, std::logl
+
+```cpp
+float       log ( float num );
+double      log ( double num );
+long double log ( long double num );  // (until C++23)
+/* floating-point-type */
+            log ( /* floating-point-type */ num );  // (since C++23) (constexpr since C++26)
+float       logf( float num );  // (2) (since C++11) (constexpr since C++26)
+long double logl( long double num );  // (3) (since C++11) (constexpr since C++26)
+Additional overloads (since C++11)
+template< class Integer >
+double      log ( Integer num );  // (A) (constexpr since C++26)
+```
+
+1-3) Computes the natural (base *e*) logarithm of `num`. The library provides
+   overloads of `std::log` for all cv-unqualified floating-point types as the
+   type of the parameter.(since C++23)
+
+A) Additional overloads are provided for all integer types, which are treated as
+double.
+*(since C++11)*
+
+### Parameters
+
+- **num** — floating-point or integer value
+
+### Return value
+
+If no errors occur, the natural (base-*e*) logarithm of `num` (ln(num) or
+loge(num)) is returned.
+
+If a domain error occurs, an implementation-defined value is returned (NaN where
+supported).
+
+If a pole error occurs, `-HUGE_VAL`, `-HUGE_VALF`, or `-HUGE_VALL` is returned.
+
+### Error handling
+
+Errors are reported as specified in `math_errhandling`.
+
+Domain error occurs if `num` is less than zero.
+
+Pole error may occur if `num` is zero.
+
+If the implementation supports IEEE floating-point arithmetic (IEC 60559),
+
+- If the argument is ±0, -∞ is returned and `FE_DIVBYZERO` is raised.
+- If the argument is 1, +0 is returned.
+- If the argument is negative, NaN is returned and `FE_INVALID` is raised.
+- If the argument is +∞, +∞ is returned.
+- If the argument is NaN, NaN is returned.
+
+### Notes
+
+The additional overloads are not required to be provided exactly as (A). They
+only need to be sufficient to ensure that for their argument `num` of integer
+type, `std::log(num)` has the same effect as
+`std::log(static_cast<double>(num))`.
+
+### Example
+
+```cpp
+#include <cerrno>
+#include <cfenv>
+#include <cmath>
+#include <cstring>
+#include <iostream>
+// #pragma STDC FENV_ACCESS ON
+
+int main()
+{
+    std::cout << "log(1) = " << std::log(1) << '\n'
+              << "base-5 logarithm of 125 = " << std::log(125) / std::log(5) << '\n';
+
+    // special values
+    std::cout << "log(1) = " << std::log(1) << '\n'
+              << "log(+Inf) = " << std::log(INFINITY) << '\n';
+
+    // error handling
+    errno = 0;
+    std::feclearexcept(FE_ALL_EXCEPT);
+
+    std::cout << "log(0) = " << std::log(0) << '\n';
+
+    if (errno == ERANGE)
+        std::cout << "    errno == ERANGE: " << std::strerror(errno) << '\n';
+    if (std::fetestexcept(FE_DIVBYZERO))
+        std::cout << "    FE_DIVBYZERO raised\n";
+}
+```
+
+Possible output:
+
+```text
+log(1) = 0
+base-5 logarithm of 125 = 3
+log(1) = 0
+log(+Inf) = inf
+log(0) = -inf
+    errno == ERANGE: Numerical result out of range
+    FE_DIVBYZERO raised
+```
+
+### See also
+
+- **log10log10flog10l (C++11)(C++11)** — computes common (base *10*) logarithm
+  (\({\small\log_{10}{x}}\)log10(x)) (function)
+- **log2log2flog2l (C++11)(C++11)(C++11)** — base 2 logarithm of the given
+  number (\({\small\log_{2}{x}}\)log2(x)) (function)
+- **log1plog1pflog1pl (C++11)(C++11)(C++11)** — natural logarithm (to base *e*)
+  of 1 plus the given number (\({\small\ln{(1+x)}}\)ln(1+x)) (function)
+- **expexpfexpl (C++11)(C++11)** — returns *e* raised to the given power
+  (\({\small e^x}\)ex) (function)
+- **log(std::complex)** — complex natural logarithm with the branch cuts along
+  the negative real axis (function template)
+- **log(std::valarray)** — applies the function `std::log` to each element of
+  valarray (function template)
+
+**C documentation for `log`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/numeric/math/log*

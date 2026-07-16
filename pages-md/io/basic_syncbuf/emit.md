@@ -1,0 +1,55 @@
+# std::basic_syncbuf<CharT,Traits,Allocator>::emit
+
+```cpp
+bool emit();
+```
+
+Atomically transmits all pending output to the wrapped stream.
+
+All `emit()` calls transferring characters to the same wrapped stream buffer
+object appear to execute in a total order, where each `emit()` call
+synchronizes-with subsequent `emit()` calls in that total order, even if these
+calls are made through difference instances of
+`std::basic_syncbuf`/`std::basic_osyncstream`. In practice, this means that
+emit() takes a lock uniquely associated with the wrapped stream object: for
+example, it could be held in a static hash map where the address of the wrapped
+stream is used as the key.
+
+If a call had been made to `sync` since the last call to `emit()`, then also
+flushes the wrapped stream by calling `pubsync()` on it.
+
+### Parameters
+
+(none)
+
+### Return value
+
+`true` if all of the following is true:
+
+- there is a wrapped stream (the wrapped streambuf pointer is not null)
+- all characters from the temporary storage were successfully sent into the
+  wrapped stream
+- the call to `pubsync()`, if requested, also completed successfully.
+
+Returns `false` otherwise.
+
+### Notes
+
+Normally called by the destructor or move assignment of the owning
+`std::basic_osyncstream`, or by `std::basic_osyncstream::emit`.
+
+### Example
+
+### See also
+
+- **(destructor)** — destroys the `basic_osyncstream` and emits its internal
+  buffer (public member function of
+  `std::basic_osyncstream<CharT,Traits,Allocator>`)
+- **emit** — calls **`emit()`** on the underlying `basic_syncbuf` to transmit
+  its internal data to the final destination (public member function of
+  `std::basic_osyncstream<CharT,Traits,Allocator>`)
+- **(constructor)** — constructs a `basic_syncbuf` object (public member
+  function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/io/basic_syncbuf/emit*

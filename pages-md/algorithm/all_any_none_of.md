@@ -1,0 +1,186 @@
+# std::all_of, std::any_of, std::none_of
+
+```cpp
+template< class InputIt, class UnaryPredicate >
+bool all_of( InputIt first, InputIt last, UnaryPredicate p );  // (since C++11) (until C++20)
+template< class InputIt, class UnaryPredicate >
+constexpr bool all_of( InputIt first, InputIt last, UnaryPredicate p );  // (since C++20)
+template< class ExecutionPolicy, class ForwardIt, class UnaryPredicate >
+bool all_of( ExecutionPolicy&& policy, ForwardIt first, ForwardIt last,
+             UnaryPredicate p );  // (2) (since C++17)
+template< class InputIt, class UnaryPredicate >
+bool any_of( InputIt first, InputIt last, UnaryPredicate p );  // (since C++11) (until C++20)
+template< class InputIt, class UnaryPredicate >
+constexpr bool any_of( InputIt first, InputIt last, UnaryPredicate p );  // (since C++20)
+template< class ExecutionPolicy, class ForwardIt, class UnaryPredicate >
+bool any_of( ExecutionPolicy&& policy, ForwardIt first, ForwardIt last,
+             UnaryPredicate p );  // (4) (since C++17)
+template< class InputIt, class UnaryPredicate >
+bool none_of( InputIt first, InputIt last, UnaryPredicate p );  // (since C++11) (until C++20)
+template< class InputIt, class UnaryPredicate >
+constexpr bool none_of( InputIt first, InputIt last, UnaryPredicate p );  // (since C++20)
+template< class ExecutionPolicy, class ForwardIt, class UnaryPredicate >
+bool none_of( ExecutionPolicy&& policy, ForwardIt first, ForwardIt last,
+              UnaryPredicate p );  // (6) (since C++17)
+```
+
+1) Checks if unary predicate `p` returns `true` for all elements in the range
+   `[``first``,``last``)`.
+
+3) Checks if unary predicate `p` returns `true` for at least one element in the
+   range `[``first``,``last``)`.
+
+5) Checks if unary predicate `p` returns `true` for no elements in the range
+   `[``first``,``last``)`.
+
+2,4,6) Same as (1,3,5), but executed according to `policy`. These overloads do
+   not participate in overload resolution unless
+   `std::is_execution_policy_v<std::decay_t<ExecutionPolicy>>` is `true`. (until
+   C++20) `std::is_execution_policy_v<std::remove_cvref_t<ExecutionPolicy>>` is
+   `true`. (since C++20)
+
+### Parameters
+
+- **first, last** — the range of elements to examine
+- **policy** — the execution policy to use. See execution policy for details.
+- **p** — unary predicate . The expression `p(v)` must be convertible to `bool`
+  for every argument `v` of type (possibly const) `VT`, where `VT` is the value
+  type of `InputIt`, regardless of value category, and must not modify `v`.
+  Thus, a parameter type of `VT&`is not allowed, nor is `VT` unless for `VT` a
+  move is equivalent to a copy(since C++11). ​
+
+**Type requirements**
+
+**-`InputIt` must meet the requirements of LegacyInputIterator.**
+
+**-`ForwardIt` must meet the requirements of LegacyForwardIterator.**
+
+**-`UnaryPredicate` must meet the requirements of Predicate.**
+
+### Return value
+
+1,2) `true` if unary predicate returns `true` for all elements in the range,
+   `false` otherwise. Returns `true` if the range is empty.
+
+3,4) `true` if unary predicate returns `true` for at least one element in the
+   range, `false` otherwise. Returns `false` if the range is empty.
+
+5,6) `true` if unary predicate returns `true` for no elements in the range,
+   `false` otherwise. Returns `true` if the range is empty.
+
+See also Notes below.
+
+### Complexity
+
+1,3,5) At most `last` - `first` applications of the predicate.
+
+2,4,6) `O(last - first)` applications of the predicate.
+
+### Exceptions
+
+The overloads with a template parameter named `ExecutionPolicy` report errors as
+follows:
+
+- If execution of a function invoked as part of the algorithm throws an
+  exception and `ExecutionPolicy` is one of the standard policies,
+  `std::terminate` is called. For any other `ExecutionPolicy`, the behavior is
+  implementation-defined.
+- If the algorithm fails to allocate memory, `std::bad_alloc` is thrown.
+
+### Possible implementation
+
+See also the implementations of
+
+- `all_of` in libstdc++ and libc++.
+- `any_of` in libstdc++ and libc++.
+- `none_of` in libstdc++ and libc++.
+
+```cpp
+template<class InputIt, class UnaryPredicate>
+constexpr bool all_of(InputIt first, InputIt last, UnaryPredicate p)
+{
+    return std::find_if_not(first, last, p) == last;
+}
+```
+
+```cpp
+template<class InputIt, class UnaryPredicate>
+constexpr bool any_of(InputIt first, InputIt last, UnaryPredicate p)
+{
+    return std::find_if(first, last, p) != last;
+}
+```
+
+```cpp
+template<class InputIt, class UnaryPredicate>
+constexpr bool none_of(InputIt first, InputIt last, UnaryPredicate p)
+{
+    return std::find_if(first, last, p) == last;
+}
+```
+
+### Notes
+
+The return value represented in the form of the Truth table is:
+
+  input range contains
+  all `true`, none `false` | some `true`, some `false` | none `true`, all
+      `false` | none `true`, none `false` (empty range)
+  1,2) `all_of` | `true` | `false` | `false` | `true`
+  3,4) `any_of` | `true` | `true` | `false` | `false`
+  5,6) `none_of` | `false` | `false` | `true` | `true`
+
+### Example
+
+```cpp
+#include <algorithm>
+#include <functional>
+#include <iostream>
+#include <iterator>
+#include <numeric>
+#include <vector>
+
+int main()
+{
+    std::vector<int> v(10, 2);
+    std::partial_sum(v.cbegin(), v.cend(), v.begin());
+    std::cout << "Among the numbers: ";
+    std::copy(v.cbegin(), v.cend(), std::ostream_iterator<int>(std::cout, " "));
+    std::cout << '\n';
+
+    if (std::all_of(v.cbegin(), v.cend(), [](int i) { return i % 2 == 0; }))
+        std::cout << "All numbers are even\n";
+
+    if (std::none_of(v.cbegin(), v.cend(), std::bind(std::modulus<>(),
+                                                     std::placeholders::_1, 2)))
+        std::cout << "None of them are odd\n";
+
+    struct DivisibleBy
+    {
+        const int d;
+        DivisibleBy(int n) : d(n) {}
+        bool operator()(int n) const { return n % d == 0; }
+    };
+
+    if (std::any_of(v.cbegin(), v.cend(), DivisibleBy(7)))
+        std::cout << "At least one number is divisible by 7\n";
+}
+```
+
+Output:
+
+```text
+Among the numbers: 2 4 6 8 10 12 14 16 18 20
+All numbers are even
+None of them are odd
+At least one number is divisible by 7
+```
+
+### See also
+
+- **ranges::all_ofranges::any_ofranges::none_of (C++20)(C++20)(C++20)** — checks
+  if a predicate is `true` for all, any or none of the elements in a range
+  (niebloid)
+
+---
+*Source: https://en.cppreference.com/w/cpp/algorithm/all_any_none_of*

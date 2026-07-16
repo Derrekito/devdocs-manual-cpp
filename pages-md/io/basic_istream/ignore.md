@@ -1,0 +1,98 @@
+# std::basic_istream<CharT,Traits>::ignore
+
+```cpp
+basic_istream& ignore( std::streamsize count = 1, int_type delim = Traits::eof() );
+```
+
+Extracts and discards characters from the input stream until and including
+`delim`.
+
+`ignore` behaves as an UnformattedInputFunction. After constructing and checking
+the sentry object, it extracts characters from the stream and discards them
+until any of the following conditions occurs:
+
+- `count` characters were extracted. This test is disabled in the special case
+  when `count` equals `std::numeric_limits<std::streamsize>::max()`.
+- end of file conditions occurs in the input sequence, in which case the
+  function calls `setstate(eofbit)`.
+- the next available character `c` in the input sequence is `delim`, as
+  determined by `Traits::eq_int_type(Traits::to_int_type(c), delim)`. The
+  delimiter character is extracted and discarded. This test is disabled if
+  `delim` is `Traits::eof()`.
+
+### Parameters
+
+- **count** — number of characters to extract
+- **delim** — delimiting character to stop the extraction at. It is also
+  extracted
+
+### Return value
+
+`*this`
+
+### Exceptions
+
+`failure` if an error occurred (the error state flag is not `goodbit`) and
+`exceptions()` is set to throw for that state.
+
+If an internal operation throws an exception, it is caught and `badbit` is set.
+If `exceptions()` is set for `badbit`, the exception is rethrown.
+
+### Example
+
+The following example uses `ignore` to skip over non-numeric input:
+
+```cpp
+#include <iostream>
+#include <limits>
+#include <sstream>
+
+constexpr auto max_size = std::numeric_limits<std::streamsize>::max();
+
+int main()
+{
+    std::istringstream input("1\n"
+                             "some non-numeric input\n"
+                             "2\n");
+    for (;;)
+    {
+        int n;
+        input >> n;
+
+        if (input.eof() || input.bad())
+            break;
+        else if (input.fail())
+        {
+            input.clear(); // unset failbit
+            input.ignore(max_size, '\n'); // skip bad input
+        }
+        else
+            std::cout << n << '\n';
+    }
+}
+```
+
+Output:
+
+```text
+1
+2
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 172 | C++98 | the type of `count` was misspecified as `int` | corrected to
+      `std::streamsize`
+
+### See also
+
+- **get** — extracts characters (public member function)
+- **getline** — extracts characters until the given character is found (public
+  member function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/io/basic_istream/ignore*

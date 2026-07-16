@@ -1,0 +1,105 @@
+# std::atan(std::valarray)
+
+```cpp
+template< class T >
+valarray<T> atan( const valarray<T>& va );
+```
+
+For each element in `va` computes arc tangent of the value of the element.
+
+### Parameters
+
+- **va** — value array to apply the operation to
+
+### Return value
+
+Value array containing arc tangents of the values in `va`.
+
+### Notes
+
+Unqualified function (`atan`) is used to perform the computation. If such
+function is not available, `std::atan` is used due to argument-dependent lookup.
+
+The function can be implemented with the return type different from
+`std::valarray`. In this case, the replacement type has the following
+properties:
+
+- All const member functions of `std::valarray` are provided.
+- `std::valarray`, `std::slice_array`, `std::gslice_array`, `std::mask_array`
+  and `std::indirect_array` can be constructed from the replacement type.
+- For every function taking a const std::valarray<T>& except `begin()` and
+  `end()`(since C++11), identical functions taking the replacement types shall
+  be added;
+- For every function taking two const std::valarray<T>& arguments, identical
+  functions taking every combination of const std::valarray<T>& and replacement
+  types shall be added.
+- The return type does not add more than two levels of template nesting over the
+  most deeply-nested argument type.
+
+### Possible implementation
+
+```cpp
+template<class T>
+valarray<T> atan(const valarray<T>& va)
+{
+    valarray<T> other = va;
+    for (T& i : other)
+        i = atan(i);
+
+    return other; // proxy object may be returned
+}
+```
+
+### Example
+
+```cpp
+#include <algorithm>
+#include <cmath>
+#include <iostream>
+#include <valarray>
+
+auto show = [](char const* title, const std::valarray<float>& va)
+{
+    std::cout << title << " :";
+    std::for_each(std::begin(va), std::end(va),
+        [](const float x) { std::cout << "  " << std::fixed << x; });
+    std::cout << '\n';
+};
+
+int main()
+{
+    const std::valarray<float> x = {.1f, .3f, .6f, .9f};
+    const std::valarray<float> f = std::atan(x);
+    const std::valarray<float> g = std::tan(f);
+
+    show("x          ", x);
+    show("f = atan(x)", f);
+    show("g = tan(f) ", g);
+}
+```
+
+Output:
+
+```text
+x           :  0.100000  0.300000  0.600000  0.900000
+f = atan(x) :  0.099669  0.291457  0.540420  0.732815
+g = tan(f)  :  0.100000  0.300000  0.600000  0.900000
+```
+
+### See also
+
+- **asin(std::valarray)** — applies the function `std::asin` to each element of
+  valarray (function template)
+- **acos(std::valarray)** — applies the function `std::acos` to each element of
+  valarray (function template)
+- **atan2(std::valarray)** — applies the function `std::atan2` to a valarray and
+  a value (function template)
+- **tan(std::valarray)** — applies the function `std::tan` to each element of
+  valarray (function template)
+- **atanatanfatanl (C++11)(C++11)** — computes arc tangent
+  (\({\small\arctan{x}}\)arctan(x)) (function)
+- **atan(std::complex) (C++11)** — computes arc tangent of a complex number
+  (\({\small\arctan{z}}\)arctan(z)) (function template)
+
+---
+*Source: https://en.cppreference.com/w/cpp/numeric/valarray/atan*

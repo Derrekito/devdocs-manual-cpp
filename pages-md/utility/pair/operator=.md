@@ -1,0 +1,211 @@
+# std::pair<T1,T2>::operator=
+
+```cpp
+pair& operator=( const pair& other );  // (until C++20)
+constexpr pair& operator=( const pair& other );  // (since C++20)
+constexpr const pair& operator=( const pair& other ) const;  // (2) (since C++23)
+template< class U1, class U2 >
+pair& operator=( const pair<U1, U2>& other );  // (until C++20)
+template< class U1, class U2 >
+constexpr pair& operator=( const pair<U1, U2>& other );  // (since C++20)
+template< class U1, class U2 >
+constexpr const pair& operator=( const pair<U1, U2>& other ) const;  // (4) (since C++23)
+pair& operator=( pair&& other ) noexcept(/* see below */);  // (since C++11) (until C++20)
+constexpr pair& operator=( pair&& other ) noexcept(/* see below */);  // (since C++20)
+constexpr const pair& operator=( pair&& other ) const;  // (6) (since C++23)
+template< class U1, class U2 >
+pair& operator=( pair<U1, U2>&& p );  // (since C++11) (until C++20)
+template< class U1, class U2 >
+constexpr pair& operator=( pair<U1, U2>&& p );  // (since C++20)
+template< class U1, class U2 >
+constexpr const pair& operator=( pair<U1, U2>&& p ) const;  // (8) (since C++23)
+template< pair-like P >
+constexpr pair& operator=( P&& u );  // (9) (since C++23)
+template< pair-like P >
+constexpr const pair& operator=( P&& u ) const;  // (10) (since C++23)
+```
+
+Replaces the contents of the pair.
+
+1) Copy assignment operator. Replaces the contents with a copy of the contents
+   of `other`. The assignment operator is implicitly declared. Using this
+   assignment operator makes the program ill-formed if either `T1` or `T2` is a
+   const-qualified type, or a reference type, or a class type with an
+   inaccessible copy assignment operator, or an array type of such class. (until
+   C++11) This overload is defined as deleted if either
+   `std::is_copy_assignable<T1>::value` or `std::is_copy_assignable<T2>::value`
+   is `false`. (since C++11)
+
+2) Copy assignment operator for const-qualified operand.
+
+This overload participates in overload resolution only if
+   `std::is_copy_assignable_v<const T1>` and `std::is_copy_assignable_v<const
+   T2>` are both `true`.
+
+3) Assigns `other.first` to `first` and `other.second` to `second`. This
+   overload participates in overload resolution only if `std::is_assignable<T1&,
+   const U1&>::value` and `std::is_assignable<T2&, const U2&>::value` are both
+   `true`. (since C++11)
+
+4) Assigns `other.first` to `first` and `other.second` to `second`.
+
+This overload participates in overload resolution only if
+   `std::is_assignable_v<const T1&, const U1&>` and `std::is_assignable_v<const
+   T2&, const U2&>` are both `true`.
+
+5) Move assignment operator. Replaces the contents with those of `other` using
+   move semantics.
+
+This overload participates in overload resolution only if
+   `std::is_move_assignable<T1>::value` and `std::is_move_assignable<T2>::value`
+   are both `true`.
+
+6) Move assignment operator for const-qualified operand.
+
+This overload participates in overload resolution only if
+   `std::is_assignable_v<const T1&, T1>` and `std::is_assignable_v<const T2&,
+   T2>` are both `true`.
+
+7) Assigns `std::forward<U1>(p.first)` to `first` and
+   `std::forward<U2>(p.second)` to `second`.
+
+This overload participates in overload resolution only if
+   `std::is_assignable<T1&, U1>::value` and `std::is_assignable<T2&, U2>::value`
+   are both `true`.
+
+8) Assigns `std::forward<U1>(p.first)` to `first` and
+   `std::forward<U2>(p.second)` to `second`.
+
+This overload participates in overload resolution only if
+   `std::is_assignable_v<const T1&, U1>` and `std::is_assignable_v<const T2&,
+   U2>` are both `true`.
+
+9) Assigns `std::get<0>(std::forward<P>(u))` to `first` and
+   `std::get<1>(std::forward<P>(u))` to `second`.
+This overload participates in overload resolution only if
+
+- `std::same_as<std::remove_cvref_t<P>, std::pair>` is `false`,
+- std::remove_cvref_t<P> is not a specialization of `std::ranges::subrange`,
+- `std::is_assignable_v<T1&, decltype(std::get<0>(std::forward<P>(p)))>` is
+  `true`, and
+- `std::is_assignable_v<T1&, decltype(std::get<1>(std::forward<P>(p)))>` is
+  `true`.
+
+10) Assigns `std::get<0>(std::forward<P>(u))` to `first` and
+   `std::get<1>(std::forward<P>(u))` to `second`.
+This overload participates in overload resolution only if
+
+- `std::same_as<std::remove_cvref_t<P>, std::pair>` is `false`,
+- std::remove_cvref_t<P> is not a specialization of `std::ranges::subrange`,
+- `std::is_assignable_v<const T1&, decltype(std::get<0>(std::forward<P>(p)))>`
+  is `true`, and
+- `std::is_assignable_v<const T1&, decltype(std::get<1>(std::forward<P>(p)))>`
+  is `true`.
+
+### Parameters
+
+- **other** — pair of values to replace the contents of this pair
+- **p** — pair of values of possibly different types to replace the contents of
+  this pair
+- **u** — `pair-like` object of values to replace the contents of this pair
+
+**Type requirements**
+
+**-`T1` must meet the requirements of CopyAssignable from `U1`. (until C++11)**
+
+**-`T2` must meet the requirements of CopyAssignable from `U2`. (until C++11)**
+
+### Return value
+
+`*this`
+
+### Exceptions
+
+1-4) May throw implementation-defined exceptions.
+
+5) `noexcept` specification: `noexcept(
+   std::is_nothrow_move_assignable<T1>::value &&
+   std::is_nothrow_move_assignable<T2>::value )`
+
+6-10) May throw implementation-defined exceptions.
+
+### Example
+
+```cpp
+#include <cstddef>
+#include <iomanip>
+#include <iostream>
+#include <utility>
+#include <vector>
+
+template<class Os, class T>
+Os& operator<<(Os& os, const std::vector<T>& v)
+{
+    os << '{';
+    for (std::size_t t = 0; t != v.size(); ++t)
+        os << v[t] << (t + 1 < v.size() ? ", " : "");
+    return os << '}';
+}
+
+template<class Os, class U1, class U2>
+Os& operator<<(Os& os, const std::pair<U1, U2>& pair)
+{
+    return os << '{' << pair.first << ", " << pair.second << '}';
+}
+
+int main()
+{
+    std::pair<int, std::vector<int>> p{1, {2}}, q{2, {5, 6}};
+
+    p = q; // (1) operator=(const pair& other);
+    std::cout << std::setw(23) << std::left
+              << "(1) p = q;"
+              << "p: " << p << "     q: " << q << '\n';
+
+    std::pair<short, std::vector<int>> r{4, {7, 8, 9}};
+    p = r; // (3) operator=(const pair<U1, U2>& other);
+    std::cout << std::setw(23)
+              << "(3) p = r;"
+              << "p: " << p << "  r: " << r << '\n';
+
+    p = std::pair<int, std::vector<int>>{3, {4}};
+    p = std::move(q); // (5) operator=(pair&& other);
+    std::cout << std::setw(23)
+              << "(5) p = std::move(q);"
+              << "p: " << p << "     q: " << q << '\n';
+
+    p = std::pair<int, std::vector<int>>{5, {6}};
+    p = std::move(r); // (7) operator=(pair<U1, U2>&& other);
+    std::cout << std::setw(23)
+              << "(7) p = std::move(r);"
+              << "p: " << p << "  r: " << r << '\n';
+}
+```
+
+Output:
+
+```text
+(1) p = q;             p: {2, {5, 6}}     q: {2, {5, 6}}
+(3) p = r;             p: {4, {7, 8, 9}}  r: {4, {7, 8, 9}}
+(5) p = std::move(q);  p: {2, {5, 6}}     q: {2, {}}
+(7) p = std::move(r);  p: {4, {7, 8, 9}}  r: {4, {}}
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 885 | C++98 | missing heterogeneous copy assignment | added (as overload
+      (3))
+  LWG 2729 | C++11 | `pair::operator=` was unconstrained and might result in
+      unnecessary undefined behavior | constrained
+
+### See also
+
+- **operator=** — assigns the contents of one `tuple` to another (public member
+  function of `std::tuple<Types...>`)
+
+---
+*Source: https://en.cppreference.com/w/cpp/utility/pair/operator%3D*

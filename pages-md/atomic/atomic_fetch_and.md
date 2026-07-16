@@ -1,0 +1,174 @@
+# std::atomic_fetch_and, std::atomic_fetch_and_explicit
+
+```cpp
+template< class T >
+T atomic_fetch_and( std::atomic<T>* obj,
+                    typename std::atomic<T>::value_type arg ) noexcept;  // (1) (since C++11)
+template< class T >
+T atomic_fetch_and( volatile std::atomic<T>* obj,
+                    typename std::atomic<T>::value_type arg ) noexcept;  // (2) (since C++11)
+template< class T >
+T atomic_fetch_and_explicit( std::atomic<T>* obj,
+                             typename std::atomic<T>::value_type arg,
+                             std::memory_order order ) noexcept;  // (3) (since C++11)
+template< class T >
+T atomic_fetch_and_explicit( volatile std::atomic<T>* obj,
+                             typename std::atomic<T>::value_type arg,
+                             std::memory_order order ) noexcept;  // (4) (since C++11)
+```
+
+Atomically replaces the value pointed by `obj` with the result of bitwise AND
+between the old value of `obj` and `arg`. Returns the value `obj` held
+previously.
+
+The operation is performed as if the following is executed:
+
+1,2) `obj->fetch_and(arg)`
+
+3,4) `obj->fetch_and(arg, order)`
+
+If `std::atomic<T>` has no `fetch_and` member (this member is only provided for
+integral types except bool), the program is ill-formed.
+
+### Parameters
+
+- **obj** — pointer to the atomic object to modify
+- **arg** — the value to bitwise AND to the value stored in the atomic object
+- **order** — the memory synchronization ordering
+
+### Return value
+
+The value immediately preceding the effects of this function in the modification
+order of `*obj`.
+
+### Example
+
+```cpp
+#include <atomic>
+#include <chrono>
+#include <functional>
+#include <iostream>
+#include <thread>
+
+// Binary semaphore for demonstrative purposes only.
+// This is a simple yet meaningful example: atomic operations
+// are unnecessary without threads.
+class Semaphore
+{
+    std::atomic_char m_signaled;
+public:
+    Semaphore(bool initial = false)
+    {
+        m_signaled = initial;
+    }
+    // Block until semaphore is signaled
+    void take()
+    {
+        while (!std::atomic_fetch_and(&m_signaled, false))
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+
+    void put()
+    {
+        std::atomic_fetch_or(&m_signaled, true);
+    }
+};
+
+class ThreadedCounter
+{
+    static const int N = 100;
+    static const int REPORT_INTERVAL = 10;
+    int m_count;
+    bool m_done;
+    Semaphore m_count_sem;
+    Semaphore m_print_sem;
+
+    void count_up()
+    {
+        for (m_count = 1; m_count <= N; ++m_count)
+            if (m_count % REPORT_INTERVAL == 0)
+            {
+                if (m_count == N)
+                    m_done = true;
+                m_print_sem.put(); // signal printing to occur
+                m_count_sem.take(); // wait until printing is complete proceeding
+            }
+        std::cout << "count_up() done\n";
+        m_done = true;
+        m_print_sem.put();
+    }
+
+    void print_count()
+    {
+        do
+        {
+            m_print_sem.take();
+            std::cout << m_count << '\n';
+            m_count_sem.put();
+        }
+        while (!m_done);
+        std::cout << "print_count() done\n";
+    }
+
+public:
+    ThreadedCounter() : m_done(false) {}
+    void run()
+    {
+        auto print_thread = std::thread(&ThreadedCounter::print_count, this);
+        auto count_thread = std::thread(&ThreadedCounter::count_up, this);
+        print_thread.join();
+        count_thread.join();
+    }
+};
+
+int main()
+{
+    ThreadedCounter m_counter;
+    m_counter.run();
+}
+```
+
+Output:
+
+```text
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+print_count() done
+count_up() done
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  P0558R1 | C++11 | exact type match was required because `T` was deduced from
+      multiple arguments | `T` is only deduced from obj
+
+### See also
+
+- **fetch_and** — atomically performs bitwise AND between the argument and the
+  value of the atomic object and obtains the value held previously (public
+  member function of `std::atomic<T>`)
+- **atomic_fetch_oratomic_fetch_or_explicit (C++11)(C++11)** — replaces the
+  atomic object with the result of bitwise OR with a non-atomic argument and
+  obtains the previous value of the atomic (function template)
+- **atomic_fetch_xoratomic_fetch_xor_explicit (C++11)(C++11)** — replaces the
+  atomic object with the result of bitwise XOR with a non-atomic argument and
+  obtains the previous value of the atomic (function template)
+
+**C documentation for `atomic_fetch_and, atomic_fetch_and_explicit`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/atomic/atomic_fetch_and*

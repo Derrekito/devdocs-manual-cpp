@@ -1,0 +1,121 @@
+# std::any::type
+
+```cpp
+const std::type_info& type() const noexcept;  // (since C++17)
+```
+
+Queries the contained type.
+
+### Parameters
+
+(none)
+
+### Return value
+
+The `typeid` of the contained value if instance is non-empty, otherwise
+`typeid(void)`.
+
+### Example
+
+The example demonstrates `std::any` visitor idiom with ability to register new
+visitors at compile- and run-time.
+
+```cpp
+#include <any>
+#include <functional>
+#include <iomanip>
+#include <iostream>
+#include <type_traits>
+#include <typeindex>
+#include <typeinfo>
+#include <unordered_map>
+#include <vector>
+
+template<class T, class F>
+inline std::pair<const std::type_index, std::function<void(std::any const&)>>
+    to_any_visitor(F const& f)
+{
+    return
+    {
+        std::type_index(typeid(T)),
+        [g = f](std::any const& a)
+        {
+            if constexpr (std::is_void_v<T>)
+                g();
+            else
+                g(std::any_cast<T const&>(a));
+        }
+    };
+}
+
+static std::unordered_map<std::type_index, std::function<void(std::any const&)>>
+    any_visitor
+{
+    to_any_visitor<void>([] { std::cout << "{}"; }),
+    to_any_visitor<int>([](int x) { std::cout << x; }),
+    to_any_visitor<unsigned>([](unsigned x) { std::cout << x; }),
+    to_any_visitor<float>([](float x) { std::cout << x; }),
+    to_any_visitor<double>([](double x) { std::cout << x; }),
+    to_any_visitor<char const*>([](char const* s)
+        { std::cout << std::quoted(s); }),
+    // ... add more handlers for your types ...
+};
+
+inline void process(const std::any& a)
+{
+    if (const auto it = any_visitor.find(std::type_index(a.type()));
+        it != any_visitor.cend())
+        it->second(a);
+    else
+        std::cout << "Unregistered type "<< std::quoted(a.type().name());
+}
+
+template<class T, class F>
+inline void register_any_visitor(F const& f)
+{
+    std::cout << "Register visitor for type "
+              << std::quoted(typeid(T).name()) << '\n';
+    any_visitor.insert(to_any_visitor<T>(f));
+}
+
+int main()
+{
+    std::vector<std::any> va{{}, 42, 123u, 3.14159f, 2.71828, "C++17"};
+
+    std::cout << "{ ";
+    for (const std::any& a : va)
+    {
+        process(a);
+        std::cout << ", ";
+    }
+    std::cout << "}\n";
+
+    process(std::any(0xFULL)); //< Unregistered type "y" (unsigned long long)
+    std::cout << '\n';
+
+    register_any_visitor<unsigned long long>([](auto x)
+    {
+        std::cout << std::hex << std::showbase << x;
+    });
+
+    process(std::any(0xFULL)); //< OK: 0xf
+    std::cout << '\n';
+}
+```
+
+Possible output:
+
+```text
+{ {}, 42, 123, 3.14159, 2.71828, "C++17", }
+Unregistered type "y"
+Register visitor for type "y"
+0xf
+```
+
+### See also
+
+- **type_index (C++11)** — wrapper around a `type_info` object, that can be used
+  as index in associative and unordered associative containers (class)
+
+---
+*Source: https://en.cppreference.com/w/cpp/utility/any/type*

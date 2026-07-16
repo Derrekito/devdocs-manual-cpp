@@ -1,0 +1,47 @@
+# std::auto_ptr<T>::auto_ptr
+
+```cpp
+explicit auto_ptr( X* p = 0 ) throw();  // (1) (deprecated in C++11) (removed in C++17)
+auto_ptr( auto_ptr& r ) throw();  // (2) (deprecated in C++11) (removed in C++17)
+template< class Y >
+auto_ptr( auto_ptr<Y>& r ) throw();  // (3) (deprecated in C++11) (removed in C++17)
+auto_ptr( auto_ptr_ref<X> m ) throw();  // (4) (deprecated in C++11) (removed in C++17)
+```
+
+Constructs the `auto_ptr` from a pointer that refers to the object to manage.
+
+1) Constructs the `auto_ptr` with pointer `p`.
+
+2) Constructs the `auto_ptr` with the pointer held in `r`. `r.release()` is
+   called to acquire the ownership of the object.
+
+3) Same as (2). `Y*` must be implicitly convertible to `T*`.
+
+4) Constructs the `auto_ptr` with the pointer held in the `auto_ptr` instance
+   referred to by `m`. `p.release()` is called for the `auto_ptr p` that `m`
+   holds to acquire the ownership of the object.
+
+`auto_ptr_ref` is an implementation-defined type that holds a reference to
+   `auto_ptr`. `std::auto_ptr` is implicitly convertible to and assignable from
+   this type. The implementation is allowed to provide the template with a
+   different name or implement equivalent functionality in other ways.
+
+### Parameters
+
+- **p** — a pointer to an object to manage
+- **r** — another `auto_ptr` to transfer the ownership of the object from
+- **m** — an implementation-defined type that holds a reference to `auto_ptr`
+
+### Notes
+
+The constructor and the copy assignment operator from `auto_ptr_ref` is provided
+to allow copy-constructing and assigning `std::auto_ptr` from nameless
+temporaries. Since its copy constructor and copy assignment operator take the
+argument as non-const reference, they cannot bind rvalue arguments directly.
+However, a user-defined conversion can be executed (which releases the original
+`auto_ptr`), followed by a call to the constructor or copy-assignment operator
+that take `auto_ptr_ref` by value. This is an early implementation of move
+semantics.
+
+---
+*Source: https://en.cppreference.com/w/cpp/memory/auto_ptr/auto_ptr*

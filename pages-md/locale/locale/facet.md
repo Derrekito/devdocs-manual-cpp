@@ -1,0 +1,54 @@
+# std::locale::facet
+
+```cpp
+class locale::facet;
+```
+
+`std::locale::facet` is the base class for facets. It provides a common base
+class so that locales could store pointers to the facets they implement in a
+single indexed container, and it abstracts support for facet reference counting.
+
+Whenever a facet is added to a locale, the locale increments the reference count
+in the facet (through an implementation-specific mechanism). Whenever a locale
+is destructed or modified, it decrements the reference count in each facet it no
+longer implements. Whenever a facet's reference count becomes zero, the locale
+performs `delete static_cast<std::locale::facet*>(f);` where `f` is the pointer
+to the facet.
+
+### Facet class
+
+A class is a *facet* if
+
+- it is publicly derived from another facet, or
+- it is a class derived from `std::locale::facet` and contains a publicly
+  accessible declaration as follows:
+
+`static ::std::locale::id id;`
+
+### Member functions
+
+- **(constructor)** — constructs a new facet with specified reference count
+  (protected member function)
+- **operator=** — the copy assignment operator is deleted (protected member
+  function)
+- **(destructor) [virtual]** — the destructor is protected virtual (virtual
+  protected member function)
+
+### Example
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 2694 | C++98 | the definition of 'facet' was removed by the resolution of
+      LWG issue 436 | added the definition back
+
+### See also
+
+- **id** — the facet index type: each facet class must declare or inherit a
+  public static member of this type (class)
+
+---
+*Source: https://en.cppreference.com/w/cpp/locale/locale/facet*

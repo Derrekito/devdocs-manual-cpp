@@ -1,0 +1,127 @@
+# std::expm1, std::expm1f, std::expm1l
+
+```cpp
+float       expm1 ( float num );
+double      expm1 ( double num );
+long double expm1 ( long double num );  // (until C++23)
+/* floating-point-type */
+            expm1 ( /* floating-point-type */ num );  // (since C++23) (constexpr since C++26)
+float       expm1f( float num );  // (2) (since C++11) (constexpr since C++26)
+long double expm1l( long double num );  // (3) (since C++11) (constexpr since C++26)
+Additional overloads (since C++11)
+template< class Integer >
+double      expm1 ( Integer num );  // (A) (constexpr since C++26)
+```
+
+1-3) Computes the *e* (Euler's number, `2.7182818...`) raised to the given power
+   `num`, minus `1.0`. This function is more accurate than the expression
+   `std::exp(num) - 1.0` if `num` is close to zero. The library provides
+   overloads of `std::expm1` for all cv-unqualified floating-point types as the
+   type of the parameter.(since C++23)
+
+A) Additional overloads are provided for all integer types, which are treated as
+double.
+*(since C++11)*
+
+### Parameters
+
+- **num** — floating-point or integer value
+
+### Return value
+
+If no errors occur enum-1 is returned.
+
+If a range error due to overflow occurs, `+HUGE_VAL`, `+HUGE_VALF`, or
+`+HUGE_VALL` is returned.
+
+If a range error occurs due to underflow, the correct result (after rounding) is
+returned.
+
+### Error handling
+
+Errors are reported as specified in `math_errhandling`.
+
+If the implementation supports IEEE floating-point arithmetic (IEC 60559),
+
+- If the argument is ±0, it is returned, unmodified.
+- If the argument is -∞, -1 is returned.
+- If the argument is +∞, +∞ is returned.
+- If the argument is NaN, NaN is returned.
+
+### Notes
+
+The functions `std::expm1` and `std::log1p` are useful for financial
+calculations, for example, when calculating small daily interest rates: (1+x)n-1
+can be expressed as `std::expm1(n * std::log1p(x))`. These functions also
+simplify writing accurate inverse hyperbolic functions.
+
+For IEEE-compatible type double, overflow is guaranteed if 709.8 < num.
+
+The additional overloads are not required to be provided exactly as (A). They
+only need to be sufficient to ensure that for their argument `num` of integer
+type, `std::expm1(num)` has the same effect as
+`std::expm1(static_cast<double>(num))`.
+
+### Example
+
+```cpp
+#include <cerrno>
+#include <cfenv>
+#include <cmath>
+#include <cstring>
+#include <iostream>
+// #pragma STDC FENV_ACCESS ON
+
+int main()
+{
+    std::cout << "expm1(1) = " << std::expm1(1) << '\n'
+              << "Interest earned in 2 days on $100, compounded daily at 1%\n"
+              << "    on a 30/360 calendar = "
+              << 100 * std::expm1(2 * std::log1p(0.01 / 360)) << '\n'
+              << "exp(1e-16)-1 = " << std::exp(1e-16) - 1
+              << ", but expm1(1e-16) = " << std::expm1(1e-16) << '\n';
+
+    // special values
+    std::cout << "expm1(-0) = " << std::expm1(-0.0) << '\n'
+              << "expm1(-Inf) = " << std::expm1(-INFINITY) << '\n';
+
+    // error handling
+    errno = 0;
+    std::feclearexcept(FE_ALL_EXCEPT);
+
+    std::cout << "expm1(710) = " << std::expm1(710) << '\n';
+
+    if (errno == ERANGE)
+        std::cout << "    errno == ERANGE: " << std::strerror(errno) << '\n';
+    if (std::fetestexcept(FE_OVERFLOW))
+        std::cout << "    FE_OVERFLOW raised\n";
+}
+```
+
+Possible output:
+
+```text
+expm1(1) = 1.71828
+Interest earned in 2 days on $100, compounded daily at 1%
+    on a 30/360 calendar = 0.00555563
+exp(1e-16)-1 = 0, but expm1(1e-16) = 1e-16
+expm1(-0) = -0
+expm1(-Inf) = -1
+expm1(710) = inf
+    errno == ERANGE: Result too large
+    FE_OVERFLOW raised
+```
+
+### See also
+
+- **expexpfexpl (C++11)(C++11)** — returns *e* raised to the given power
+  (\({\small e^x}\)ex) (function)
+- **exp2exp2fexp2l (C++11)(C++11)(C++11)** — returns *2* raised to the given
+  power (\({\small 2^x}\)2x) (function)
+- **log1plog1pflog1pl (C++11)(C++11)(C++11)** — natural logarithm (to base *e*)
+  of 1 plus the given number (\({\small\ln{(1+x)}}\)ln(1+x)) (function)
+
+**C documentation for `expm1`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/numeric/math/expm1*

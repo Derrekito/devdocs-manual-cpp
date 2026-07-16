@@ -1,0 +1,111 @@
+# std::ios_base::setf
+
+```cpp
+fmtflags setf( fmtflags flags );  // (1)
+fmtflags setf( fmtflags flags, fmtflags mask );  // (2)
+```
+
+Sets the formatting flags to specified settings.
+
+1) Sets the formatting flags identified by `flags`. Effectively, the following
+   operation is performed `fl = fl | flags` where `fl` defines the state of
+   internal formatting flags.
+
+2) Clears the formatting flags under `mask`, and sets the cleared flags to those
+   specified by `flags`. Effectively the following operation is performed `fl =
+   (fl & ~mask) | (flags & mask)` where `fl` defines the state of internal
+   formatting flags.
+
+### Parameters
+
+- **flags, mask** — new formatting setting. `mask` defines which flags can be
+  altered, `flags` defines which flags of those to be altered should be set
+  (others will be cleared). Both parameters can be a combination of the
+  formatting flags constants
+
+##### Formatting flags
+
+- **`dec`** — use decimal base for integer I/O: see `std::dec`
+- **`oct`** — use octal base for integer I/O: see `std::oct`
+- **`hex`** — use hexadecimal base for integer I/O: see `std::hex`
+- **`basefield`** — `dec | oct | hex`. Useful for masking operations
+- **`left`** — left adjustment (adds fill characters to the right): see
+  `std::left`
+- **`right`** — right adjustment (adds fill characters to the left): see
+  `std::right`
+- **`internal`** — internal adjustment (adds fill characters to the internal
+  designated point): see `std::internal`
+- **`adjustfield`** — `left | right | internal`. Useful for masking operations
+- **`scientific`** — generate floating point types using scientific notation, or
+  hex notation if combined with `fixed`: see `std::scientific`
+- **`fixed`** — generate floating point types using fixed notation, or hex
+  notation if combined with `scientific`: see `std::fixed`
+- **`floatfield`** — `scientific | fixed`. Useful for masking operations
+- **`boolalpha`** — insert and extract bool type in alphanumeric format: see
+  `std::boolalpha`
+- **`showbase`** — generate a prefix indicating the numeric base for integer
+  output, require the currency indicator in monetary I/O: see `std::showbase`
+- **`showpoint`** — generate a decimal-point character unconditionally for
+  floating-point number output: see `std::showpoint`
+- **`showpos`** — generate a + character for non-negative numeric output: see
+  `std::showpos`
+- **`skipws`** — skip leading whitespace before certain input operations: see
+  `std::skipws`
+- **`unitbuf`** — flush the output after each output operation: see
+  `std::unitbuf`
+- **`uppercase`** — replace certain lowercase letters with their uppercase
+  equivalents in certain output operations: see `std::uppercase`
+
+### Return value
+
+The formatting flags before the call to the function.
+
+### Example
+
+```cpp
+#include <iomanip>
+#include <iostream>
+#include <numbers>
+
+int main()
+{
+    const double PI = std::numbers::pi;
+    const int WIDTH = 15;
+
+    std::cout.setf(std::ios::right); // equivalent: cout << right;
+    std::cout << std::setw(WIDTH / 2) << "radius"
+              << std::setw(WIDTH) << "circumference" << '\n';
+
+    std::cout.setf(std::ios::fixed); // equivalent: cout << fixed;
+    for (double radius = 1; radius <= 6; radius += 0.5)
+        std::cout << std::setprecision(1) << std::setw(WIDTH / 2)
+                  << radius
+                  << std::setprecision(2) << std::setw(WIDTH)
+                  << (2 * PI * radius) << '\n';
+}
+```
+
+Output:
+
+```text
+radius  circumference
+   1.0           6.28
+   1.5           9.42
+   2.0          12.57
+   2.5          15.71
+   3.0          18.85
+   3.5          21.99
+   4.0          25.13
+   4.5          28.27
+   5.0          31.42
+   5.5          34.56
+   6.0          37.70
+```
+
+### See also
+
+- **flags** — manages format flags (public member function)
+- **unsetf** — clears specific format flag (public member function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/io/ios_base/setf*

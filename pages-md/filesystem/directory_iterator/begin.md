@@ -1,0 +1,69 @@
+# std::filesystem::begin(directory_iterator), std::filesystem::end(directory_iterator)
+
+```cpp
+directory_iterator begin( directory_iterator iter ) noexcept;  // (1) (since C++17)
+directory_iterator end( directory_iterator ) noexcept;  // (2) (since C++17)
+```
+
+1) Returns `iter` unchanged.
+
+2) Returns a default-constructed `directory_iterator`, which serves as the end
+   iterator. The argument is ignored.
+
+These non-member functions enable the use of `directory_iterator`s with
+range-based for loops and make `directory_iterator` a `range` type(since C++20).
+
+### Parameters
+
+- **iter** — a `directory_iterator`
+
+### Return value
+
+1) `iter` unchanged.
+
+2) End iterator (default-constructed `directory_iterator`).
+
+### Example
+
+```cpp
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+namespace fs = std::filesystem;
+
+int main()
+{
+    fs::create_directories("sandbox/a/b");
+    std::ofstream("sandbox/file1.txt");
+    std::ofstream("sandbox/file2.txt");
+    for (auto& p : fs::directory_iterator("sandbox"))
+        std::cout << p << '\n';
+    fs::remove_all("sandbox");
+}
+```
+
+Possible output:
+
+```text
+"sandbox/a"
+"sandbox/file1.txt"
+"sandbox/file2.txt"
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 3480 | C++17 | `end` took the argument by reference | takes the argument
+      by value
+
+### See also
+
+-
+  **begin(std::filesystem::recursive_directory_iterator)end(std::filesystem::recursive_directory_iterator)**
+  — range-based for loop support (function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/filesystem/directory_iterator/begin*

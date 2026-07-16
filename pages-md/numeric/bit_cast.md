@@ -1,0 +1,132 @@
+# std::bit_cast
+
+```cpp
+template< class To, class From >
+constexpr To bit_cast( const From& from ) noexcept;  // (since C++20)
+```
+
+Obtain a value of type `To` by reinterpreting the object representation of
+`From`. Every bit in the value representation of the returned `To` object is
+equal to the corresponding bit in the object representation of `from`. The
+values of padding bits in the returned `To` object are unspecified.
+
+If there is no value of type `To` corresponding to the value representation
+produced, the behavior is undefined. If there are multiple such values, which
+value is produced is unspecified.
+
+A bit in the value representation of the result is *indeterminate* if it
+
+- does not correspond to a bit in the value representation of `From` (i.e. it
+  corresponds to a padding bit), or
+- corresponds to a bit of an object that is not within its lifetime, or
+- has an indeterminate value.
+
+For each bit in the value representation of the result that is indeterminate,
+the smallest object containing that bit has an indeterminate value; the behavior
+is undefined unless that object is of `unsigned char` or `std::byte` type. The
+result does not otherwise contain any indeterminate values.
+
+This overload participates in overload resolution only if `sizeof(To) ==
+sizeof(From)` and both `To` and `From` are TriviallyCopyable types.
+
+This function template is `constexpr` if and only if each of `To`, `From` and
+the types of all subobjects of `To` and `From`:
+
+- is not a union type;
+- is not a pointer type;
+- is not a pointer to member type;
+- is not a volatile-qualified type; and
+- has no non-static data member of reference type.
+
+### Parameters
+
+- **from** — the source of bits for the return value
+
+### Return value
+
+An object of type `To` whose value representation is as described above.
+
+### Possible implementation
+
+To implement `std::bit_cast`, ignoring the fact that it's constexpr,
+`std::memcpy` can be used, when it is needed, to interpret the object
+representation as one of another type:
+
+```cpp
+template<class To, class From>
+std::enable_if_t<
+    sizeof(To) == sizeof(From) &&
+    std::is_trivially_copyable_v<From> &&
+    std::is_trivially_copyable_v<To>,
+    To>
+// constexpr support needs compiler magic
+bit_cast(const From& src) noexcept
+{
+    static_assert(std::is_trivially_constructible_v<To>,
+        "This implementation additionally requires "
+        "destination type to be trivially constructible");
+
+    To dst;
+    std::memcpy(&dst, &src, sizeof(To));
+    return dst;
+}
+```
+
+### Notes
+
+`reinterpret_cast` (or equivalent explicit cast) between pointer or reference
+types shall not be used to reinterpret object representation in most cases
+because of the type aliasing rule.
+
+  Feature-test macro | Value | Std | Feature
+  `__cpp_lib_bit_cast` | 201806L | (C++20) | `std::bit_cast`
+
+### Example
+
+```cpp
+#include <bit>
+#include <cstdint>
+#include <iostream>
+
+constexpr double f64v = 19880124.0;
+constexpr auto u64v = std::bit_cast<std::uint64_t>(f64v);
+static_assert(std::bit_cast<double>(u64v) == f64v); // round-trip
+
+constexpr std::uint64_t u64v2 = 0x3fe9000000000000ull;
+constexpr auto f64v2 = std::bit_cast<double>(u64v2);
+static_assert(std::bit_cast<std::uint64_t>(f64v2) == u64v2); // round-trip
+
+int main()
+{
+    std::cout
+        << "std::bit_cast<std::uint64_t>(" << std::fixed << f64v << ") == 0x"
+        << std::hex << u64v << '\n'
+        << "std::bit_cast<double>(0x" << std::hex << u64v2 << ") == "
+        << std::fixed << f64v2 << '\n';
+}
+```
+
+Possible output:
+
+```text
+std::bit_cast<std::uint64_t>(19880124.000000) == 0x4172f58bc0000000
+std::bit_cast<double>(0x3fe9000000000000) == 0.781250
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  CWG 2482 | C++20 | it was unspecified whether UB would occur when involving
+      indeterminate bits | specified
+
+### See also
+
+- **start_lifetime_asstart_lifetime_as_array (C++23)** — implicitly creates
+  objects in given storage with the object representation reused (function
+  template)
+
+---
+*Source: https://en.cppreference.com/w/cpp/numeric/bit_cast*

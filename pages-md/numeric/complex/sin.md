@@ -1,0 +1,71 @@
+# std::sin(std::complex)
+
+```cpp
+template< class T >
+complex<T> sin( const complex<T>& z );
+```
+
+Computes complex sine of a complex value `z`.
+
+### Parameters
+
+- **z** — complex value
+
+### Return value
+
+If no errors occur, the complex sine of `z` is returned.
+
+Errors and special cases are handled as if the operation is implemented by `-i *
+std::sinh(i * z)`, where `i` is the imaginary unit.
+
+### Notes
+
+The sine is an entire function on the complex plane, and has no branch cuts.
+Mathematical definition of the sine is sin z =
+
+eiz-e-iz/2i.
+
+### Example
+
+```cpp
+#include <cmath>
+#include <complex>
+#include <iostream>
+
+int main()
+{
+    std::cout << std::fixed;
+    std::complex<double> z(1.0, 0.0); // behaves like real sine along the real line
+    std::cout << "sin" << z << " = " << std::sin(z)
+              << " ( sin(1) = " << std::sin(1) << ")\n";
+
+    std::complex<double> z2(0.0, 1.0); // behaves like sinh along the imaginary line
+    std::cout << "sin" << z2 << " = " << std::sin(z2)
+              << " (sinh(1) = " << std::sinh(1) << ")\n";
+}
+```
+
+Output:
+
+```text
+sin(1.000000,0.000000) = (0.841471,0.000000) ( sin(1) = 0.841471)
+sin(0.000000,1.000000) = (0.000000,1.175201) (sinh(1) = 1.175201)
+```
+
+### See also
+
+- **cos(std::complex)** — computes cosine of a complex number
+  (\({\small\cos{z}}\)cos(z)) (function template)
+- **tan(std::complex)** — computes tangent of a complex number
+  (\({\small\tan{z}}\)tan(z)) (function template)
+- **asin(std::complex) (C++11)** — computes arc sine of a complex number
+  (\({\small\arcsin{z}}\)arcsin(z)) (function template)
+- **sinsinfsinl (C++11)(C++11)** — computes sine (\({\small\sin{x}}\)sin(x))
+  (function)
+- **sin(std::valarray)** — applies the function `std::sin` to each element of
+  valarray (function template)
+
+**C documentation for `csin`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/numeric/complex/sin*

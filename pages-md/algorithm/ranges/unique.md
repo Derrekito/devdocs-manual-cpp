@@ -1,0 +1,193 @@
+# std::ranges::unique
+
+```cpp
+Call signature
+template< std::permutable I, std::sentinel_for<I> S, class Proj = std::identity,
+          std::indirect_equivalence_relation<std::projected<I, Proj>>
+              C = ranges::equal_to >
+constexpr ranges::subrange<I>
+    unique( I first, S last, C comp = {}, Proj proj = {} );  // (1) (since C++20)
+template< ranges::forward_range R, class Proj = std::identity,
+          std::indirect_equivalence_relation<std::projected<ranges::iterator_t<R>, Proj>>
+              C = ranges::equal_to >
+requires std::permutable<ranges::iterator_t<R>>
+constexpr ranges::borrowed_subrange_t<R>
+    unique( R&& r, C comp = {}, Proj proj = {} );  // (2) (since C++20)
+```
+
+1) Eliminates all except the first element from every consecutive group of
+   equivalent elements from the range `[``first``,``last``)` and returns a
+   subrange `[``ret``,``last``)`, where `ret` is a past-the-end iterator for the
+   new end of the range.
+
+Two consecutive elements `*(i - 1)` and `*i` are considered equivalent if
+   `std::invoke(comp, std::invoke(proj, *(i - 1)), std::invoke(proj, *i)) ==
+   true`, where `i` is an iterator in the range `[``first + 1``,``last``)`.
+
+2) Same as (1), but uses `r` as the range, as if using `ranges::begin(r)` as
+   `first`, and `ranges::end(r)` as `last`.
+
+The function-like entities described on this page are *niebloids*, that is:
+
+- Explicit template argument lists cannot be specified when calling any of them.
+- None of them are visible to argument-dependent lookup.
+- When any of them are found by normal unqualified lookup as the name to the
+  left of the function-call operator, argument-dependent lookup is inhibited.
+
+In practice, they may be implemented as function objects, or with special
+compiler extensions.
+
+### Parameters
+
+- **first, last** — the range of elements to process
+- **r** — the range of elements to process
+- **comp** — the binary predicate to compare the projected elements
+- **proj** — the projection to apply to the elements
+
+### Return value
+
+Returns `{ret, last}`, where `ret` is a past-the-end iterator for the new end of
+the range.
+
+### Complexity
+
+For nonempty ranges, exactly `ranges::distance(first, last) - 1` applications of
+the corresponding predicate `comp` and no more that twice as many applications
+of any projection `proj`.
+
+### Notes
+
+Removing is done by shifting (by means of move assignment) the elements in the
+range in such a way that the elements that are not to be removed appear in the
+beginning of the range. Relative order of the elements that remain is preserved
+and the *physical* size of the container is unchanged. Iterators in
+`[``ret``,``last``)` (if any) are still dereferenceable, but the elements
+themselves have unspecified values (as per MoveAssignable post-condition).
+
+A call to `ranges::unique` is sometimes followed by a call to a container’s
+`erase` member function, which erases the unspecified values and reduces the
+*physical* size of the container to match its new *logical* size. These two
+invocations together model the *Erase–remove* idiom.
+
+### Possible implementation
+
+```cpp
+struct unique_fn
+{
+    template<std::permutable I, std::sentinel_for<I> S, class Proj = std::identity,
+             std::indirect_equivalence_relation<std::projected<I, Proj>>
+                 C = ranges::equal_to>
+    constexpr ranges::subrange<I>
+        operator()(I first, S last, C comp = {}, Proj proj = {}) const
+    {
+        first = ranges::adjacent_find(first, last, comp, proj);
+        if (first == last)
+            return {first, first};
+        auto i {first};
+        ++first;
+        while (++first != last)
+            if (!std::invoke(comp, std::invoke(proj, *i), std::invoke(proj, *first)))
+                *++i = ranges::iter_move(first);
+        return {++i, first};
+    }
+
+    template<ranges::forward_range R, class Proj = std::identity,
+             std::indirect_equivalence_relation<std::projected<ranges::iterator_t<R>, Proj>>
+                 C = ranges::equal_to>
+    requires std::permutable<ranges::iterator_t<R>>
+    constexpr ranges::borrowed_subrange_t<R>
+        operator()(R&& r, C comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r),
+                       std::move(comp), std::move(proj));
+    }
+};
+
+inline constexpr unique_fn unique {};
+```
+
+### Example
+
+```cpp
+#include <algorithm>
+#include <cmath>
+#include <complex>
+#include <iostream>
+#include <vector>
+
+struct id {
+    int i;
+    explicit id(int i) : i {i} {}
+};
+
+void print(id i, const auto& v)
+{
+    std::cout << i.i << ") ";
+    std::ranges::for_each(v, [](auto const& e) { std::cout << e << ' '; });
+    std::cout << '\n';
+}
+
+int main()
+{
+    // a vector containing several duplicated elements
+    std::vector<int> v {1, 2, 1, 1, 3, 3, 3, 4, 5, 4};
+
+    print(id {1}, v);
+
+    // remove consecutive (adjacent) duplicates
+    const auto ret = std::ranges::unique(v);
+    // v now holds {1 2 1 3 4 5 4 x x x}, where 'x' is indeterminate
+    v.erase(ret.begin(), ret.end());
+    print(id {2}, v);
+
+    // sort followed by unique, to remove all duplicates
+    std::ranges::sort(v); // {1 1 2 3 4 4 5}
+    print(id {3}, v);
+
+    const auto [first, last] = std::ranges::unique(v.begin(), v.end());
+    // v now holds {1 2 3 4 5 x x}, where 'x' is indeterminate
+    v.erase(first, last);
+    print(id {4}, v);
+
+    // unique with custom comparison and projection
+    std::vector<std::complex<int>> vc { {1, 1}, {-1, 2}, {-2, 3}, {2, 4}, {-3, 5} };
+    print(id {5}, vc);
+
+    const auto ret2 = std::ranges::unique(vc,
+        // consider two complex nums equal if their real parts are equal by module:
+        [](int x, int y) { return std::abs(x) == std::abs(y); }, // comp
+        [](std::complex<int> z) { return z.real(); }             // proj
+    );
+    vc.erase(ret2.begin(), ret2.end());
+    print(id {6}, vc);
+}
+```
+
+Output:
+
+```text
+1) 1 2 1 1 3 3 3 4 5 4
+2) 1 2 1 3 4 5 4
+3) 1 1 2 3 4 4 5
+4) 1 2 3 4 5
+5) (1,1) (-1,2) (-2,3) (2,4) (-3,5)
+6) (1,1) (-2,3) (-3,5)
+```
+
+### See also
+
+- **ranges::unique_copy (C++20)** — creates a copy of some range of elements
+  that contains no consecutive duplicates (niebloid)
+- **ranges::adjacent_find (C++20)** — finds the first two adjacent items that
+  are equal (or satisfy a given predicate) (niebloid)
+- **ranges::removeranges::remove_if (C++20)(C++20)** — removes elements
+  satisfying specific criteria (niebloid)
+- **unique** — removes consecutive duplicate elements in a range (function
+  template)
+- **unique** — removes consecutive duplicate elements (public member function of
+  `std::list<T,Allocator>`)
+- **unique** — removes consecutive duplicate elements (public member function of
+  `std::forward_list<T,Allocator>`)
+
+---
+*Source: https://en.cppreference.com/w/cpp/algorithm/ranges/unique*

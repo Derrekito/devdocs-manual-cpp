@@ -1,0 +1,91 @@
+# std::filesystem::recursive_directory_iterator::disable_recursion_pending
+
+```cpp
+void disable_recursion_pending();  // (since C++17)
+```
+
+Disables recursion to the currently referred subdirectory, if any.
+
+The call modifies the pending recursion flag on the iterator in such a way that
+the next time `increment` is called, the iterator will advance within the
+current directory even if it is currently referring to a subdirectory that
+hasn't been visited.
+
+The status of the pending recursion flag can be queried with
+`recursion_pending()`, which is `false` after this call. It is reset back to
+`true` after `increment`, and its initial value is also `true`.
+
+The behavior is undefined if `*this` is the end iterator.
+
+### Parameters
+
+(none)
+
+### Return value
+
+(none)
+
+### Exceptions
+
+May throw implementation-defined exceptions.
+
+### Example
+
+```cpp
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <string>
+namespace fs = std::filesystem;
+
+int main()
+{
+    fs::current_path(fs::temp_directory_path());
+    fs::create_directories("sandbox/a/b/c");
+    fs::create_directories("sandbox/a/b/d/e");
+    std::ofstream("sandbox/a/b/file1.txt");
+    fs::create_symlink("a", "sandbox/syma");
+    std::system("tree sandbox");
+    for (auto i = fs::recursive_directory_iterator("sandbox");
+         i != fs::recursive_directory_iterator();
+         ++i)
+    {
+        std::cout << std::string(i.depth() * 2, ' ') << *i;
+        if (fs::is_symlink(i->symlink_status()))
+            std::cout << " -> " << fs::read_symlink(*i);
+        std::cout << '\n';
+
+        // do not descend into "b"
+        if (i->path().filename() == "b")
+            i.disable_recursion_pending();
+    }
+    fs::remove_all("sandbox");
+}
+```
+
+Possible output:
+
+```text
+sandbox
+├── a
+│   └── b
+│       ├── c
+│       ├── d
+│       │   └── e
+│       └── file1.txt
+└── syma -> a
+
+"sandbox/a"
+  "sandbox/a/b"
+"sandbox/syma" -> "a"
+```
+
+### See also
+
+- **recursion_pending** — checks whether the recursion is disabled for the
+  current directory (public member function)
+- **incrementoperator++** — advances to the next entry (public member function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/filesystem/recursive_directory_iterator/disable_recursion_pending*

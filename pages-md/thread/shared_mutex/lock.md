@@ -1,0 +1,137 @@
+# std::shared_mutex::lock
+
+```cpp
+void lock();  // (since C++17)
+```
+
+Acquires an exclusive ownership of the `shared_mutex`. If another thread is
+holding an exclusive lock or a shared lock on the same `shared_mutex` the a call
+to `lock` will block execution until all such locks are released. While
+`shared_mutex` is locked in an exclusive mode, no other lock of any kind can
+also be held.
+
+If `lock` is called by a thread that already owns the `shared_mutex` in any mode
+(exclusive or shared), the behavior is undefined. A prior `unlock()` operation
+on the same mutex *synchronizes-with* (as defined in `std::memory_order`) this
+operation.
+
+### Parameters
+
+(none)
+
+### Return value
+
+(none)
+
+### Exceptions
+
+Throws `std::system_error` when errors occur, including errors from the
+underlying operating system that would prevent `lock` from meeting its
+specifications. The mutex is not locked in the case of any exception being
+thrown.
+
+### Notes
+
+`lock()` is usually not called directly: `std::unique_lock`, `std::scoped_lock`,
+and `std::lock_guard` are used to manage exclusive locking.
+
+### Example
+
+```cpp
+#include <chrono>
+#include <iostream>
+#include <mutex>
+#include <shared_mutex>
+#include <syncstream>
+#include <thread>
+#include <vector>
+
+std::mutex stream_mutx;
+void print(auto const& v)
+{
+    std::unique_lock<std::mutex> lock(stream_mutx);
+    std::cout << std::this_thread::get_id() << " saw: ";
+    for (auto e : v)
+        std::cout << e << ' ';
+    std::cout << '\n';
+}
+
+int main()
+{
+    using namespace std::chrono_literals;
+    constexpr int N_READERS = 5;
+    constexpr int LAST = -999;
+
+    std::shared_mutex smtx;
+    int product = 0;
+
+    auto writer = [&smtx, &product](int start, int end)
+    {
+        for (int i = start; i < end; ++i)
+        {
+            auto data = i;
+            {
+                std::unique_lock<std::shared_mutex> lock(smtx); // better than:
+                                                                // smtx.lock();
+                product = data;
+            }
+            std::this_thread::sleep_for(3ms);
+        }
+
+        smtx.lock(); // lock manually
+        product = LAST;
+        smtx.unlock();
+    };
+
+    auto reader = [&smtx, &product]
+    {
+        int data = 0;
+        std::vector<int> seen;
+        do
+        {
+            {
+                // better to use:
+                std::shared_lock lock(smtx); // smtx.lock_shared();
+                data = product;
+            }                                // smtx.unlock_shared();
+
+            seen.push_back(data);
+            std::this_thread::sleep_for(2ms);
+        }
+        while (data != LAST);
+
+        print(seen);
+    };
+
+    std::vector<std::thread> threads;
+    threads.emplace_back(writer, 1, 13);
+    threads.emplace_back(writer, 42, 52);
+
+    for (int i = 0; i < N_READERS; ++i)
+        threads.emplace_back(reader);
+
+    for (auto&& t : threads)
+        t.join();
+}
+```
+
+Possible output:
+
+```text
+127755840 saw: 43 3 3 4 46 5 6 7 7 8 9 51 10 11 11 12 -999
+144541248 saw: 2 44 3 4 46 5 6 7 7 8 9 51 10 11 11 12 -999
+110970432 saw: 42 2 3 45 4 5 47 6 7 8 8 9 10 11 11 12 -999
+119363136 saw: 42 2 3 4 46 5 6 7 7 8 9 9 10 11 11 12 12 -999
+136148544 saw: 2 44 3 4 46 5 6 48 7 8 9 51 10 11 11 12 12 -999
+```
+
+### See also
+
+- **try_lock** — tries to lock the mutex, returns if the mutex is not available
+  (public member function)
+- **unlock** — unlocks the mutex (public member function)
+- **lock_shared** — locks the mutex for shared ownership, blocks if the mutex is
+  not available (public member function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/thread/shared_mutex/lock*

@@ -1,0 +1,68 @@
+# std::time
+
+```cpp
+std::time_t time( std::time_t* arg );
+```
+
+Returns the current calendar time encoded as a `std::time_t` object, and also
+stores it in the object pointed to by `arg`, unless `arg` is a null pointer.
+
+### Parameters
+
+- **arg** — pointer to a `std::time_t` object to store the time, or a null
+  pointer
+
+### Return value
+
+Current calendar time encoded as `std::time_t` object on success,
+`(std::time_t)(-1)` on error. If `arg` is not null, the return value is also
+stored in the object pointed to by `arg`.
+
+### Notes
+
+The encoding of calendar time in `std::time_t` is unspecified, but most systems
+conform to the POSIX specification and return a value of integral type holding
+86400 times the number of calendar days since the Epoch plus the number of
+seconds that have passed since the last midnight UTC. Most notably, POSIX time
+does not (and can not) take leap seconds into account, so that this integral
+value is not equal to the number of S.I. seconds that have passed since the
+epoch, but rather is reduced with the number of leap seconds that have occurred
+since the epoch. Implementations in which `std::time_t` is a 32-bit signed
+integer (many historical implementations) fail in the year 2038.
+
+### Example
+
+```cpp
+#include <ctime>
+#include <iostream>
+
+int main()
+{
+    std::time_t result = std::time(nullptr);
+    std::cout << std::asctime(std::localtime(&result))
+              << result << " seconds since the Epoch\n";
+}
+```
+
+Possible output:
+
+```text
+Wed Sep 21 10:27:52 2011
+1316615272 seconds since the Epoch
+```
+
+### See also
+
+- **timespec_get (C++17)** — returns the calendar time in seconds and
+  nanoseconds based on a given time base (function)
+- **localtime** — converts time since epoch to calendar time expressed as local
+  time (function)
+- **gmtime** — converts time since epoch to calendar time expressed as Universal
+  Coordinated Time (function)
+- **system_clock (C++11)** — wall clock time from the system-wide realtime clock
+  (class)
+
+**C documentation for `time`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/chrono/c/time*

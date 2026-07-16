@@ -1,0 +1,121 @@
+# std::move_backward
+
+```cpp
+template< class BidirIt1, class BidirIt2 >
+BidirIt2 move_backward( BidirIt1 first, BidirIt1 last, BidirIt2 d_last );  // (since C++11) (until C++20)
+template< class BidirIt1, class BidirIt2 >
+constexpr BidirIt2 move_backward( BidirIt1 first, BidirIt1 last, BidirIt2 d_last );  // (since C++20)
+```
+
+Moves the elements from the range `[``first``,``last``)`, to another range
+ending at `d_last`. The elements are moved in reverse order (the last element is
+moved first), but their relative order is preserved.
+
+The behavior is undefined if `d_last` is within (`first`, `last`]. `std::move`
+must be used instead of `std::move_backward` in that case.
+
+### Parameters
+
+- **first, last** — the range of the elements to move
+- **d_last** — end of the destination range
+
+**Type requirements**
+
+**-`BidirIt1, BidirIt2` must meet the requirements of LegacyBidirectionalIterator.**
+
+### Return value
+
+Iterator in the destination range, pointing at the last element moved.
+
+### Complexity
+
+Exactly `last - first` move assignments.
+
+### Possible implementation
+
+```cpp
+template<class BidirIt1, class BidirIt2>
+BidirIt2 move_backward(BidirIt1 first, BidirIt1 last,
+                       BidirIt2 d_last)
+{
+    while (first != last)
+        *(--d_last) = std::move(*(--last));
+
+    return d_last;
+}
+```
+
+### Notes
+
+When moving overlapping ranges, `std::move` is appropriate when moving to the
+left (beginning of the destination range is outside the source range) while
+`std::move_backward` is appropriate when moving to the right (end of the
+destination range is outside the source range).
+
+### Example
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <iterator>
+#include <string>
+#include <string_view>
+#include <vector>
+
+using container = std::vector<std::string>;
+
+void print(std::string_view comment, const container& src, const container& dst = {})
+{
+    auto prn = [](std::string_view name, const container& cont)
+    {
+        std::cout << name;
+        for (const auto &s : cont)
+            std::cout << (s.empty() ? "∙" : s.data()) << ' ';
+        std::cout << '\n';
+    };
+    std::cout << comment << '\n';
+    prn("src: ", src);
+    if (dst.empty())
+        return;
+    prn("dst: ", dst);
+}
+
+int main()
+{
+    container src {"foo", "bar", "baz"};
+    container dst {"qux", "quux", "quuz", "corge"};
+    print("Non-overlapping case; before move_backward:", src, dst);
+    std::move_backward(src.begin(), src.end(), dst.end());
+    print("After:", src, dst);
+
+    src = {"snap", "crackle", "pop", "lock", "drop"};
+    print("Overlapping case; before move_backward:", src);
+    std::move_backward(src.begin(), std::next(src.begin(), 3), src.end());
+    print("After:", src);
+}
+```
+
+Output:
+
+```text
+Non-overlapping case; before move_backward:
+src: foo bar baz
+dst: qux quux quuz corge
+After:
+src: ∙ ∙ ∙
+dst: qux foo bar baz
+Overlapping case; before move_backward:
+src: snap crackle pop lock drop
+After:
+src: ∙ ∙ snap crackle pop
+```
+
+### See also
+
+- **move (C++11)** — moves a range of elements to a new location (function
+  template)
+- **ranges::move_backward (C++20)** — moves a range of elements to a new
+  location in backwards order (niebloid)
+
+---
+*Source: https://en.cppreference.com/w/cpp/algorithm/move_backward*

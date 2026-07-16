@@ -1,0 +1,87 @@
+# std::put_money
+
+```cpp
+template< class MoneyT >
+/*unspecified*/ put_money( const MoneyT& mon, bool intl = false );  // (since C++11)
+```
+
+When used in an expression `out << put_money(mon, intl)`, converts the monetary
+value `mon` to its character representation as specified by the `std::money_put`
+facet of the locale currently imbued in `out`.
+
+The insertion operation in `out << put_money(mon, intl)` behaves as a
+FormattedOutputFunction.
+
+### Parameters
+
+- **mon** — a monetary value, either `long double` or `std::basic_string`
+- **intl** — use international currency strings if `true`, use currency symbols
+  otherwise
+
+### Return value
+
+An object of unspecified type such that
+
+- if `out` is an object of type `std::basic_ostream<CharT, Traits>`, the
+  expression `out << put_money(mon, intl)` has type `std::basic_ostream<CharT,
+  Traits>&` has value `out` behaves as a FormattedOutputFunction that calls
+  `f(out, mon, intl)`
+
+where the function `f` is defined as:
+
+```cpp
+template<class CharT, class Traits, class MoneyT>
+void f(std::basic_ios<CharT, Traits>& str, const MoneyT& mon, bool intl)
+{
+    using Iter = std::ostreambuf_iterator<CharT, Traits>;
+    using MoneyPut = std::money_put<CharT, Iter>;
+
+    const MoneyPut& mp = std::use_facet<MoneyPut>(str.getloc());
+    const Iter end = mp.put(Iter(str.rdbuf()), intl, str, str.fill(), mon);
+
+    if (end.failed())
+        str.setstate(std::ios_base::badbit);
+}
+```
+
+### Example
+
+```cpp
+#include <iomanip>
+#include <iostream>
+
+int main()
+{
+    long double mon = 123.45; // or std::string mon = "123.45";
+
+    std::cout.imbue(std::locale("en_US.UTF-8"));
+    std::cout << std::showbase
+              << "en_US: " << std::put_money(mon)
+              << " or " << std::put_money(mon, true) << '\n';
+
+    std::cout.imbue(std::locale("ru_RU.UTF-8"));
+    std::cout << "ru_RU: " << std::put_money(mon)
+              << " or " << std::put_money(mon, true) << '\n';
+
+    std::cout.imbue(std::locale("ja_JP.UTF-8"));
+    std::cout << "ja_JP: " << std::put_money(mon)
+              << " or " << std::put_money(mon, true) << '\n';
+}
+```
+
+Possible output:
+
+```text
+en_US: $1.23 or USD  1.23
+ru_RU: 1.23 руб or 1.23 RUB
+ja_JP: ￥123 or JPY  123
+```
+
+### See also
+
+- **money_put** — formats a monetary value for output as a character sequence
+  (class template)
+- **get_money (C++11)** — parses a monetary value (function template)
+
+---
+*Source: https://en.cppreference.com/w/cpp/io/manip/put_money*

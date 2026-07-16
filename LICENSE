@@ -1,0 +1,21 @@
+This work is licensed under the Creative Commons
+Attribution-ShareAlike 3.0 Unported License (CC-BY-SA 3.0).
+
+Full license text: https://creativecommons.org/licenses/by-sa/3.0/legalcode
+
+Attribution
+-----------
+
+Derived from reference documentation authored by the cppreference.com
+community (https://en.cppreference.com), which is dual-licensed under
+CC-BY-SA 3.0 and the GNU Free Documentation License (GFDL). This
+derivative is distributed under CC-BY-SA 3.0.
+
+The content was obtained via the devdocs.io "cpp" docset
+(https://devdocs.io), converted to markdown, and subsequently edited:
+rewritten descriptions, restructured pages, and added examples. It is
+not endorsed by cppreference.com.
+
+Under CC-BY-SA 3.0 you may share and adapt this material provided you
+give appropriate credit, indicate changes, and distribute derivatives
+under the same license.

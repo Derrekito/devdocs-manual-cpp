@@ -1,0 +1,152 @@
+# std::distance
+
+```cpp
+template< class InputIt >
+typename std::iterator_traits<InputIt>::difference_type
+    distance( InputIt first, InputIt last );  // (constexpr since C++17)
+```
+
+Returns the number of hops from `first` to `last`.
+
+If `InputIt` is not LegacyRandomAccessIterator, the behavior is undefined if
+`last` is not reachable from `first`.
+
+If `InputIt` is LegacyRandomAccessIterator, the behavior is undefined if `first`
+and `last` are neither reachable from each other.
+
+### Parameters
+
+- **first** — iterator pointing to the first element
+- **last** — iterator pointing to the end of the range
+
+**Type requirements**
+
+**-`InputIt` must meet the requirements of LegacyInputIterator. The operation is more efficient if `InputIt` additionally meets the requirements of LegacyRandomAccessIterator.**
+
+### Return value
+
+The number of increments needed to go from `first` to `last`.
+
+The value may be negative if random-access iterators are used and `first` is
+reachable from `last`.
+*(since C++11)*
+
+### Complexity
+
+Linear.
+
+However, if `InputIt` additionally meets the requirements of
+LegacyRandomAccessIterator, complexity is constant.
+
+### Possible implementation
+
+See also the implementations in libstdc++ and libc++.
+
+```cpp
+namespace detail
+{
+    template<class It>
+    constexpr // required since C++17
+    typename std::iterator_traits<It>::difference_type
+        do_distance(It first, It last, std::input_iterator_tag)
+    {
+        typename std::iterator_traits<It>::difference_type result = 0;
+        while (first != last)
+        {
+            ++first;
+            ++result;
+        }
+        return result;
+    }
+
+    template<class It>
+    constexpr // required since C++17
+    typename std::iterator_traits<It>::difference_type
+        do_distance(It first, It last, std::random_access_iterator_tag)
+    {
+        return last - first;
+    }
+} // namespace detail
+
+template<class It>
+constexpr // since C++17
+typename std::iterator_traits<It>::difference_type
+    distance(It first, It last)
+{
+    return detail::do_distance(first, last,
+                               typename std::iterator_traits<It>::iterator_category());
+}
+```
+
+```cpp
+template<class It>
+constexpr typename std::iterator_traits<It>::difference_type
+    distance(It first, It last)
+{
+    using category = typename std::iterator_traits<It>::iterator_category;
+    static_assert(std::is_base_of_v<std::input_iterator_tag, category>);
+
+    if constexpr (std::is_base_of_v<std::random_access_iterator_tag, category>)
+        return last - first;
+    else
+    {
+        typename std::iterator_traits<It>::difference_type result = 0;
+        while (first != last)
+        {
+            ++first;
+            ++result;
+        }
+        return result;
+    }
+}
+```
+
+### Example
+
+```cpp
+#include <iostream>
+#include <iterator>
+#include <vector>
+
+int main()
+{
+    std::vector<int> v{3, 1, 4};
+    std::cout << "distance(first, last) = "
+              << std::distance(v.begin(), v.end()) << '\n'
+              << "distance(last, first) = "
+              << std::distance(v.end(), v.begin()) << '\n';
+              // the behavior is undefined (until LWG940)
+
+    static constexpr auto il = {3, 1, 4};
+    // Since C++17 `distance` can be used in constexpr context.
+    static_assert(std::distance(il.begin(), il.end()) == 3);
+    static_assert(std::distance(il.end(), il.begin()) == -3);
+}
+```
+
+Output:
+
+```text
+distance(first, last) = 3
+distance(last, first) = -3
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 940 | C++98 | the wording was unclear for the case where `first` is
+      reachable from `last` | made clear
+
+### See also
+
+- **advance** — advances an iterator by given distance (function template)
+- **countcount_if** — returns the number of elements satisfying specific
+  criteria (function template)
+- **ranges::distance (C++20)** — returns the distance between an iterator and a
+  sentinel, or between the beginning and end of a range (niebloid)
+
+---
+*Source: https://en.cppreference.com/w/cpp/iterator/distance*

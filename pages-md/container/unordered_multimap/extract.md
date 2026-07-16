@@ -1,0 +1,124 @@
+# std::unordered_multimap<Key,T,Hash,KeyEqual,Allocator>::extract
+
+```cpp
+node_type extract( const_iterator position );  // (1) (since C++17)
+node_type extract( const Key& k );  // (2) (since C++17)
+template< class K >
+node_type extract( K&& x );  // (3) (since C++23)
+```
+
+1) Unlinks the node that contains the element pointed to by `position` and
+   returns a node handle that owns it.
+
+2) If the container has an element with key equivalent to `k`, unlinks the node
+   that contains the first such element from the container and returns a node
+   handle that owns it. Otherwise, returns an empty node handle.
+
+3) Same as (2). This overload participates in overload resolution only if
+   `Hash::is_transparent` and `KeyEqual::is_transparent` are valid and each
+   denotes a type, and neither `iterator` nor `const_iterator` is implicitly
+   convertible from `K`. This assumes that such `Hash` is callable with both `K`
+   and `Key` type, and that the `KeyEqual` is transparent, which, together,
+   allows calling this function without constructing an instance of `Key`.
+
+In either case, no elements are copied or moved, only the internal pointers of
+the container nodes are repointed .
+
+Extracting a node invalidates only the iterators to the extracted element, and
+preserves the relative order of the elements that are not erased. Pointers and
+references to the extracted element remain valid, but cannot be used while
+element is owned by a node handle: they become usable if the element is inserted
+into a container.
+
+### Parameters
+
+- **position** — a valid iterator into this container
+- **k** — a key to identify the node to be extracted
+- **x** — a value of any type that can be transparently compared with a key
+  identifying the node to be extracted
+
+### Return value
+
+A node handle that owns the extracted element, or empty node handle in case the
+element is not found in (2,3).
+
+### Exceptions
+
+1) Throws nothing.
+
+2,3) Any exceptions thrown by the `Hash` and `KeyEqual` object.
+
+### Complexity
+
+1,2,3) Average case O(1), worst case O(`size()`).
+
+### Notes
+
+extract is the only way to change a key of a map element without reallocation:
+
+```cpp
+std::map<int, std::string> m{{1, "mango"}, {2, "papaya"}, {3, "guava"}};
+auto nh = m.extract(2);
+nh.key() = 4;
+m.insert(std::move(nh));
+// m == {{1, "mango"}, {3, "guava"}, {4, "papaya"}}
+```
+
+  Feature-test macro | Value | Std | Feature
+  `__cpp_lib_associative_heterogeneous_erasure` | 202110L | (C++23) |
+      Heterogeneous erasure in associative containers and unordered associative
+      containers, (3)
+
+### Example
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <string_view>
+#include <unordered_map>
+
+void print(std::string_view comment, const auto& data)
+{
+    std::cout << comment;
+    for (auto [k, v] : data)
+        std::cout << ' ' << k << '(' << v << ')';
+
+    std::cout << '\n';
+}
+
+int main()
+{
+    std::unordered_multimap<int, char> cont{{1, 'a'}, {2, 'b'}, {3, 'c'}};
+
+    print("Start:", cont);
+
+    // Extract node handle and change key
+    auto nh = cont.extract(1);
+    nh.key() = 4;
+
+    print("After extract and before insert:", cont);
+
+    // Insert node handle back
+    cont.insert(std::move(nh));
+
+    print("End:", cont);
+}
+```
+
+Possible output:
+
+```text
+Start: 1(a) 2(b) 3(c)
+After extract and before insert: 2(b) 3(c)
+End: 2(b) 3(c) 4(a)
+```
+
+### See also
+
+- **merge (C++17)** — splices nodes from another container (public member
+  function)
+- **insert** — inserts elements or nodes(since C++17) (public member function)
+- **erase** — erases elements (public member function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/container/unordered_multimap/extract*

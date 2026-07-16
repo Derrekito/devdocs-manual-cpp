@@ -1,0 +1,82 @@
+# std::literals::chrono_literals::operator""us
+
+```cpp
+constexpr std::chrono::microseconds
+    operator""us( unsigned long long us );  // (1) (since C++14)
+constexpr std::chrono::duration</*unspecified*/, std::micro>
+    operator""us( long double us );  // (2) (since C++14)
+```
+
+Forms a `std::chrono::duration` literal representing microseconds.
+
+1) Integer literal, returns exactly `std::chrono::microseconds(us)`.
+
+2) Floating-point literal, returns a floating-point duration equivalent to
+   `std::chrono::microseconds`.
+
+### Parameters
+
+- **us** — the number of microseconds
+
+### Return value
+
+The `std::chrono::duration` literal.
+
+### Possible implementation
+
+```cpp
+constexpr std::chrono::microseconds operator""us(unsigned long long us)
+{
+    return std::chrono::microseconds(us);
+}
+constexpr std::chrono::duration<long double, std::micro> operator""us(long double us)
+{
+    return std::chrono::duration<long double, std::micro>(us);
+}
+```
+
+### Notes
+
+This operator is declared in the namespace `std::literals::chrono_literals`,
+where both `literals` and `chrono_literals` are inline namespaces. Access to
+this operator can be gained with:
+
+- `using namespace std::literals`,
+- `using namespace std::chrono_literals`, or
+- `using namespace std::literals::chrono_literals`.
+
+In addition, within the namespace `std::chrono`, the directive `using namespace
+literals::chrono_literals;` is provided by the standard library, so that if a
+programmer uses `using namespace std::chrono;` to gain access to the classes in
+the chrono library, the corresponding literal operators become visible as well.
+
+### Example
+
+```cpp
+#include <chrono>
+#include <iostream>
+
+int main()
+{
+    using namespace std::chrono_literals;
+    auto d1 = 250us;
+    std::chrono::microseconds d2 = 1ms;
+    std::cout << d1 << " = " << d1.count() << " microseconds\n"
+              << 1ms << " = " << d2.count() << " microseconds\n";
+}
+```
+
+Output:
+
+```text
+250us = 250 microseconds
+1ms = 1000 microseconds
+```
+
+### See also
+
+- **(constructor)** — constructs new duration (public member function of
+  `std::chrono::duration<Rep,Period>`)
+
+---
+*Source: https://en.cppreference.com/w/cpp/chrono/operator%22%22us*

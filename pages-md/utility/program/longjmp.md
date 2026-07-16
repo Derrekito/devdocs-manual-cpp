@@ -1,0 +1,124 @@
+# std::longjmp
+
+```cpp
+void longjmp( std::jmp_buf env, int status );  // (until C++17)
+[[noreturn]] void longjmp( std::jmp_buf env, int status );  // (since C++17)
+```
+
+Loads the execution context `env` saved by a previous call to `setjmp`. This
+function does not return. Control is transferred to the call site of the macro
+`setjmp` that set up `env`. That `setjmp` then returns the value, passed as the
+`status`.
+
+If the function that called `setjmp` has exited, the behavior is undefined (in
+other words, only long jumps up the call stack are allowed).
+
+### Extra restrictions in C++
+
+On top of C `longjmp`, C++ `std::longjmp` has more restricted behavior.
+
+If replacing `std::longjmp` with throw and `setjmp` with catch would invoke a
+non-trivial destructor for any automatic object, the behavior of such
+`std::longjmp` is undefined.
+
+The behavior is undefined if `std::longjmp` is called in a coroutine in a place
+where the co_await operator may be used.
+*(since C++20)*
+
+### Parameters
+
+- **env** — variable referring to the execution state of the program saved by
+  `setjmp`
+- **status** — the value to return from `setjmp`. If it is equal to `​0​`, `1`
+  is used instead
+
+### Return value
+
+(none)
+
+### Notes
+
+`std::longjmp` is the mechanism used in C to handle unexpected error conditions
+where the function cannot return meaningfully. C++ generally uses exception
+handling for this purpose.
+
+### Example
+
+```cpp
+#include <array>
+#include <cmath>
+#include <csetjmp>
+#include <cstdlib>
+#include <format>
+#include <iostream>
+
+std::jmp_buf solver_error_handler;
+
+std::array<double, 2> solve_quadratic_equation(double a, double b, double c)
+{
+    const double discriminant = b * b - 4.0 * a * c;
+    if (discriminant < 0)
+        std::longjmp(solver_error_handler, true); // Go to error handler
+
+    const double delta = std::sqrt(discriminant) / (2.0 * a);
+    const double argmin = -b / (2.0 * a);
+    return {argmin - delta, argmin + delta};
+}
+
+void show_quadratic_equation_solution(double a, double b, double c)
+{
+    std::cout << std::format("Solving {}x² + {}x + {} = 0...\n", a, b, c);
+    auto [x_0, x_1] = solve_quadratic_equation(a, b, c);
+    std::cout << std::format("x₁ = {}, x₂ = {}\n\n", x_0, x_1);
+}
+
+int main()
+{
+    if (setjmp(solver_error_handler))
+    {
+        // Error handler for solver
+        std::cout << "No real solution\n";
+        return EXIT_FAILURE;
+    }
+
+    for (auto [a, b, c] : {std::array{1, -3, 2}, {2, -3, -2}, {1, 2, 3}})
+        show_quadratic_equation_solution(a, b, c);
+
+    return EXIT_SUCCESS;
+}
+```
+
+Output:
+
+```text
+Solving 1x² + -3x + 2 = 0...
+x₁ = 1, x₂ = 2
+
+Solving 2x² + -3x + -2 = 0...
+x₁ = -0.5, x₂ = 2
+
+Solving 1x² + 2x + 3 = 0...
+No real solution
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 619 | C++98 | the wording of the extra restrictions in C++ was vague |
+      improved the wording
+  LWG 894 | C++98 | the behavior was undefined if replacing `std::longjmp` with
+      throw and `setjmp` with catch would destroy any automatic object | the
+      behavior is only undefined if a non-trivial destructor for any automatic
+      object is invoked
+
+### See also
+
+- **setjmp** — saves the context (function macro)
+
+**C documentation for `longjmp`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/utility/program/longjmp*

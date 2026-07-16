@@ -1,0 +1,107 @@
+# std::ranges::data
+
+```cpp
+inline namespace /* unspecified */ {
+    inline constexpr /* unspecified */ data = /* unspecified */;
+}  // (since C++20) (customization point object)
+Call signature
+template< class T >
+    requires /* see below */
+constexpr std::remove_reference_t<
+    ranges::range_reference_t<T>>* data( T&& t );  // (since C++20)
+```
+
+Returns a pointer to the first element of a contiguous range.
+
+If `T` is an array type and
+std::remove_all_extents_t<std::remove_reference_t<T>> is incomplete, then the
+call to `ranges::data` is ill-formed, no diagnostic required.
+
+If the argument is an lvalue or
+`ranges::enable_borrowed_range<std::remove_cv_t<T>>` is `true`, a call to
+`ranges::data` is expression-equivalent to:
+
+1. `decay-copy(t.data())`(until C++23)`auto(t.data())`(since C++23), if that
+   expression is valid and its type is a pointer to an object type.
+1. Otherwise, `std::to_address(ranges::begin(t))`, if the expression
+   `ranges::begin(t)` is valid and its type models `std::contiguous_iterator`.
+
+In all other cases, a call to `ranges::data` is ill-formed, which can result in
+substitution failure when `ranges::data(e)` appears in the immediate context of
+a template instantiation.
+
+### Customization point objects
+
+The name `ranges::data` denotes a *customization point object*, which is a const
+function object of a literal `semiregular` class type. For exposition purposes,
+the cv-unqualified version of its type is denoted as `__data_fn`.
+
+All instances of `__data_fn` are equal. The effects of invoking different
+instances of type `__data_fn` on the same arguments are equivalent, regardless
+of whether the expression denoting the instance is an lvalue or rvalue, and is
+const-qualified or not (however, a volatile-qualified instance is not required
+to be invocable). Thus, `ranges::data` can be copied freely and its copies can
+be used interchangeably.
+
+Given a set of types `Args...`, if `std::declval<Args>()...` meet the
+requirements for arguments to `ranges::data` above, `__data_fn` models
+
+- `std::invocable<__data_fn, Args...>`,
+- `std::invocable<const __data_fn, Args...>`,
+- `std::invocable<__data_fn&, Args...>`, and
+- `std::invocable<const __data_fn&, Args...>`.
+
+Otherwise, no function call operator of `__data_fn` participates in overload
+resolution.
+
+### Notes
+
+If the argument is an rvalue (i.e. `T` is an object type) and
+`ranges::enable_borrowed_range<std::remove_cv_t<T>>` is `false`, the call to
+`ranges::data` is ill-formed, which also results in substitution failure.
+
+If `ranges::data(e)` is valid for an expression `e`, then it returns a pointer
+to an object.
+
+The C++20 standard requires that if the underlying `data` function call returns
+a prvalue, the return value is move-constructed from the materialized temporary
+object. All implementations directly return the prvalue instead. The requirement
+is corrected by the post-C++20 proposal P0849R8 to match the implementations.
+
+### Example
+
+```cpp
+#include <cstring>
+#include <iostream>
+#include <ranges>
+#include <string>
+
+int main()
+{
+    std::string s{"Hello world!\n"};
+
+    char a[20]; // storage for a C-style string
+    std::strcpy(a, std::ranges::data(s));
+    // [data(s), data(s) + size(s)] is guaranteed to be an NTBS
+
+    std::cout << a;
+}
+```
+
+Output:
+
+```text
+Hello world!
+```
+
+### See also
+
+- **ranges::cdata (C++20)** — obtains a pointer to the beginning of a read-only
+  contiguous range (customization point object)
+- **ranges::begin (C++20)** — returns an iterator to the beginning of a range
+  (customization point object)
+- **data (C++17)** — obtains the pointer to the underlying array (function
+  template)
+
+---
+*Source: https://en.cppreference.com/w/cpp/ranges/data*

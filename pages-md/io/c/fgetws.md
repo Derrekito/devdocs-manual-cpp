@@ -1,0 +1,96 @@
+# std::fgetws
+
+```cpp
+wchar_t* fgetws( wchar_t* str, int count, std::FILE* stream );
+```
+
+Reads at most `count - 1` wide characters from the given file stream and stores
+them in `str`. The produced wide string is always null-terminated. Parsing stops
+if end-of-file occurs or a newline wide character is found, in which case `str`
+will contain that wide newline character.
+
+### Parameters
+
+- **str** — wide string to read the characters to
+- **count** — the length of `str`
+- **stream** — file stream to read the data from
+
+### Return value
+
+`str` on success, a null pointer on an error.
+
+### Example
+
+```cpp
+#include <array>
+#include <clocale>
+#include <cstdio>
+#include <cstdlib>
+#include <cwchar>
+#include <cwctype>
+#include <iomanip>
+#include <iostream>
+#include <span>
+#include <string>
+
+void dump(std::span<const wchar_t> sp, std::size_t width = 14)
+{
+    for (wchar_t wc : sp)
+        std::wcout << (std::iswprint(wc) ? wc : L'.');
+    std::wcout << std::wstring(width > sp.size() ? width - sp.size() : 1, L' ')
+               << std::hex << std::uppercase << std::setfill(L'0');
+    for (wchar_t wc : sp)
+        std::wcout << std::setw(sizeof wc) << static_cast<unsigned>(wc) << ' ';
+    std::wcout << '\n';
+}
+
+int main()
+{
+    // Create temp file that contains wide characters
+    std::setlocale(LC_ALL, "en_US.utf8");
+    std::FILE* tmpf = std::tmpfile();
+
+    for (const wchar_t* text : {
+        L"Tétraèdre"    L"\n",
+        L"Cube"         L"\n",
+        L"Octaèdre"     L"\n",
+        L"Icosaèdre"    L"\n",
+        L"Dodécaèdre"   L"\n"
+        })
+        if (int rc = std::fputws(text, tmpf); rc == EOF)
+        {
+            std::perror("fputws()"); // POSIX requires that errno is set
+            return EXIT_FAILURE;
+        }
+
+    std::rewind(tmpf);
+
+    std::array<wchar_t, 12> buf;
+    while (std::fgetws(buf.data(), buf.size(), tmpf) != nullptr)
+        dump(std::span(buf.data(), buf.size()));
+
+    return EXIT_SUCCESS;
+}
+```
+
+Possible output:
+
+```text
+Tétraèdre...  0054 00E9 0074 0072 0061 00E8 0064 0072 0065 000A 0000 0000
+Cube..dre...  0043 0075 0062 0065 000A 0000 0064 0072 0065 000A 0000 0000
+Octaèdre....  004F 0063 0074 0061 00E8 0064 0072 0065 000A 0000 0000 0000
+Icosaèdre...  0049 0063 006F 0073 0061 00E8 0064 0072 0065 000A 0000 0000
+Dodécaèdre..  0044 006F 0064 00E9 0063 0061 00E8 0064 0072 0065 000A 0000
+```
+
+### See also
+
+- **wscanffwscanfswscanf** — reads formatted wide character input from `stdin`,
+  a file stream or a buffer (function)
+- **fgetwcgetwc** — gets a wide character from a file stream (function)
+- **fputws** — writes a wide string to a file stream (function)
+
+**C documentation for `fgetws`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/io/c/fgetws*

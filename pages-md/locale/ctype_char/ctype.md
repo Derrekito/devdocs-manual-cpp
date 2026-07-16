@@ -1,0 +1,27 @@
+# std::ctype<char>::ctype
+
+```cpp
+explicit ctype( const mask* tbl = 0, bool del = false, std::size_t refs = 0);
+```
+
+Creates a `std::ctype<char>` facet and forwards the starting reference count
+`refs` to the base class constructor, `locale::facet::facet()`.
+
+If `tbl` is null, `classic_table()` is used by all classification member
+functions. Otherwise, `tbl` must be a pointer to the first element of an array
+of masks, at least `std::ctype<char>::table_size` in size, and that array is
+used by all of this facet's classification member functions.
+
+If `del` is `true`, it is assumed that the array was allocated with `new[]`, and
+the destructor of this facet will call `delete[] tbl`.
+
+### Parameters
+
+- **tbl** — classification table to use or a null pointer
+- **del** — indicator whether the table needs to be deleted
+- **refs** — starting reference count
+
+### Example
+
+---
+*Source: https://en.cppreference.com/w/cpp/locale/ctype_char/ctype*

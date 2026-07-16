@@ -1,0 +1,127 @@
+# std::any_cast
+
+```cpp
+template< class T >
+T any_cast( const any& operand );  // (1) (since C++17)
+template< class T >
+T any_cast( any& operand );  // (2) (since C++17)
+template< class T >
+T any_cast( any&& operand );  // (3) (since C++17)
+template< class T >
+const T* any_cast( const any* operand ) noexcept;  // (4) (since C++17)
+template< class T >
+T* any_cast( any* operand ) noexcept;  // (5) (since C++17)
+```
+
+Performs type-safe access to the contained object.
+
+Let `U` be `std::remove_cv_t<std::remove_reference_t<T>>`.
+
+1) The program is ill-formed if `std::is_constructible_v<T, const U&>` is
+   `false`.
+
+2) The program is ill-formed if `std::is_constructible_v<T, U&>` is `false`.
+
+3) The program is ill-formed if `std::is_constructible_v<T, U>` is `false`.
+
+4,5) The program is ill-formed if `std::is_void_v<T>` is `true`.
+
+### Parameters
+
+- **operand** — target `any` object
+
+### Return value
+
+1,2) Returns `static_cast<T>(*std::any_cast<U>(&operand))`.
+
+3) Returns `static_cast<T>(std::move(*std::any_cast<U>(&operand)))`.
+
+4,5) If `operand` is not a null pointer, and the `typeid` of the requested `T`
+   matches that of the contents of `operand`, a pointer to the value contained
+   by operand, otherwise a null pointer.
+
+### Exceptions
+
+1-3) Throws `std::bad_any_cast` if the `typeid` of the requested `T` does not
+   match that of the contents of `operand`.
+
+### Example
+
+```cpp
+#include <any>
+#include <iostream>
+#include <string>
+#include <type_traits>
+#include <utility>
+
+int main()
+{
+    // Simple example
+
+    auto a1 = std::any(12);
+
+    std::cout << "1) a1 is int: " << std::any_cast<int>(a1) << '\n';
+
+    try
+    {
+        auto s = std::any_cast<std::string>(a1); // throws
+    }
+    catch (const std::bad_any_cast& e)
+    {
+        std::cout << "2) " << e.what() << '\n';
+    }
+
+    // Pointer example
+
+    if (int* i = std::any_cast<int>(&a1))
+        std::cout << "3) a1 is int: " << *i << '\n';
+    else if (std::string* s = std::any_cast<std::string>(&a1))
+        std::cout << "3) a1 is std::string: " << *s << '\n';
+    else
+        std::cout << "3) a1 is another type or unset\n";
+
+    // Advanced example
+
+    a1 = std::string("hello");
+
+    auto& ra = std::any_cast<std::string&>(a1); //< reference
+    ra[1] = 'o';
+
+    std::cout << "4) a1 is string: "
+              << std::any_cast<std::string const&>(a1) << '\n'; //< const reference
+
+    auto s1 = std::any_cast<std::string&&>(std::move(a1)); //< rvalue reference
+
+    // Note: s1 is a move-constructed std::string:
+    static_assert(std::is_same_v<decltype(s1), std::string>);
+
+    // Note: the std::string in a1 is left in valid but unspecified state
+    std::cout << "5) a1.size(): "
+              << std::any_cast<std::string>(&a1)->size() //< pointer
+              << '\n'
+              << "6) s1: " << s1 << '\n';
+}
+```
+
+Possible output:
+
+```text
+1) a1 is int: 12
+2) bad any_cast
+3) a1 is int: 12
+4) a1 is string: hollo
+5) a1.size(): 0
+6) s1: hollo
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 3305 | C++17 | (4,5) overloads allow `T` to be `void` | made the program
+      ill-formed
+
+---
+*Source: https://en.cppreference.com/w/cpp/utility/any/any_cast*

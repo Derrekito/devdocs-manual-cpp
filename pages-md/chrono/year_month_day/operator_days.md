@@ -1,0 +1,84 @@
+# std::chrono::year_month_day::operator sys_days, std::chrono::year_month_day::operator local_days
+
+```cpp
+constexpr operator std::chrono::sys_days() const noexcept;  // (1) (since C++20)
+constexpr explicit operator std::chrono::local_days() const noexcept;  // (2) (since C++20)
+```
+
+Converts `*this` to a `std::chrono::time_point` representing the same date as
+this `year_month_day`.
+
+1) If `ok()` is `true`, the return value holds a count of days from the
+   `std::chrono::system_clock` epoch (1970-01-01) to `*this`. The result is
+   negative if `*this` represent a date prior to it.
+
+Otherwise, if the stored year and month are valid (`year().ok() && month().ok()`
+   is `true`), then the returned value is `sys_days(year()/month()/1d) + (day()
+   - 1d)`.
+
+Otherwise (if `year().ok() && month().ok()` is `false`), the return value is
+   unspecified.
+
+A `std::chrono::sys_days` in the range `[std::chrono::days{-12687428},
+   std::chrono::days{11248737}]`, when converted to `year_month_day` and back,
+   yields the same value.
+
+2) Same as (1) but returns `local_days` instead. Equivalent to `return
+   local_days(sys_days(*this).time_since_epoch());`.
+
+### Notes
+
+Converting to `std::chrono::sys_days` and back can be used to normalize a
+`year_month_day` that contains an invalid day but a valid year and month:
+
+```cpp
+using namespace std::chrono;
+auto ymd = 2017y/January/0;
+ymd = sys_days{ymd};
+// ymd is now 2016y/December/31
+```
+
+Normalizing the year and month can be done by adding (or subtracting) zero
+`std::chrono::months`:
+
+```cpp
+using namespace std::chrono;
+constexpr year_month_day normalize(year_month_day ymd)
+{
+    ymd += months{0}; // normalizes year and month
+    return sys_days{ymd}; // normalizes day
+}
+static_assert(normalize(2017y/33/59) == 2019y/10/29);
+```
+
+### Example
+
+```cpp
+#include <chrono>
+#include <iostream>
+
+int main()
+{
+    using namespace std::chrono;
+    const auto today = sys_days{std::chrono::floor<days>(system_clock::now())};
+    for (const year_month_day ymd : {{November/15/2020}, {November/15/2120}, today})
+    {
+        std::cout << ymd;
+        const auto delta = (sys_days{ymd} - today).count();
+        (delta < 0) ? std::cout << " was " << -delta << " day(s) ago\n" :
+        (delta > 0) ? std::cout << " is " << delta << " day(s) from now\n"
+                    : std::cout << " is today!\n";
+    }
+}
+```
+
+Possible output:
+
+```text
+2020-11-15 was 1014 day(s) ago
+2120-11-15 is 35510 day(s) from now
+2023-08-26 is today!
+```
+
+---
+*Source: https://en.cppreference.com/w/cpp/chrono/year_month_day/operator_days*

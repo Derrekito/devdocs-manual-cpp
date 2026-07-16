@@ -1,0 +1,76 @@
+# std::basic_string<CharT,Traits,Allocator>::operator basic_string_view
+
+```cpp
+operator std::basic_string_view<CharT, Traits>() const noexcept;  // (since C++17) (until C++20)
+constexpr operator std::basic_string_view<CharT, Traits>() const noexcept;  // (since C++20)
+```
+
+Returns a `std::basic_string_view`, constructed as if by
+`std::basic_string_view<CharT, Traits>(data(), size())`.
+
+### Parameters
+
+(none)
+
+### Return value
+
+A string view representing the entire contents of the string.
+
+### Notes
+
+It is the programmer's responsibility to ensure that the resulting string view
+does not outlive the string.
+
+```cpp
+std::string get_string();
+int f(std::string_view sv);
+
+int x = f(get_string()); // OK
+std::string_view sv = get_string(); // Bad: holds a dangling pointer
+```
+
+### Example
+
+```cpp
+#include <iostream>
+#include <string>
+#include <string_view>
+
+void show_wstring_size(std::wstring_view wcstr_v)
+{
+    std::cout << wcstr_v.size() << " code points\n";
+}
+
+int main()
+{
+    std::string cppstr = "ラーメン";   // narrow string
+    std::wstring wcstr = L"ラーメン";  // wide string
+
+    // Implicit conversion from string to string_view
+    // via std::string::operator string_view:
+    std::string_view cppstr_v = cppstr;
+
+    std::cout << cppstr_v << '\n'
+              << cppstr_v.size() << " code units\n";
+
+    // Implicit conversion from wstring to wstring_view
+    // via std::wstring::operator wstring_view:
+    show_wstring_size(wcstr);
+}
+```
+
+Output:
+
+```text
+ラーメン
+12 code units
+4 code points
+```
+
+### See also
+
+- **(constructor)** — constructs a `basic_string_view` (public member function
+  of `std::basic_string_view<CharT,Traits>`)
+
+---
+*Source: https://en.cppreference.com/w/cpp/string/basic_string/operator_basic_string_view*

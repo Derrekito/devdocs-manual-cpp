@@ -1,0 +1,66 @@
+# std::chrono::gps_clock::now
+
+```cpp
+static std::chrono::time_point<std::chrono::gps_clock> now();  // (since C++20)
+```
+
+Returns a time point representing the current point in time. The result is
+calculated as if by
+`std::chrono::gps_clock::from_utc(std::chrono::utc_clock::now())`.
+Implementations may use a more accurate value of GPS time.
+
+### Parameters
+
+(none)
+
+### Return value
+
+A time point representing the current time.
+
+### Example
+
+```cpp
+#include <chrono>
+#include <cstddef>
+#include <iomanip>
+#include <iostream>
+#include <numeric>
+#include <vector>
+
+volatile int sink;
+
+void do_some_work(std::size_t size)
+{
+    std::vector<int> v(size, 42);
+    sink = std::accumulate(v.begin(), v.end(), 0); // make sure it is a side effect
+}
+
+int main()
+{
+    std::cout << std::fixed << std::setprecision(9) << std::left;
+    for (auto size{1ull}; size < 10'00'00'00'00ull; size *= 100)
+    {
+        const auto start = std::chrono::gps_clock::now();
+        do_some_work(size);
+        const auto end = std::chrono::gps_clock::now();
+
+        const std::chrono::duration<double> diff = end - start;
+
+        std::cout << "Time to fill and iterate a vector of " << std::setw(9)
+                  << size << " ints : " << diff << '\n';
+    }
+}
+```
+
+Possible output:
+
+```text
+Time to fill and iterate a vector of 1         ints : 0.000006568s
+Time to fill and iterate a vector of 100       ints : 0.000002854s
+Time to fill and iterate a vector of 10000     ints : 0.000116290s
+Time to fill and iterate a vector of 1000000   ints : 0.011742752s
+Time to fill and iterate a vector of 100000000 ints : 0.505534949s
+```
+
+---
+*Source: https://en.cppreference.com/w/cpp/chrono/gps_clock/now*

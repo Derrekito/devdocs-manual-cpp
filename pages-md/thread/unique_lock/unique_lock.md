@@ -1,0 +1,108 @@
+# std::unique_lock<Mutex>::unique_lock
+
+```cpp
+unique_lock() noexcept;  // (1) (since C++11)
+unique_lock( unique_lock&& other ) noexcept;  // (2) (since C++11)
+explicit unique_lock( mutex_type& m );  // (3) (since C++11)
+unique_lock( mutex_type& m, std::defer_lock_t t ) noexcept;  // (4) (since C++11)
+unique_lock( mutex_type& m, std::try_to_lock_t t );  // (5) (since C++11)
+unique_lock( mutex_type& m, std::adopt_lock_t t );  // (6) (since C++11)
+template< class Rep, class Period >
+unique_lock( mutex_type& m,
+             const std::chrono::duration<Rep, Period>& timeout_duration );  // (7) (since C++11)
+template< class Clock, class Duration >
+unique_lock( mutex_type& m,
+             const std::chrono::time_point<Clock, Duration>& timeout_time );  // (8) (since C++11)
+```
+
+Constructs a `unique_lock`, optionally locking the supplied mutex.
+
+1) Constructs a `unique_lock` with no associated mutex.
+
+2) Move constructor. Initializes the `unique_lock` with the contents of `other`.
+   Leaves `other` with no associated mutex.
+
+3-8) Constructs a `unique_lock` with `m` as the associated mutex. Additionally:
+
+   3) Locks the associated mutex by calling `m.lock()`.
+
+   4) Does not lock the associated mutex.
+
+   5) Tries to lock the associated mutex without blocking by calling
+      `m.try_lock()`. The behavior is undefined if `Mutex` does not satisfy
+      Lockable.
+
+   6) Assumes the calling thread already holds a non-shared lock (i.e., a lock
+      acquired by `lock`, `try_lock`, `try_lock_for`, or `try_lock_until`) on
+      `m`. The behavior is undefined if not so.
+
+   7) Tries to lock the associated mutex by calling
+      `m.try_lock_for(timeout_duration)`. Blocks until specified
+      `timeout_duration` has elapsed or the lock is acquired, whichever comes
+      first. May block for longer than `timeout_duration`. The behavior is
+      undefined if `Mutex` does not satisfy TimedLockable.
+
+   8) Tries to lock the associated mutex by calling
+      `m.try_lock_until(timeout_time)`. Blocks until specified `timeout_time`
+      has been reached or the lock is acquired, whichever comes first. May block
+      for longer than until `timeout_time` has been reached. The behavior is
+      undefined if `Mutex` does not satisfy TimedLockable.
+
+### Parameters
+
+- **other** — another `unique_lock` to initialize the state with
+- **m** — mutex to associate with the lock and optionally acquire ownership of
+- **t** — tag parameter used to select constructors with different locking
+  strategies
+- **timeout_duration** — maximum duration to block for
+- **timeout_time** — maximum time point to block until
+
+### Example
+
+```cpp
+#include <iostream>
+#include <mutex>
+#include <thread>
+#include <utility>
+#include <vector>
+
+std::mutex m_a, m_b, m_c;
+int a, b, c = 1;
+
+void update()
+{
+    {   // Note: std::lock_guard or atomic<int> can be used instead
+        std::unique_lock<std::mutex> lk(m_a);
+        ++a;
+    }
+
+    {   // Note: see std::lock and std::scoped_lock for details and alternatives
+        std::unique_lock<std::mutex> lk_b(m_b, std::defer_lock);
+        std::unique_lock<std::mutex> lk_c(m_c, std::defer_lock);
+        std::lock(lk_b, lk_c);
+        b = std::exchange(c, b + c);
+    }
+}
+
+int main()
+{
+    std::vector<std::thread> threads;
+    for (unsigned i = 0; i < 12; ++i)
+        threads.emplace_back(update);
+
+    for (auto& i : threads)
+        i.join();
+
+    std::cout << a << "'th and " << a + 1 << "'th Fibonacci numbers: "
+              << b << " and " << c << '\n';
+}
+```
+
+Output:
+
+```text
+12'th and 13'th Fibonacci numbers: 144 and 233
+```
+
+---
+*Source: https://en.cppreference.com/w/cpp/thread/unique_lock/unique_lock*

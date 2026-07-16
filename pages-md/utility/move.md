@@ -1,0 +1,134 @@
+# std::move
+
+```cpp
+template< class T >
+typename std::remove_reference<T>::type&& move( T&& t ) noexcept;  // (since C++11) (until C++14)
+template< class T >
+constexpr std::remove_reference_t<T>&& move( T&& t ) noexcept;  // (since C++14)
+```
+
+`std::move` is used to *indicate* that an object `t` may be "moved from", i.e.
+allowing the efficient transfer of resources from `t` to another object.
+
+In particular, `std::move` produces an xvalue expression that identifies its
+argument `t`. It is exactly equivalent to a `static_cast` to an rvalue reference
+type.
+
+### Parameters
+
+- **t** — the object to be moved
+
+### Return value
+
+`static_cast<typename std::remove_reference<T>::type&&>(t)`
+
+### Notes
+
+The functions that accept rvalue reference parameters (including move
+constructors, move assignment operators, and regular member functions such as
+`std::vector::push_back`) are selected, by overload resolution, when called with
+rvalue arguments (either prvalues such as a temporary object or xvalues such as
+the one produced by `std::move`). If the argument identifies a resource-owning
+object, these overloads have the option, but aren't required, to *move* any
+resources held by the argument. For example, a move constructor of a linked list
+might copy the pointer to the head of the list and store `nullptr` in the
+argument instead of allocating and copying individual nodes.
+
+Names of rvalue reference variables are lvalues and have to be converted to
+xvalues to be bound to the function overloads that accept rvalue reference
+parameters, which is why move constructors and move assignment operators
+typically use `std::move`:
+
+```cpp
+// Simple move constructor
+A(A&& arg) : member(std::move(arg.member)) // the expression "arg.member" is lvalue
+{}
+
+// Simple move assignment operator
+A& operator=(A&& other)
+{
+    member = std::move(other.member);
+    return *this;
+}
+```
+
+One exception is when the type of the function parameter is rvalue reference to
+type template parameter ("forwarding reference" or "universal reference"), in
+which case `std::forward` is used instead.
+
+Unless otherwise specified, all standard library objects that have been moved
+from are placed in a "valid but unspecified state", meaning the object's class
+invariants hold (so functions without preconditions, such as the assignment
+operator, can be safely used on the object after it was moved from):
+
+```cpp
+std::vector<std::string> v;
+std::string str = "example";
+v.push_back(std::move(str)); // str is now valid but unspecified
+str.back(); // undefined behavior if size() == 0: back() has a precondition !empty()
+if (!str.empty())
+    str.back(); // OK, empty() has no precondition and back() precondition is met
+
+str.clear(); // OK, clear() has no preconditions
+```
+
+Also, the standard library functions called with xvalue arguments may assume the
+argument is the only reference to the object; if it was constructed from an
+lvalue with `std::move`, no aliasing checks are made. However,
+self-move-assignment of standard library types is guaranteed to place the object
+in a valid (but usually unspecified) state:
+
+```cpp
+std::vector<int> v = {2, 3, 3};
+v = std::move(v); // the value of v is unspecified
+```
+
+### Example
+
+```cpp
+#include <iomanip>
+#include <iostream>
+#include <string>
+#include <utility>
+#include <vector>
+
+int main()
+{
+    std::string str = "Salut";
+    std::vector<std::string> v;
+
+    // uses the push_back(const T&) overload, which means
+    // we'll incur the cost of copying str
+    v.push_back(str);
+    std::cout << "After copy, str is " << std::quoted(str) << '\n';
+
+    // uses the rvalue reference push_back(T&&) overload,
+    // which means no strings will be copied; instead, the contents
+    // of str will be moved into the vector. This is less
+    // expensive, but also means str might now be empty.
+    v.push_back(std::move(str));
+    std::cout << "After move, str is " << std::quoted(str) << '\n';
+
+    std::cout << "The contents of the vector are { " << std::quoted(v[0])
+              << ", " << std::quoted(v[1]) << " }\n";
+}
+```
+
+Possible output:
+
+```text
+After copy, str is "Salut"
+After move, str is ""
+The contents of the vector are { "Salut", "Salut" }
+```
+
+### See also
+
+- **forward (C++11)** — forwards a function argument (function template)
+- **move_if_noexcept (C++11)** — obtains an rvalue reference if the move
+  constructor does not throw (function template)
+- **move (C++11)** — moves a range of elements to a new location (function
+  template)
+
+---
+*Source: https://en.cppreference.com/w/cpp/utility/move*

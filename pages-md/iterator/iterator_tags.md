@@ -1,0 +1,149 @@
+# std::input_iterator_tag, std::output_iterator_tag, std::forward_iterator_tag, std::bidirectional_iterator_tag, std::random_access_iterator_tag, std::contiguous_iterator_tag
+
+```cpp
+struct input_iterator_tag {};  // (1)
+struct output_iterator_tag {};  // (2)
+struct forward_iterator_tag : public input_iterator_tag {};  // (3)
+struct bidirectional_iterator_tag : public forward_iterator_tag {};  // (4)
+struct random_access_iterator_tag : public bidirectional_iterator_tag {};  // (5)
+struct contiguous_iterator_tag : public random_access_iterator_tag {};  // (6) (since C++20)
+```
+
+Defines the category of an iterator. Each tag is an empty type.
+
+### Iterator category
+
+For every LegacyIterator type `It`, a `typedef`
+`std::iterator_traits<It>::iterator_category` must be defined to be an alias to
+one of these tag types, to indicate the most specific category that `It` is in.
+
+1. `input_iterator_tag` corresponds to LegacyInputIterator.
+1. `output_iterator_tag` corresponds to LegacyOutputIterator.
+1. `forward_iterator_tag` corresponds to LegacyForwardIterator.
+1. `bidirectional_iterator_tag` corresponds to LegacyBidirectionalIterator.
+1. `random_access_iterator_tag` corresponds to LegacyRandomAccessIterator.
+
+Iterator category tags carry information that can be used to select the most
+efficient algorithms for the specific requirement set that is implied by the
+category.
+
+### Iterator concept
+For every `input_iterator` type `It`, either `It::iterator_concept` (if
+`std::iterator_traits<It>` is generated from primary template) or
+`std::iterator_traits<It>::iterator_concept` (if `std::iterator_traits<It>` is
+specialized) may be declared as an alias to one of these tags, to indicate the
+strongest iterator concept that `It` intends to model.
+1. `input_iterator_tag` corresponds to `input_iterator`.
+1. `forward_iterator_tag` corresponds to `forward_iterator`.
+1. `bidirectional_iterator_tag` corresponds to `bidirectional_iterator`.
+1. `random_access_iterator_tag` corresponds to `random_access_iterator`.
+1. `contiguous_iterator_tag` corresponds to `contiguous_iterator`.
+If `iterator_concept` is not provided, `iterator_category` is used as a
+fallback. If `iterator_category` is not provided either (i.e. `It` is not a
+LegacyIterator), and `std::iterator_traits<It>` is not specialized,
+`random_access_iterator_tag` is assumed.
+In any case, each concept is not satisfied if the required operations are not
+supported, regardless of the tag.
+*(since C++20)*
+
+### Notes
+
+There is no separate tag for LegacyContiguousIterator. That is, it is not
+possible to tell a LegacyContiguousIterator based on its `iterator_category`. To
+define specialized algorithm for contiguous iterators, use the
+`contiguous_iterator` concept.(since C++20)
+
+There are no correspondences between `output_iterator_tag` and the
+`output_iterator` concept. Setting `iterator_concept` to `output_iterator_tag`
+only indicates that the type does not model `input_iterator`.
+
+### Example
+
+Common technique for algorithm selection based on iterator category tags is to
+use a dispatcher function (the alternative is `std::enable_if`). The iterator
+tag classes are also used in the corresponding concepts definitions to denote
+the requirements, which can't be expressed in terms of usage patterns
+alone.(since C++20)
+
+```cpp
+#include <iostream>
+#include <iterator>
+#include <list>
+#include <vector>
+
+// Using concepts (tag checking is part of the concepts themselves)
+
+template<std::bidirectional_iterator BDIter>
+void alg(BDIter, BDIter)
+{
+    std::cout << "1. alg() \t called for bidirectional iterator\n";
+}
+
+template<std::random_access_iterator RAIter>
+void alg(RAIter, RAIter)
+{
+    std::cout << "2. alg() \t called for random-access iterator\n";
+}
+
+// Legacy, using tag dispatch
+
+namespace legacy
+{
+    // Quite often implementation details are hidden in a dedicated namespace
+    namespace implementation_details
+    {
+        template<class BDIter>
+        void alg(BDIter, BDIter, std::bidirectional_iterator_tag)
+        {
+            std::cout << "3. legacy::alg() called for bidirectional iterator\n";
+        }
+
+        template<class RAIter>
+        void alg(RAIter, RAIter, std::random_access_iterator_tag)
+        {
+            std::cout << "4. legacy::alg() called for random-access iterator\n";
+        }
+    } // namespace implementation_details
+
+    template<class Iter>
+    void alg(Iter first, Iter last)
+    {
+        implementation_details::alg(first, last,
+            typename std::iterator_traits<Iter>::iterator_category());
+    }
+} // namespace legacy
+
+int main()
+{
+    std::list<int> l;
+    alg(l.begin(), l.end()); // 1.
+    legacy::alg(l.begin(), l.end()); // 3.
+
+    std::vector<int> v;
+    alg(v.begin(), v.end()); // 2.
+    legacy::alg(v.begin(), v.end()); // 4.
+
+//  std::istreambuf_iterator<char> i1(std::cin), i2;
+//  alg(i1, i2);         // compile error: no matching function for call
+//  legacy::alg(i1, i2); // compile error: no matching function for call
+}
+```
+
+Output:
+
+```text
+1. alg()          called for bidirectional iterator
+3. legacy::alg() called for bidirectional iterator
+2. alg()          called for random-access iterator
+4. legacy::alg() called for random-access iterator
+```
+
+### See also
+
+- **iterator (deprecated in C++17)** — base class to ease the definition of
+  required types for simple iterators (class template)
+- **iterator_traits** — provides uniform interface to the properties of an
+  iterator (class template)
+
+---
+*Source: https://en.cppreference.com/w/cpp/iterator/iterator_tags*

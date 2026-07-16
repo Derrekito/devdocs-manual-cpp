@@ -1,0 +1,116 @@
+# std::forward_list<T,Allocator>::unique
+
+```cpp
+void unique();  // (since C++11) (until C++20)
+size_type unique();  // (since C++20)
+template< class BinaryPredicate >
+void unique( BinaryPredicate p );  // (since C++11) (until C++20)
+template< class BinaryPredicate >
+size_type unique( BinaryPredicate p );  // (since C++20)
+```
+
+Removes all *consecutive* duplicate elements from the container. Only the first
+element in each group of equal elements is left. Invalidates only the iterators
+and references to the removed elements.
+
+1) Uses `operator==` to compare the elements.
+
+2) Uses `p` to compare the elements.
+
+The behavior is undefined if the corresponding comparator does not establish an
+equivalence relation.
+
+### Parameters
+
+- **p** — binary predicate which returns ​`true` if the elements should be
+  treated as equal. The signature of the predicate function should be equivalent
+  to the following: `bool pred(const Type1 &a, const Type2 &b);` While the
+  signature does not need to have `const &`, the function must not modify the
+  objects passed to it and must be able to accept all values of type (possibly
+  const) `Type1` and `Type2` regardless of value category (thus, `Type1 &` is
+  not allowed, nor is `Type1` unless for `Type1` a move is equivalent to a
+  copy(since C++11)). The types Type1 and Type2 must be such that an object of
+  type forward_list<T,Allocator>::const_iterator can be dereferenced and then
+  implicitly converted to both of them. ​
+
+**Type requirements**
+
+**-`BinaryPredicate` must meet the requirements of BinaryPredicate.**
+
+### Return value
+
+(none)
+*(until C++20)*
+
+The number of elements removed.
+*(since C++20)*
+
+### Complexity
+
+If `empty()` is `true`, no comparison is performed.
+
+Otherwise, given \(\scriptsize N\)N as `std::distance(begin(), end())`:
+
+1) Exactly \(\scriptsize N-1\)N-1 comparisons using `operator==`.
+
+2) Exactly \(\scriptsize N-1\)N-1 applications of the predicate `p`.
+
+### Notes
+
+  Feature-test macro | Value | Std | Feature
+  `__cpp_lib_list_remove_return_type` | 201806L | (C++20) | Change the return
+      type
+
+### Example
+
+```cpp
+#include <iostream>
+#include <forward_list>
+
+std::ostream& operator<< (std::ostream& os, std::forward_list<int> const& container)
+{
+    for (int val : container)
+        os << val << ' ';
+    return os << '\n';
+}
+
+int main()
+{
+    std::forward_list<int> c{1, 2, 2, 3, 3, 2, 1, 1, 2};
+    std::cout << "Before unique(): " << c;
+    const auto count1 = c.unique();
+    std::cout << "After unique():  " << c
+              << count1 << " elements were removed\n";
+
+    c = {1, 2, 12, 23, 3, 2, 51, 1, 2, 2};
+    std::cout << "\nBefore unique(pred): " << c;
+
+    const auto count2 = c.unique([mod = 10](int x, int y)
+    {
+        return (x % mod) == (y % mod);
+    });
+
+    std::cout << "After unique(pred):  " << c
+              << count2 << " elements were removed\n";
+}
+```
+
+Output:
+
+```text
+Before unique(): 1 2 2 3 3 2 1 1 2
+After unique():  1 2 3 2 1 2
+3 elements were removed
+
+Before unique(pred): 1 2 12 23 3 2 51 1 2 2
+After unique(pred):  1 2 23 2 51 2
+4 elements were removed
+```
+
+### See also
+
+- **unique** — removes consecutive duplicate elements in a range (function
+  template)
+
+---
+*Source: https://en.cppreference.com/w/cpp/container/forward_list/unique*

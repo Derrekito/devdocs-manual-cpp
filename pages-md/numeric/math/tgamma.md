@@ -1,0 +1,144 @@
+# std::tgamma, std::tgammaf, std::tgammal
+
+```cpp
+float       tgamma ( float num );
+double      tgamma ( double num );
+long double tgamma ( long double num );  // (until C++23)
+/* floating-point-type */
+            tgamma ( /* floating-point-type */ num );  // (since C++23) (constexpr since C++26)
+float       tgammaf( float num );  // (2) (since C++11) (constexpr since C++26)
+long double tgammal( long double num );  // (3) (since C++11) (constexpr since C++26)
+Additional overloads (since C++11)
+template< class Integer >
+double      tgamma ( Integer num );  // (A) (constexpr since C++26)
+```
+
+1-3) Computes the gamma function of `num`. The library provides overloads of
+   `std::tgamma` for all cv-unqualified floating-point types as the type of the
+   parameter.(since C++23)
+
+A) Additional overloads are provided for all integer types, which are treated as
+double.
+*(since C++11)*
+
+### Parameters
+
+- **num** — floating-point or integer value
+
+### Return value
+
+If no errors occur, the value of the gamma function of `num`, that is
+\(\Gamma(\mathtt{num}) = \displaystyle\int_0^\infty\!\! t^{\mathtt{num}-1}
+e^{-t}\, dt\)∫∞0*t*num-1 *e*-t d*t*, is returned.
+
+If a domain error occurs, an implementation-defined value (NaN where supported)
+is returned.
+
+If a pole error occurs, `±HUGE_VAL`, `±HUGE_VALF`, or `±HUGE_VALL` is returned.
+
+If a range error due to overflow occurs, `±HUGE_VAL`, `±HUGE_VALF`, or
+`±HUGE_VALL` is returned.
+
+If a range error due to underflow occurs, the correct value (after rounding) is
+returned.
+
+### Error handling
+
+Errors are reported as specified in `math_errhandling`.
+
+If `num` is zero or is an integer less than zero, a pole error or a domain error
+may occur.
+
+If the implementation supports IEEE floating-point arithmetic (IEC 60559),
+
+- If the argument is ±0, ±∞ is returned and `FE_DIVBYZERO` is raised.
+- If the argument is a negative integer, NaN is returned and `FE_INVALID` is
+  raised.
+- If the argument is -∞, NaN is returned and `FE_INVALID` is raised.
+- If the argument is +∞, +∞ is returned.
+- If the argument is NaN, NaN is returned.
+
+### Notes
+
+If `num` is a natural number, `std::tgamma(num)` is the factorial of `num - 1`.
+Many implementations calculate the exact integer-domain factorial if the
+argument is a sufficiently small integer.
+
+For IEEE-compatible type double, overflow happens if `0 < num && num < 1 /
+DBL_MAX` or if `num > 171.7`.
+
+POSIX requires that a pole error occurs if the argument is zero, but a domain
+error occurs when the argument is a negative integer. It also specifies that in
+future, domain errors may be replaced by pole errors for negative integer
+arguments (in which case the return value in those cases would change from NaN
+to ±∞).
+
+There is a non-standard function named `gamma` in various implementations, but
+its definition is inconsistent. For example, glibc and 4.2BSD version of `gamma`
+executes `lgamma`, but 4.4BSD version of `gamma` executes `tgamma`.
+
+The additional overloads are not required to be provided exactly as (A). They
+only need to be sufficient to ensure that for their argument `num` of integer
+type, `std::tgamma(num)` has the same effect as
+`std::tgamma(static_cast<double>(num))`.
+
+### Example
+
+```cpp
+#include <cerrno>
+#include <cfenv>
+#include <cmath>
+#include <cstring>
+#include <iostream>
+// #pragma STDC FENV_ACCESS ON
+
+int main()
+{
+    std::cout << "tgamma(10) = " << std::tgamma(10)
+              << ", 9! = " << 2 * 3 * 4 * 5 * 6 * 7 * 8 * 9 << '\n'
+              << "tgamma(0.5) = " << std::tgamma(0.5)
+              << ", sqrt(pi) = " << std::sqrt(std::acos(-1)) << '\n';
+
+    // special values
+    std::cout << "tgamma(1) = " << std::tgamma(1) << '\n'
+              << "tgamma(+Inf) = " << std::tgamma(INFINITY) << '\n';
+
+    // error handling
+    errno = 0;
+    std::feclearexcept(FE_ALL_EXCEPT);
+
+    std::cout << "tgamma(-1) = " << std::tgamma(-1) << '\n';
+
+    if (errno == EDOM)
+        std::cout << "    errno == EDOM: " << std::strerror(errno) << '\n';
+    if (std::fetestexcept(FE_INVALID))
+        std::cout << "    FE_INVALID raised\n";
+}
+```
+
+Possible output:
+
+```text
+tgamma(10) = 362880, 9! = 362880
+tgamma(0.5) = 1.77245, sqrt(pi) = 1.77245
+tgamma(1) = 1
+tgamma(+Inf) = inf
+tgamma(-1) = nan
+    errno == EDOM: Numerical argument out of domain
+    FE_INVALID raised
+```
+
+### See also
+
+- **lgammalgammaflgammal (C++11)(C++11)(C++11)** — natural logarithm of the
+  gamma function (function)
+- **betabetafbetal (C++17)(C++17)(C++17)** — beta function (function)
+
+**C documentation for `tgamma`**
+
+### External links
+
+  Weisstein, Eric W. "Gamma Function." From MathWorld — A Wolfram Web Resource.
+
+---
+*Source: https://en.cppreference.com/w/cpp/numeric/math/tgamma*

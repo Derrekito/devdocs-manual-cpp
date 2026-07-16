@@ -1,0 +1,99 @@
+# std::setbase
+
+```cpp
+/*unspecified*/ setbase( int base );
+```
+
+Sets the numeric base of the stream. When used in an expression `out <<
+setbase(base)` or `in >> setbase(base)`, changes the `basefield` flag of the
+stream `out` or `in`, depending on the value of `base`:
+
+- the value `16` sets `basefield` to `std::ios_base::hex`.
+- the value `8` sets `std::ios_base::oct`.
+- the value `10` sets `std::ios_base::dec`.
+
+Values of `base` other than 8, 10, or 16 reset `basefield` to zero, which
+corresponds to decimal output and prefix-dependent input.
+
+### Parameters
+
+- **base** — new value for basefield
+
+### Return value
+
+An object of unspecified type such that
+
+- if `out` is an object of type `std::basic_ostream<CharT, Traits>`, the
+  expression `out << setbase(base)` has type `std::basic_ostream<CharT,
+  Traits>&` has value `out` behaves as if it called `f(out, base)`
+- if `in` is an object of type `std::basic_istream<CharT, Traits>`, the
+  expression `in >> setbase(base)` has type `std::basic_istream<CharT, Traits>&`
+  has value `in` behaves as if it called `f(in, base)`
+
+where the function `f` is defined as:
+
+```cpp
+void f(std::ios_base& str, int base)
+{
+    // set basefield
+    str.setf(base == 8 ? std::ios_base::oct :
+        base == 10 ? std::ios_base::dec :
+        base == 16 ? std::ios_base::hex :
+        std::ios_base::fmtflags(0), std::ios_base::basefield);
+}
+```
+
+### Example
+
+```cpp
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+
+int main()
+{
+    std::cout << "Parsing string \"10 0x10 010\"\n";
+
+    int n1, n2, n3;
+    std::istringstream s("10 0x10 010");
+
+    s >> std::setbase(16) >> n1 >> n2 >> n3;
+    std::cout << "hexadecimal parse: " << n1 << ' ' << n2 << ' ' << n3 << '\n';
+
+    s.clear();
+    s.seekg(0);
+
+    s >> std::setbase(0) >> n1 >> n2 >> n3;
+    std::cout << "prefix-dependent parse: " << n1 << ' ' << n2 << ' ' << n3 << '\n';
+
+    std::cout << "hex output: " << std::setbase(16)
+              << std::showbase << n1 << ' ' << n2 << ' ' << n3 << '\n';
+}
+```
+
+Output:
+
+```text
+Parsing string "10 0x10 010"
+hexadecimal parse: 16 16 16
+prefix-dependent parse: 10 16 8
+hex output: 0xa 0x10 0x8
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 183 | C++98 | `setbase` could only be used with streams of type
+      `std::ostream` or `std::istream` | usable with any character stream
+
+### See also
+
+- **dechexoct** — changes the base used for integer I/O (function)
+- **showbasenoshowbase** — controls whether prefix is used to indicate numeric
+  base (function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/io/manip/setbase*

@@ -1,0 +1,87 @@
+# std::shared_ptr<T>::get
+
+```cpp
+T* get() const noexcept;  // (until C++17)
+element_type* get() const noexcept;  // (since C++17)
+```
+
+Returns the stored pointer.
+
+### Parameters
+
+(none)
+
+### Return value
+
+The stored pointer.
+
+### Notes
+
+A `shared_ptr` may share ownership of an object while storing a pointer to
+another object. `get()` returns the stored pointer, not the managed pointer.
+
+### Example
+
+```cpp
+#include <iostream>
+#include <memory>
+#include <string_view>
+
+int main()
+{
+    auto output = [](std::string_view msg, int const* pInt)
+    {
+        std::cout << msg << *pInt << " in " << pInt << '\n';
+    };
+
+    int* pInt = new int(42);
+    std::shared_ptr<int> pShared = std::make_shared<int>(42);
+
+    output("Naked pointer: ", pInt);
+//  output("Shared pointer: ", pShared); // compiler error
+    output("Shared pointer: ", &*pShared); // OK, calls operator*, then takes addr
+    output("Shared pointer with get(): ", pShared.get());
+
+    delete pInt;
+
+    std::cout << "\nThe shared_ptr's aliasing constructor demo.\n";
+    struct Base1 { int i1{}; };
+    struct Base2 { int i2{}; };
+    struct Derived : Base1, Base2 { int i3{}; };
+
+    std::shared_ptr<Derived> p(new Derived());
+    std::shared_ptr<Base2> q(p, static_cast<Base2*>(p.get()));
+    std::cout << "q shares ownership with p, but points to Base2 subobject:\n"
+              << "p.get(): " << p.get() << '\n'
+              << "q.get(): " << q.get() << '\n'
+              << "&(p->i1): " << &(p->i1) << '\n'
+              << "&(p->i2): " << &(p->i2) << '\n'
+              << "&(p->i3): " << &(p->i3) << '\n'
+              << "&(q->i2): " << &(q->i2) << '\n';
+}
+```
+
+Possible output:
+
+```text
+Naked pointer: 42 in 0xacac20
+Shared pointer: 42 in 0xacac50
+Shared pointer with get(): 42 in 0xacac50
+
+The shared_ptr's aliasing constructor demo.
+q shares ownership with p, but points to Base2 subobject:
+p.get(): 0xacac20
+q.get(): 0xacac24
+&(p->i1): 0xacac20
+&(p->i2): 0xacac24
+&(p->i3): 0xacac28
+&(q->i2): 0xacac24
+```
+
+### See also
+
+- **operator*operator->** — dereferences the stored pointer (public member
+  function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/memory/shared_ptr/get*

@@ -1,0 +1,98 @@
+# std::expected<T,E>::transform
+
+```cpp
+template< class F >
+constexpr auto transform( F&& f ) &;  // (1) (since C++23)
+template< class F >
+constexpr auto transform( F&& f ) const&;  // (2) (since C++23)
+template< class F >
+constexpr auto transform( F&& f ) &&;  // (3) (since C++23)
+template< class F >
+constexpr auto transform( F&& f ) const&&;  // (4) (since C++23)
+```
+
+If `*this` contains an expected value, invokes `f` and returns a `std::expected`
+object that contains its result; otherwise, returns a `std::expected` object
+that contains a copy of `error()`.
+
+If `T` is not (possibly cv-qualified) void, the contained value (obtained from
+`operator*`) is passed as an argument to `f`; otherwise `f` takes no argument.
+
+1,2) Given type `U` as
+
+- std::remove_cv_t<std::invoke_result_t<F>> if `T` is (possibly cv-qualified)
+  void, or
+- std::remove_cv_t<std::invoke_result_t<F, decltype(**this)>> otherwise,
+
+and expression `/* invoke-expr */` as
+
+- `std::invoke(std::forward<F>(f))` if `T` is (possibly cv-qualified) void, or
+- `std::invoke(std::forward<F>(f), **this)` otherwise.
+
+If `U` is not a valid value type for `std::expected`, or `U u(/* invoke-expr
+   */);` is ill-formed when `std::is_void_v<U>` is `false`, the program is
+   ill-formed.
+
+The effect is equivalent to if (has_value()) { if constexpr (std::is_void_v<U>)
+   { /* invoke-expr */; return std::expected<U, E>(); } else // the returned
+   std::expected object contains an expected value, // which is
+   direct-non-list-initialized with /* invoke-expr */ return /* an
+   std::expected<U, E> object */; } else return std::expected<U,
+   E>(std::unexpect, error());
+
+These overloads participate in overload resolution only if
+   `std::is_constructible_v<E, decltype(error())>` is `true`.
+3,4) Given type `U` as
+
+- std::remove_cv_t<std::invoke_result_t<F>> if `T` is (possibly cv-qualified)
+  void, or
+- std::remove_cv_t<std::invoke_result_t<F, decltype(std::move(**this))>>
+  otherwise,
+
+and expression `/* invoke-expr */` as
+
+- `std::invoke(std::forward<F>(f))` if `T` is (possibly cv-qualified) void, or
+- `std::invoke(std::forward<F>(f), std::move(**this))` otherwise.
+
+If `U` is not a valid value type for `std::expected`, or `U u(/* invoke-expr
+   */);` is ill-formed when `std::is_void_v<U>` is `false`, the program is
+   ill-formed.
+
+The effect is equivalent to if (has_value()) { if constexpr (std::is_void_v<U>)
+   { /* invoke-expr */; return std::expected<U, E>(); } else // the returned
+   std::expected object contains an expected value, // which is
+   direct-non-list-initialized with /* invoke-expr */ return /* an
+   std::expected<U, E> object */; } else return std::expected<U,
+   E>(std::unexpect, std::move(error())); These overloads participate in
+   overload resolution only if `std::is_constructible_v<E,
+   decltype(std::move(error()))>` is `true`.
+
+### Parameters
+
+- **f** — a suitable function or Callable object whose call signature returns a
+  non-reference type
+
+### Return value
+
+A `std::expected` object containing either the result of `f` or an error value,
+as described above.
+
+### Example
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 3938 | C++23 | `transform` was ill-formed if `T` is not (possibly
+      cv-qualified) void and `E` is not copyable | made well-formed
+
+### See also
+
+- **transform_error** — returns the `expected` itself if it contains an expected
+  value; otherwise, returns an `expected` containing the transformed unexpected
+  value (public member function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/utility/expected/transform*

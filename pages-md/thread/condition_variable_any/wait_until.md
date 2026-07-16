@@ -1,0 +1,189 @@
+# std::condition_variable_any::wait_until
+
+```cpp
+template< class Lock, class Clock, class Duration >
+std::cv_status
+    wait_until( Lock& lock,
+                const std::chrono::time_point<Clock, Duration>& timeout_time );  // (1) (since C++11)
+template< class Lock, class Clock, class Duration, class Predicate >
+bool wait_until( Lock& lock,
+                 const std::chrono::time_point<Clock, Duration>& timeout_time,
+                 Predicate stop_waiting );  // (2) (since C++11)
+template< class Lock, class Clock, class Duration, class Predicate >
+bool wait_until( Lock& lock,
+                 std::stop_token stoken,
+                 const std::chrono::time_point<Clock, Duration>& timeout_time,
+                 Predicate stop_waiting );  // (3) (since C++20)
+```
+
+`wait_until` causes the current thread to block until the condition variable is
+notified, a specific time is reached, or a spurious wakeup occurs, optionally
+looping until some predicate is satisfied (`bool(stop_waiting()) == true`).
+
+1) Atomically releases `lock`, blocks the current executing thread, and adds it
+   to the list of threads waiting on `*this`. The thread will be unblocked when
+   `notify_all()` or `notify_one()` is executed, or when the absolute time point
+   `timeout_time` is reached. It may also be unblocked spuriously. When
+   unblocked, regardless of the reason, `lock` is reacquired and `wait_until`
+   exits.
+
+2) Equivalent to
+
+```cpp
+while (!stop_waiting())
+{
+    if (wait_until(lock, timeout_time) == std::cv_status::timeout)
+        return stop_waiting();
+}
+return true;
+```
+
+This overload may be used to ignore spurious wakeups.
+
+3) An interruptible wait: registers the `condition_variable_any` for the
+   duration of `wait_until()`, to be notified if a stop request is made on the
+   given `stoken`'s associated stop-state; it is then equivalent to while
+   (!stoken.stop_requested()) { if (stop_waiting()) return true; if
+   (wait_until(lock, timeout_time) == std::cv_status::timeout) return
+   stop_waiting(); } return stop_waiting();
+
+If these functions fail to meet the postcondition (`lock` is locked by the
+calling thread), `std::terminate` is called. For example, this could happen if
+relocking the mutex throws an exception.
+
+`Clock` must meet the Clock requirements. The program is ill-formed if
+`std::chrono::is_clock_v<Clock>` is `false`.(since C++20)
+
+### Parameters
+
+- **lock** — an object of type `Lock` that meets the requirements of
+  BasicLockable, which must be locked by the current thread
+- **stoken** — a `std::stop_token` to register interruption for
+- **timeout_time** — an object of type `std::chrono::time_point` representing
+  the time when to stop waiting
+- **stop_waiting** — predicate which returns ​`false` if the waiting should be
+  continued (`bool(stop_waiting()) == false`). The signature of the predicate
+  function should be equivalent to the following: `bool pred();`​
+
+### Return value
+
+1) `std::cv_status::timeout` if the absolute timeout specified by `timeout_time`
+   was reached, `std::cv_status::no_timeout` otherwise.
+
+2) `false` if the predicate `stop_waiting` still evaluates to `false` after the
+   `timeout_time` timeout expired, otherwise `true`. If the timeout had already
+   expired, evaluates and returns the result of `stop_waiting`.
+
+3) `stop_waiting()`, regardless of whether the timeout was met or stop was
+   requested.
+
+### Exceptions
+
+1) Any exception thrown by clock, time point, or duration during the execution
+   (clocks, time points, and durations provided by the standard library never
+   throw).
+
+2) Same as (1) but may also propagate exceptions thrown by `stop_waiting`.
+
+3) Same as (2).
+
+### Notes
+
+The standard recommends that the clock tied to `timeout_time` be used to measure
+time; that clock is not required to be a monotonic clock. There are no
+guarantees regarding the behavior of this function if the clock is adjusted
+discontinuously, but the existing implementations convert `timeout_time` from
+`Clock` to `std::chrono::system_clock` and delegate to POSIX
+`pthread_cond_timedwait` so that the wait honors adjustments to the system
+clock, but not to the user-provided `Clock`. In any case, the function also may
+wait for longer than until after `timeout_time` has been reached due to
+scheduling or resource contention delays.
+
+Even if the clock in use is `std::chrono::steady_clock` or another monotonic
+clock, a system clock adjustment may induce a spurious wakeup.
+
+The effects of `notify_one()`/`notify_all()` and each of the three atomic parts
+of `wait()`/`wait_for()`/`wait_until()` (unlock+wait, wakeup, and lock) take
+place in a single total order that can be viewed as modification order of an
+atomic variable: the order is specific to this individual condition variable.
+This makes it impossible for `notify_one()` to, for example, be delayed and
+unblock a thread that started waiting just after the call to `notify_one()` was
+made.
+
+### Example
+
+```cpp
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <iostream>
+#include <thread>
+using namespace std::chrono_literals;
+
+std::condition_variable cv;
+std::mutex cv_m;
+std::atomic<int> i{0};
+
+void waits(int idx)
+{
+    std::unique_lock<std::mutex> lk(cv_m);
+    auto now = std::chrono::system_clock::now();
+    if (cv.wait_until(lk, now + idx*100ms, [](){ return i == 1; }))
+        std::cerr << "Thread " << idx << " finished waiting. i == " << i << '\n';
+    else
+        std::cerr << "Thread " << idx << " timed out. i == " << i << '\n';
+}
+
+void signals()
+{
+    std::this_thread::sleep_for(120ms);
+    std::cerr << "Notifying...\n";
+    cv.notify_all();
+    std::this_thread::sleep_for(100ms);
+    i = 1;
+    std::cerr << "Notifying again...\n";
+    cv.notify_all();
+}
+
+int main()
+{
+    std::thread t1(waits, 1), t2(waits, 2), t3(waits, 3), t4(signals);
+    t1.join();
+    t2.join();
+    t3.join();
+    t4.join();
+}
+```
+
+Possible output:
+
+```text
+Thread 1 timed out. i == 0
+Notifying...
+Thread 2 timed out. i == 0
+Notifying again...
+Thread 3 finished waiting. i == 1
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 2093 | C++11 | timeout-related exceptions were missing in the
+      specification | mentioned
+  LWG 2135 | C++11 | `wait_until` threw an exception on unlocking/relocking
+      failure | calls `std::terminate`
+
+### See also
+
+- **wait** — blocks the current thread until the condition variable is awakened
+  (public member function)
+- **wait_for** — blocks the current thread until the condition variable is
+  awakened or after the specified timeout duration (public member function)
+
+**C documentation for `cnd_timedwait`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/thread/condition_variable_any/wait_until*

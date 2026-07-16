@@ -1,0 +1,128 @@
+# std::ranges::construct_at
+
+```cpp
+Call signature
+template< class T, class... Args >
+constexpr T* construct_at( T* p, Args&&... args );  // (since C++20)
+```
+
+Creates a `T` object initialized with arguments `args...` at given address `p`.
+`construct_at` participates in overload resolution only if
+`::new(std::declval<void*>()) T(std::declval<Args>()...)` is well-formed in
+unevaluated context.
+
+Equivalent to
+
+```cpp
+return ::new (static_cast<void*>(p)) T(std::forward<Args>(args)...);
+```
+
+except that `construct_at` may be used in evaluation of constant expressions.
+
+When `construct_at` is called in the evaluation of some constant expression `e`,
+the argument `p` must point to either storage obtained by
+`std::allocator<T>::allocate` or an object whose lifetime began within the
+evaluation of `e`.
+
+The function-like entities described on this page are *niebloids*, that is:
+
+- Explicit template argument lists cannot be specified when calling any of them.
+- None of them are visible to argument-dependent lookup.
+- When any of them are found by normal unqualified lookup as the name to the
+  left of the function-call operator, argument-dependent lookup is inhibited.
+
+In practice, they may be implemented as function objects, or with special
+compiler extensions.
+
+### Parameters
+
+- **p** — pointer to the uninitialized storage on which a `T` object will be
+  constructed
+- **args...** — arguments used for initialization
+
+### Return value
+
+`p`
+
+### Possible implementation
+
+```cpp
+struct construct_at_fn
+{
+    template<class T, class...Args>
+        requires
+            requires (void* vp, Args&&... args)
+                { ::new (vp) T(static_cast<Args&&>(args)...); }
+    constexpr T* operator()(T* p, Args&&... args) const
+    {
+        return std::construct_at(p, static_cast<Args&&>(args)...);
+    }
+};
+
+inline constexpr construct_at_fn construct_at{};
+```
+
+### Notes
+
+`std::ranges::construct_at` behaves exactly same as `std::construct_at`, except
+that it is invisible to argument-dependent lookup.
+
+### Example
+
+```cpp
+#include <iostream>
+#include <memory>
+
+struct S
+{
+    int x;
+    float y;
+    double z;
+
+    S(int x, float y, double z) : x{x}, y{y}, z{z} { std::cout << "S::S();\n"; }
+
+    ~S() { std::cout << "S::~S();\n"; }
+
+    void print() const
+    {
+        std::cout << "S { x=" << x << "; y=" << y << "; z=" << z << "; };\n";
+    }
+};
+
+int main()
+{
+    alignas(S) unsigned char buf[sizeof(S)];
+
+    S* ptr = std::ranges::construct_at(reinterpret_cast<S*>(buf), 42, 2.71828f, 3.1415);
+    ptr->print();
+
+    std::ranges::destroy_at(ptr);
+}
+```
+
+Output:
+
+```text
+S::S();
+S { x=42; y=2.71828; z=3.1415; };
+S::~S();
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 3870 | C++20 | `construct_at` could create objects of a cv-qualified types
+      | only cv-unqualified types are permitted
+
+### See also
+
+- **ranges::destroy_at (C++20)** — destroys an object at a given address
+  (niebloid)
+- **construct_at (C++20)** — creates an object at a given address (function
+  template)
+
+---
+*Source: https://en.cppreference.com/w/cpp/memory/ranges/construct_at*

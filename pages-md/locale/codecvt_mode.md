@@ -1,0 +1,83 @@
+# std::codecvt_mode
+
+```cpp
+enum codecvt_mode {
+    consume_header = 4,
+    generate_header = 2,
+    little_endian = 1
+};  // (since C++11) (deprecated in C++17) (removed in C++26)
+```
+
+The facets `std::codecvt_utf8`, `std::codecvt_utf16`, and
+`std::codecvt_utf8_utf16` accept an optional value of type `std::codecvt_mode`
+as a template argument, which specifies optional features of the unicode string
+conversion.
+
+### Constants
+
+- **`little_endian`** — assume the input is in little-endian byte order (applies
+  to UTF-16 input only, the default is big-endian)
+- **`consume_header`** — consume the byte order mark, if present at the start of
+  input sequence, and (in case of UTF-16), rely on the byte order it specifies
+  for decoding the rest of the input
+- **`generate_header`** — output the byte order mark at the start of the output
+  sequence
+
+The recognized byte order marks are:
+
+- **`0xfe 0xff`** — UTF-16 big-endian
+- **`0xff 0xfe`** — UTF-16 little-endian
+- **`0xef 0xbb 0xbf`** — UTF-8 (no effect on endianness)
+
+If `std::consume_header` is not selected when reading a file beginning with byte
+order mark, the Unicode character U+FEFF (Zero width non-breaking space) will be
+read as the first character of the string content.
+
+### Example
+
+The following example demonstrates consuming the UTF-8 BOM:
+
+```cpp
+#include <codecvt>
+#include <cwchar>
+#include <fstream>
+#include <iostream>
+#include <locale>
+#include <string>
+
+int main()
+{
+    // UTF-8 data with BOM
+    std::ofstream{"text.txt"} << "\ufeffz\u6c34\U0001d10b";
+
+    // read the UTF-8 file, skipping the BOM
+    std::wifstream fin{"text.txt"};
+    fin.imbue(std::locale(fin.getloc(),
+                          new std::codecvt_utf8<wchar_t, 0x10ffff, std::consume_header>));
+
+    for (wchar_t c; fin.get(c);)
+        std::cout << std::hex << std::showbase << (std::wint_t)c << '\n';
+}
+```
+
+Output:
+
+```text
+0x7a
+0x6c34
+0x1d10b
+```
+
+### See also
+
+- **codecvt** — converts between character encodings, including UTF-8, UTF-16,
+  UTF-32 (class template)
+- **codecvt_utf8 (C++11)(deprecated in C++17)(removed in C++26)** — converts
+  between UTF-8 and UCS-2/UCS-4 (class template)
+- **codecvt_utf16 (C++11)(deprecated in C++17)(removed in C++26)** — converts
+  between UTF-16 and UCS-2/UCS-4 (class template)
+- **codecvt_utf8_utf16 (C++11)(deprecated in C++17)(removed in C++26)** —
+  converts between UTF-8 and UTF-16 (class template)
+
+---
+*Source: https://en.cppreference.com/w/cpp/locale/codecvt_mode*

@@ -1,0 +1,136 @@
+# std::promise<R>::set_value
+
+```cpp
+void set_value( const R& value );  // (1) (member only of generic promise template)(since C++11)
+void set_value( R&& value );  // (2) (member only of generic promise template)(since C++11)
+void set_value( R& value );  // (3) (member only of promise<R&> template specialization)(since C++11)
+void set_value();  // (4) (member only of promise<void> template specialization)(since C++11)
+```
+
+1-3) Atomically stores the `value` into the shared state and makes the state
+   ready.
+
+4) Makes the state ready.
+
+The operation behaves as though `set_value`, `set_exception`,
+`set_value_at_thread_exit`, and `set_exception_at_thread_exit` acquire a single
+mutex associated with the promise object while updating the promise object.
+
+An exception is thrown if there is no shared state or the shared state already
+stores a value or exception.
+
+Calls to this function do not introduce data races with calls to `get_future`
+(therefore they need not synchronize with each other).
+
+### Parameters
+
+- **value** — value to store in the shared state
+
+### Return value
+
+(none)
+
+### Exceptions
+
+`std::future_error` on the following conditions:
+
+- `*this` has no shared state. The error code is set to `no_state`.
+- The shared state already stores a value or exception. The error code is set to
+  `promise_already_satisfied`.
+
+Additionally:
+
+1) Any exception thrown by the copy constructor of `value`.
+
+2) Any exception thrown by the move constructor of `value`.
+
+### Example
+
+This example shows how `std::promise<void>` can be used as signals between
+threads.
+
+```cpp
+#include <algorithm>
+#include <cctype>
+#include <chrono>
+#include <future>
+#include <iostream>
+#include <iterator>
+#include <sstream>
+#include <thread>
+#include <vector>
+using namespace std::chrono_literals;
+
+int main()
+{
+    std::istringstream iss_numbers{"3 4 1 42 23 -23 93 2 -289 93"};
+    std::istringstream iss_letters{" a 23 b,e a2 k k?a;si,ksa c"};
+
+    std::vector<int> numbers;
+    std::vector<char> letters;
+    std::promise<void> numbers_promise, letters_promise;
+
+    auto numbers_ready = numbers_promise.get_future();
+    auto letter_ready = letters_promise.get_future();
+
+    std::thread value_reader([&]
+    {
+        // I/O operations.
+        std::copy(std::istream_iterator<int>{iss_numbers},
+                  std::istream_iterator<int>{},
+                  std::back_inserter(numbers));
+
+        // Notify for numbers.
+        numbers_promise.set_value();
+
+        std::copy_if(std::istreambuf_iterator<char>{iss_letters},
+                     std::istreambuf_iterator<char>{},
+                     std::back_inserter(letters),
+                     ::isalpha);
+
+        // Notify for letters.
+        letters_promise.set_value();
+    });
+
+    numbers_ready.wait();
+
+    std::sort(numbers.begin(), numbers.end());
+
+    if (letter_ready.wait_for(1s) == std::future_status::timeout)
+    {
+        // Output the numbers while letters are being obtained.
+        for (int num : numbers)
+            std::cout << num << ' ';
+        numbers.clear(); // Numbers were already printed.
+    }
+
+    letter_ready.wait();
+    std::sort(letters.begin(), letters.end());
+
+    // If numbers were already printed, it does nothing.
+    for (int num : numbers)
+        std::cout << num << ' ';
+    std::cout << '\n';
+
+    for (char let : letters)
+        std::cout << let << ' ';
+    std::cout << '\n';
+
+    value_reader.join();
+}
+```
+
+Output:
+
+```text
+-289 -23 1 2 3 4 23 42 93 93
+a a a a b c e i k k k s s
+```
+
+### See also
+
+- **set_exception** — sets the result to indicate an exception (public member
+  function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/thread/promise/set_value*

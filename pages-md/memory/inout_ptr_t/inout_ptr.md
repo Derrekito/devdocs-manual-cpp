@@ -1,0 +1,56 @@
+# std::inout_ptr
+
+```cpp
+template< class Pointer = void, class Smart, class... Args >
+auto inout_ptr( Smart& s, Args&&... args );  // (since C++23)
+```
+
+Returns an `inout_ptr_t` with deduced template arguments that captures arguments
+for resetting by reference.
+
+The program is ill-formed if construction of the return value (see below) is
+ill-formed.
+
+### Parameters
+
+- **s** — the object (typically a smart pointer) to adapt
+- **args...** — the arguments for resetting to capture
+
+### Return value
+
+`std::inout_ptr_t<Smart, P, Args&&>(s, std::forward<Args>(args)...)`, where `P`
+is
+
+- `Pointer`, if `Pointer` is not same as `void`, otherwise,
+- `Smart::pointer`, if it is valid and denotes a type, otherwise,
+- `Smart::element_type*`, if `Smart::element_type` is valid and denotes a type,
+  otherwise,
+- `std::pointer_traits<Smart>::element_type*`.
+
+### Notes
+
+Users may specify the template argument for the template parameter `Pointer`, in
+order to interoperate with foreign functions that take a `Pointer*`.
+
+As all arguments for resetting are captured by reference, the returned
+`inout_ptr_t` should be a temporary object destroyed at the end of the
+full-expression containing the call to the foreign function, in order to avoid
+dangling references.
+
+  Feature-test macro | Value | Std | Feature
+  `__cpp_lib_out_ptr` | 202106L | (C++23) | `std::out_ptr`, `std::inout_ptr`
+  202311L | (C++26) | freestanding `std::out_ptr` and `std::inout_ptr`
+
+### Example
+
+### See also
+
+- **out_ptr (C++23)** — creates an `out_ptr_t` with an associated smart pointer
+  and resetting arguments (function template)
+- **make_uniquemake_unique_for_overwrite (C++14)(C++20)** — creates a unique
+  pointer that manages a new object (function template)
+- **make_sharedmake_shared_for_overwrite (C++20)** — creates a shared pointer
+  that manages a new object (function template)
+
+---
+*Source: https://en.cppreference.com/w/cpp/memory/inout_ptr_t/inout_ptr*

@@ -1,0 +1,84 @@
+# std::unordered_multiset<Key,Hash,KeyEqual,Allocator>::count
+
+```cpp
+size_type count( const Key& key ) const;  // (1) (since C++11)
+template< class K >
+size_type count( const K& x ) const;  // (2) (since C++20)
+```
+
+1) Returns the number of elements with key that compares equal to the specified
+   argument `key`.
+
+2) Returns the number of elements with key that compares equivalent to the
+   specified argument `x`. This overload participates in overload resolution
+   only if `Hash::is_transparent` and `KeyEqual::is_transparent` are valid and
+   each denotes a type. This assumes that such `Hash` is callable with both `K`
+   and `Key` type, and that the `KeyEqual` is transparent, which, together,
+   allows calling this function without constructing an instance of `Key`.
+
+### Parameters
+
+- **key** — key value of the elements to count
+- **x** — a value of any type that can be transparently compared with a key
+
+### Return value
+
+1) Number of elements with key `key`.
+
+2) Number of elements with key that compares equivalent to `x`.
+
+### Complexity
+
+linear in the number of elements with key `key` on average, worst case linear in
+the size of the container.
+
+### Notes
+
+  Feature-test macro | Value | Std | Feature
+  `__cpp_lib_generic_unordered_lookup` | 201811L | (C++20) | Heterogeneous
+      comparison lookup in unordered associative containers, overload (2)
+
+### Example
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <unordered_set>
+
+int main()
+{
+    std::unordered_multiset set{2, 7, 1, 8, 2, 8, 1, 8, 2, 8};
+
+    std::cout << "The set is:\n";
+    for (int e : set)
+        std::cout << e << ' ';
+
+    const auto [min, max] = std::ranges::minmax(set);
+
+    std::cout << "\nNumbers [" << min << ".." << max << "] frequency:\n";
+
+    for (int i{min}; i <= max; ++i)
+        std::cout << i << ':' << set.count(i) << "; ";
+    std::cout << '\n';
+}
+```
+
+Possible output:
+
+```text
+The set is:
+8 8 8 8 1 1 7 2 2 2
+Numbers [1..8] frequency:
+1:2; 2:3; 3:0; 4:0; 5:0; 6:0; 7:1; 8:4;
+```
+
+### See also
+
+- **find** — finds element with specific key (public member function)
+- **contains (C++20)** — checks if the container contains element with specific
+  key (public member function)
+- **equal_range** — returns range of elements matching a specific key (public
+  member function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/container/unordered_multiset/count*

@@ -1,0 +1,59 @@
+# std::ranges::range_adaptor_closure
+
+```cpp
+template< class D >
+    requires std::is_object_v<D> && std::same_as<D, std::remove_cv_t<D>>
+class range_adaptor_closure {};  // (since C++23)
+```
+
+`std::ranges::range_adaptor_closure` is a helper class template for defining a
+RangeAdaptorClosureObject.
+
+Let `t` be the object of type `T`, the implementation ensures that `t` is a
+range adaptor closure object if all the requirements are met:
+
+- `t` is a unary function object that takes one `range` argument.
+- `T` has exactly one public base class `ranges::range_adaptor_closure<T>`, and
+  `T` has no base classes of type `ranges::range_adaptor_closure<U>` for any
+  other type `U`.
+- `T` does not satisfy `range`.
+
+### Example
+
+```cpp
+#include <ranges>
+#include <string_view>
+
+// Define Slice as a range adaptor closure
+struct Slice : std::ranges::range_adaptor_closure<Slice>
+{
+    std::size_t start = 0;
+    std::size_t end = std::string_view::npos;
+
+    constexpr std::string_view operator()(std::string_view sv) const
+    {
+        return sv.substr(start, end - start);
+    }
+};
+
+int main()
+{
+    constexpr std::string_view str = "01234567";
+
+    constexpr Slice slicer{.start = 1, .end = 6};
+
+    constexpr auto sv1 = slicer(str); // use slicer as a normal function object
+    constexpr auto sv2 = str | slicer; // use slicer as a range adaptor closure object
+    static_assert(sv1 == "12345");
+    static_assert(sv2 == "12345");
+
+    // range adaptor closures can be composed
+    constexpr auto slice_and_drop
+        = slicer
+        | std::views::drop_while([](char ch) { return ch != '3'; });
+    static_assert(std::string_view(str | slice_and_drop) == "345");
+}
+```
+
+---
+*Source: https://en.cppreference.com/w/cpp/ranges/range_adaptor_closure*

@@ -1,0 +1,41 @@
+# std::indirectly_readable
+
+```cpp
+template< class In >
+    concept __IndirectlyReadableImpl =
+        requires(const In in) {
+            typename std::iter_value_t<In>;
+            typename std::iter_reference_t<In>;
+            typename std::iter_rvalue_reference_t<In>;
+            { *in } -> std::same_as<std::iter_reference_t<In>>;
+            { ranges::iter_move(in) } -> std::same_as<std::iter_rvalue_reference_t<In>>;
+        } &&
+        std::common_reference_with<
+            std::iter_reference_t<In>&&, std::iter_value_t<In>&
+        > &&
+        std::common_reference_with<
+            std::iter_reference_t<In>&&, std::iter_rvalue_reference_t<In>&&
+        > &&
+        std::common_reference_with<
+            std::iter_rvalue_reference_t<In>&&, const std::iter_value_t<In>&
+        >;  // (exposition only*)
+template< class In >
+    concept indirectly_readable =
+        __IndirectlyReadableImpl<std::remove_cvref_t<In>>;  // (since C++20)
+```
+
+The concept `indirectly_readable` is modeled by types that are readable by
+applying `operator*`, such as pointers, smart pointers, and input iterators.
+
+### Semantic requirements
+
+Given a value `i` of type `I`, `I` models `indirectly_readable` only if all
+concepts it subsumes are modeled and the expression `*i` is equality-preserving.
+
+### Equality preservation
+
+Expressions declared in requires expressions of the standard library concepts
+are required to be equality-preserving (except where stated otherwise).
+
+---
+*Source: https://en.cppreference.com/w/cpp/iterator/indirectly_readable*

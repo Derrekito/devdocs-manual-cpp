@@ -1,0 +1,132 @@
+# std::asctime
+
+```cpp
+char* asctime( const std::tm* time_ptr );
+```
+
+Converts given calendar time `std::tm` to a textual representation of the
+following fixed 25-character form: `Www Mmm dd hh:mm:ss yyyy\n`.
+
+- `Www` - three-letter English abbreviated day of the week from
+  `time_ptr->tm_wday`, one of `Mon`, `Tue`, `Wed`, `Thu`, `Fri`, `Sat`, `Sun`.
+- `Mmm` - three-letter English abbreviated month name from `time_ptr->tm_mon`,
+  one of `Jan`, `Feb`, `Mar`, `Apr`, `May`, `Jun`, `Jul`, `Aug`, `Sep`, `Oct`,
+  `Nov`, `Dec`.
+- `dd` - 2-digit day of the month from `timeptr->tm_mday` as if printed by
+  `sprintf` using `%2d`.
+- `hh` - 2-digit hour from `timeptr->tm_hour` as if printed by `sprintf` using
+  `%.2d`.
+- `mm` - 2-digit minute from `timeptr->tm_min` as if printed by `sprintf` using
+  `%.2d`.
+- `ss` - 2-digit second from `timeptr->tm_sec` as if printed by `sprintf` using
+  `%.2d`.
+- `yyyy` - 4-digit year from `timeptr->tm_year + 1900` as if printed by
+  `sprintf` using `%4d`.
+
+The behavior is undefined if any member of `*time_ptr` is outside its normal
+range.
+
+The behavior is undefined if the calendar year indicated by `time_ptr->tm_year`
+has more than 4 digits or is less than the year 1000.
+
+The function does not support localization, and the newline character cannot be
+removed.
+
+The function modifies static storage and is not thread-safe.
+
+### Parameters
+
+- **time_ptr** — pointer to a `std::tm` object specifying the time to print
+
+### Return value
+
+Pointer to a static null-terminated character string holding the textual
+representation of date and time. The string may be shared between `std::asctime`
+and `std::ctime`, and may be overwritten on each invocation of any of those
+functions.
+
+### Notes
+
+This function returns a pointer to static data and is not thread-safe. POSIX
+marks this function obsolete and recommends locale-dependent `std::strftime`
+instead. In `std::locale``("C")` the `std::strftime` format string `"%c\n"` will
+be an exact match to `std::asctime` output, while in other locales the format
+string `"%a %b %e %H:%M:%S %Y\n"` will be a potentially closer but not always
+exact match.
+
+POSIX limits undefined behaviors only to the cases when the output string would
+be longer than 25 characters, when `timeptr->tm_wday` or `timeptr->tm_mon` are
+not within the expected ranges, or when `timeptr->tm_year` exceeds
+`INT_MAX-1990`.
+
+Some implementations handle `timeptr->tm_mday == 0` as meaning the last day of
+the preceding month.
+
+### Example
+
+```cpp
+#include <ctime>
+#include <iomanip>
+#include <iostream>
+
+int main()
+{
+    const std::time_t now = std::time(nullptr);
+
+    for (const char* localeName : {"C", "en_US.utf8", "de_DE.utf8", "ja_JP.utf8"})
+    {
+        std::cout << "locale " << localeName << ":\n" << std::left;
+        std::locale::global(std::locale(localeName));
+
+        std::cout << std::setw(40) << "    asctime" << std::asctime(std::localtime(&now));
+
+        // strftime output for comparison:
+        char buf[64];
+        if (strftime(buf, sizeof buf, "%c\n", std::localtime(&now)))
+            std::cout << std::setw(40) << "    strftime %c" << buf;
+
+        if (strftime(buf, sizeof buf, "%a %b %e %H:%M:%S %Y\n", std::localtime(&now)))
+            std::cout << std::setw(40) << "    strftime %a %b %e %H:%M:%S %Y" << buf;
+
+        std::cout << '\n';
+    }
+}
+```
+
+Possible output:
+
+```text
+locale C:
+    asctime                             Wed Nov  4 00:45:01 2020
+    strftime %c                         Wed Nov  4 00:45:01 2020
+    strftime %a %b %e %H:%M:%S %Y       Wed Nov  4 00:45:01 2020
+
+locale en_US.utf8:
+    asctime                             Wed Nov  4 00:45:01 2020
+    strftime %c                         Wed 04 Nov 2020 12:45:01 AM UTC
+    strftime %a %b %e %H:%M:%S %Y       Wed Nov  4 00:45:01 2020
+
+locale de_DE.utf8:
+    asctime                             Wed Nov  4 00:45:01 2020
+    strftime %c                         Mi 04 Nov 2020 00:45:01 UTC
+    strftime %a %b %e %H:%M:%S %Y       Mi Nov  4 00:45:01 2020
+
+locale ja_JP.utf8:
+    asctime                             Wed Nov  4 00:45:01 2020
+    strftime %c                         2020年11月04日 00時45分01秒
+    strftime %a %b %e %H:%M:%S %Y       水 11月  4 00:45:01 2020
+```
+
+### See also
+
+- **ctime** — converts a `std::time_t` object to a textual representation
+  (function)
+- **strftime** — converts a `std::tm` object to custom textual representation
+  (function)
+- **put_time (C++11)** — formats and outputs a date/time value according to the
+  specified format (function template)
+
+**C documentation for `asctime`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/chrono/c/asctime*

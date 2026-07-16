@@ -1,0 +1,86 @@
+# std::common_iterator<I,S>::common_iterator
+
+```cpp
+constexpr common_iterator() requires std::default_initializable<I> = default;  // (1) (since C++20)
+constexpr common_iterator( I i );  // (2) (since C++20)
+constexpr common_iterator( S s );  // (3) (since C++20)
+template< class I2, class S2 >
+requires std::convertible_to<const I2&, I> &&
+         std::convertible_to<const S2&, S>
+constexpr common_iterator( const common_iterator<I2, S2>& x );  // (4) (since C++20)
+```
+
+Constructs a new iterator adaptor, effectively initializes the underlying
+`std::variant<I, S>` member object `var` to hold an `I` (iterator) or `S`
+(sentinel) object.
+
+1) Default constructor. Default-initializes `var`. After construction, `var`
+   holds a value-initialized `I` object. Operations on the resulting iterator
+   adaptor have defined behavior if and only if the corresponding operations on
+   a value-initialized `I` also have defined behavior.
+
+2) After construction, `var` holds an `I` object move-constructed from `i`.
+
+3) After construction, `var` holds an `S` object move-constructed from `s`.
+
+4) After construction, `var` holds an `I` or `S` object initialized from the
+   `I2` or `S2` held by `x.var`, if `x.var` holds that alternative,
+   respectively. The behavior is undefined if `x` is in an invalid state, that
+   is, `x.var.valueless_by_exception()` is equal to `true`.
+
+### Parameters
+
+- **i** — iterator to adapt
+- **s** — sentinel to adapt
+- **x** — iterator adaptor to copy
+
+### Example
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <iterator>
+#include <numeric>
+#include <vector>
+
+int main()
+{
+    std::vector v{3, 1, 4, 1, 5, 9, 2};
+
+    using CI = std::common_iterator<
+                   std::counted_iterator<std::vector<int>::iterator>,
+                   std::default_sentinel_t>;
+    CI unused; // (1)
+    CI start{std::counted_iterator{std::next(begin(v)), ssize(v) - 2}}; // (2)
+    CI finish{std::default_sentinel}; // (3)
+    CI first{start}; // (4)
+    CI last{finish}; // (4)
+
+    std::copy(first, last, std::ostream_iterator<int>{std::cout, " "});
+    std::cout << '\n';
+
+    std::common_iterator<
+        std::counted_iterator<
+            std::ostream_iterator<double>>,
+            std::default_sentinel_t>
+            beg{std::counted_iterator{std::ostream_iterator<double>{std::cout,";  "}, 5}},
+            end{std::default_sentinel};
+    std::iota(beg, end, 3.1);
+    std::cout << '\n';
+}
+```
+
+Output:
+
+```text
+1 4 1 5 9
+3.1;  4.1;  5.1;  6.1;  7.1;
+```
+
+### See also
+
+- **operator= (C++20)** — assigns another iterator adaptor (public member
+  function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/iterator/common_iterator/common_iterator*

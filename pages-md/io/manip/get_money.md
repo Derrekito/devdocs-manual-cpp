@@ -1,0 +1,88 @@
+# std::get_money
+
+```cpp
+template< class MoneyT >
+/*unspecified*/ get_money( MoneyT& mon, bool intl = false );  // (since C++11)
+```
+
+When used in an expression `in >> get_money(mon, intl)`, parses the character
+input as a monetary value, as specified by the `std::money_get` facet of the
+locale currently imbued in `in`, and stores the value in `mon`.
+
+The extraction operation in `in >> get_money(mon, intl)` behaves as a
+FormattedInputFunction.
+
+### Parameters
+
+- **mon** — variable where monetary value will be written. Can be either `long
+  double` or `std::basic_string`
+- **intl** — expects to find required international currency strings if `true`,
+  expects optional currency symbols otherwise
+
+### Return value
+
+An object of unspecified type such that
+
+- if `in` is an object of type `std::basic_istream<CharT, Traits>`, the
+  expression `in >> get_money(mon, intl)` has type `std::basic_istream<CharT,
+  Traits>&` has value `in` behaves as if it called `f(in, mon, intl)`
+
+where the function `f` is defined as:
+
+```cpp
+template<class CharT, class Traits, class MoneyT>
+void f(std::basic_ios<CharT, Traits>& str, MoneyT& mon, bool intl)
+{
+    using Iter = std::istreambuf_iterator<CharT, Traits>;
+    using MoneyGet = std::money_get<CharT, Iter>;
+
+    std::ios_base::iostate err = std::ios_base::goodbit;
+    const MoneyGet& mg = std::use_facet<MoneyGet>(str.getloc());
+
+    mg.get(Iter(str.rdbuf()), Iter(), intl, str, err, mon);
+
+    if (err != std::ios_base::goodbit)
+        str.setstate(err);
+}
+```
+
+### Example
+
+```cpp
+#include <iomanip>
+#include <iostream>
+#include <locale>
+#include <sstream>
+
+int main()
+{
+    std::istringstream in("$1,234.56 2.22 USD  3.33");
+    long double v1, v2;
+    std::string v3;
+
+    in.imbue(std::locale("en_US.UTF-8"));
+    in >> std::get_money(v1) >> std::get_money(v2) >> std::get_money(v3, true);
+
+    if (in)
+        std::cout << std::quoted(in.str()) << " parsed as: "
+                  << v1 << ", " << v2 << ", " << v3 << '\n';
+    else
+        std::cout << "Parse failed";
+}
+```
+
+Output:
+
+```text
+"$1,234.56 2.22 USD  3.33" parsed as: 123456, 222, 333
+```
+
+### See also
+
+- **money_get** — parses and constructs a monetary value from an input character
+  sequence (class template)
+- **put_money (C++11)** — formats and outputs a monetary value (function
+  template)
+
+---
+*Source: https://en.cppreference.com/w/cpp/io/manip/get_money*

@@ -1,0 +1,162 @@
+# operator+,-,*,/,%(std::chrono::duration)
+
+```cpp
+template< class Rep1, class Period1, class Rep2, class Period2 >
+typename std::common_type<duration<Rep1,Period1>, duration<Rep2,Period2>>::type
+    constexpr operator+( const duration<Rep1,Period1>& lhs,
+                         const duration<Rep2,Period2>& rhs );  // (1) (since C++11)
+template< class Rep1, class Period1, class Rep2, class Period2 >
+typename std::common_type<duration<Rep1,Period1>, duration<Rep2,Period2>>::type
+    constexpr operator-( const duration<Rep1,Period1>& lhs,
+                         const duration<Rep2,Period2>& rhs );  // (2) (since C++11)
+template< class Rep1, class Period, class Rep2 >
+duration<typename std::common_type<Rep1,Rep2>::type, Period>
+    constexpr operator*( const duration<Rep1,Period>& d,
+                         const Rep2& s );  // (3) (since C++11)
+template< class Rep1, class Rep2, class Period >
+duration<typename std::common_type<Rep1,Rep2>::type, Period>
+    constexpr operator*( const Rep1& s,
+                         const duration<Rep2,Period>& d );  // (4) (since C++11)
+template< class Rep1, class Period, class Rep2 >
+duration<typename std::common_type<Rep1,Rep2>::type, Period>
+    constexpr operator/( const duration<Rep1,Period>& d,
+                         const Rep2& s );  // (5) (since C++11)
+template< class Rep1, class Period1, class Rep2, class Period2 >
+typename std::common_type<Rep1,Rep2>::type
+    constexpr operator/( const duration<Rep1,Period1>& lhs,
+                         const duration<Rep2,Period2>& rhs );  // (6) (since C++11)
+template< class Rep1, class Period, class Rep2 >
+duration<typename std::common_type<Rep1,Rep2>::type, Period>
+    constexpr operator%( const duration<Rep1, Period>& d,
+                         const Rep2& s );  // (7) (since C++11)
+template< class Rep1, class Period1, class Rep2, class Period2 >
+typename std::common_type<duration<Rep1,Period1>, duration<Rep2,Period2>>::type
+    constexpr operator%( const duration<Rep1,Period1>& lhs,
+                         const duration<Rep2,Period2>& rhs );  // (8) (since C++11)
+```
+
+Performs basic arithmetic operations between two durations or between a duration
+and a tick count.
+
+1) Converts the two durations to their common type and creates a duration whose
+   tick count is the sum of the tick counts after conversion.
+
+2) Converts the two durations to their common type and creates a duration whose
+   tick count is the `rhs` number of ticks subtracted from the `lhs` number of
+   ticks after conversion.
+
+3,4) Converts the duration `d` to one whose `rep` is the common type between
+   `Rep1` and `Rep2`, and multiples the number of ticks after conversion by `s`.
+   These overloads participate in overload resolution only if `s` is convertible
+   to `typename std::common_type<Rep1, Rep2>::type`.
+
+5) Converts the duration `d` to one whose `rep` is the common type between
+   `Rep1` and `Rep2`, and divides the number of ticks after conversion by `s`.
+   This overload participates in overload resolution only if `s` is convertible
+   to `typename std::common_type<Rep1, Rep2>::type` and `Rep2` is not a
+   specialization of `duration`.
+
+6) Converts the two durations to their common type and divides the tick count of
+   `lhs` after conversion by the tick count of `rhs` after conversion. Note that
+   the return value of this operator is not a duration.
+
+7) Converts the duration `d` to one whose `rep` is the common type between
+   `Rep1` and `Rep2`, and creates a duration whose tick count is the remainder
+   of the division of the tick count, after conversion, by `s`. This overload
+   participates in overload resolution only if `s` is convertible to `typename
+   std::common_type<Rep1, Rep2>::type` and `Rep2` is not a specialization of
+   `duration`.
+
+8) Converts the two durations to their common type and creates a duration whose
+   tick count is the remainder of the tick counts after conversion.
+
+### Parameters
+
+- **lhs** — duration on the left-hand side of the operator
+- **rhs** — duration on the right-hand side of the operator
+- **d** — the duration argument for mixed-argument operators
+- **s** — non-duration argument for mixed-argument operators
+
+### Return value
+
+Assuming that `CD` is the function return type and `CD<A, B> =
+std::common_type<A, B>::type`, then:
+
+1) `CD(CD(lhs).count() + CD(rhs).count())`
+
+2) `CD(CD(lhs).count() - CD(rhs).count())`
+
+3,4) `CD(CD(d).count() * s)`
+
+5) `CD(CD(d).count() / s)`
+
+6) `CD(lhs).count() / CD(rhs).count()` (the return type of this operator is not
+   a duration)
+
+7) `CD(CD(d).count() % s)`
+
+8) `CD(CD(lhs).count() % CD(rhs).count())`
+
+### Example
+
+```cpp
+#include <chrono>
+#include <iostream>
+
+int main()
+{
+    // Simple arithmetic:
+    std::chrono::seconds s = std::chrono::hours(1)
+                           + 2 * std::chrono::minutes(10)
+                           + std::chrono::seconds(70) / 10;
+    std::cout << "1 hour + 2*10 min + 70/10 sec = " << s << " (seconds)\n";
+
+    using namespace std::chrono_literals;
+
+    // Difference between dividing a duration by a number
+    // and dividing a duration by another duration:
+    std::cout << "Dividing that by 2 minutes gives "
+              << s / 2min << '\n'
+              << "Dividing that by 2 gives "
+              << (s / 2).count() << " seconds\n";
+
+    // The remainder operator is useful in determining where
+    // in a time frame is this particular duration, e.g. to
+    // break it down into hours, minutes, and seconds:
+    std::cout << s << " (seconds) = "
+              << std::chrono::duration_cast<std::chrono::hours>(
+                 s) << " (hour) + "
+              << std::chrono::duration_cast<std::chrono::minutes>(
+                 s % 1h) << " (minutes) + "
+              << std::chrono::duration_cast<std::chrono::seconds>(
+                 s % 1min) << " (seconds)\n";
+
+    constexpr auto sun_earth_distance{150'000'000ULL}; // km
+    constexpr auto speed_of_light{300000ULL}; // km/sec
+    std::chrono::seconds t(sun_earth_distance / speed_of_light); // sec
+    std::cout << "A photon flies from the Sun to the Earth in "
+              << t / 1min << " minutes " << t % 1min << " (seconds)\n";
+}
+```
+
+Output:
+
+```text
+1 hour + 2*10 min + 70/10 sec = 4807s (seconds)
+Dividing that by 2 minutes gives 40
+Dividing that by 2 gives 2403 seconds
+4807s (seconds) = 1h (hour) + 20min (minutes) + 7s (seconds)
+A photon flies from the Sun to the Earth in 8 minutes 20s (seconds)
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 3050 | C++11 | convertibility constraint used non-const xvalue | use const
+      lvalues instead
+
+---
+*Source: https://en.cppreference.com/w/cpp/chrono/duration/operator_arith4*

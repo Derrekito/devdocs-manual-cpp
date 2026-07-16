@@ -1,0 +1,102 @@
+# std::fseek
+
+```cpp
+int fseek( std::FILE* stream, long offset, int origin );
+```
+
+Sets the file position indicator for the file stream `stream`.
+
+If the `stream` is open in binary mode, the new position is exactly `offset`
+bytes measured from the beginning of the file if `origin` is `SEEK_SET`, from
+the current file position if `origin` is `SEEK_CUR`, and from the end of the
+file if `origin` is `SEEK_END`. Binary streams are not required to support
+`SEEK_END`, in particular if additional null bytes are output.
+
+If the `stream` is open in text mode, the only supported values for `offset` are
+zero (which works with any `origin`) and a value returned by an earlier call to
+`std::ftell` on a stream associated with the same file (which only works with
+`origin` of `SEEK_SET`).
+
+If the `stream` is wide-oriented, the restrictions of both text and binary
+streams apply (result of `std::ftell` is allowed with `SEEK_SET` and zero offset
+is allowed from `SEEK_SET` and `SEEK_CUR`, but not `SEEK_END`).
+
+In addition to changing the file position indicator, `fseek` undoes the effects
+of `std::ungetc` and clears the end-of-file status, if applicable.
+
+If a read or write error occurs, the error indicator for the stream
+(`std::ferror`) is set and the file position is unaffected.
+
+### Parameters
+
+- **stream** — file stream to modify
+- **offset** — number of characters to shift the position relative to origin
+- **origin** — position to which `offset` is added. It can have one of the
+  following values: `SEEK_SET`, `SEEK_CUR`, `SEEK_END`
+
+### Return value
+
+`​0​` upon success, nonzero value otherwise.
+
+### Notes
+
+After seeking to a non-end position in a wide stream, the next call to any
+output function may render the remainder of the file undefined, e.g. by
+outputting a multibyte sequence of a different length.
+
+POSIX allows seeking beyond the existing end of file. If an output is performed
+after this seek, any read from the gap will return zero bytes. Where supported
+by the filesystem, this creates a *sparse file*.
+
+POSIX also requires that `fseek` first performs `fflush` if there are any
+unwritten data (but whether the shift state is restored is
+implementation-defined). The standard C++ file streams guarantee both flushing
+and unshifting: `std::basic_filebuf::seekoff`.
+
+### Example
+
+```cpp
+#include <cassert>
+#include <cstdio>
+#include <cstdint>
+#include <fstream>
+#include <vector>
+
+int main()
+{
+    std::ofstream("dummy.nfo") << "8 bytes\n"; // create the file
+
+    std::FILE* fp = std::fopen("dummy.nfo", "rb");
+    assert(fp);
+
+    std::fseek(fp, 0, SEEK_END); // seek to end
+    const std::size_t filesize = std::ftell(fp);
+    std::vector<std::uint8_t> buffer(filesize);
+
+    std::fseek(fp, 0, SEEK_SET); // seek to start
+    std::fread(buffer.data(), sizeof(std::uint8_t), buffer.size(), fp);
+
+    std::fclose(fp);
+    std::printf("I've read %zi bytes\n", filesize);
+}
+```
+
+Possible output:
+
+```text
+I've read 8 bytes
+```
+
+### See also
+
+- **fsetpos** — moves the file position indicator to a specific location in a
+  file (function)
+- **fgetpos** — gets the file position indicator (function)
+- **ftell** — returns the current file position indicator (function)
+- **rewind** — moves the file position indicator to the beginning in a file
+  (function)
+
+**C documentation for `fseek`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/io/c/fseek*

@@ -1,0 +1,105 @@
+# std::exp(std::complex)
+
+```cpp
+template< class T >
+std::complex<T> exp( const std::complex<T>& z );
+```
+
+Compute base-e exponential of `z`, that is *e* (Euler's number, `2.7182818`)
+raised to the `z` power.
+
+### Parameters
+
+- **z** — complex value
+
+### Return value
+
+If no errors occur, *e* raised to the power of `z`, \(\small e^z\)ez, is
+returned.
+
+### Error handling and special values
+
+Errors are reported consistent with `math_errhandling`.
+
+If the implementation supports IEEE floating-point arithmetic,
+
+- `std::exp(std::conj(z)) == std::conj(std::exp(z))`
+- If `z` is `(±0,+0)`, the result is `(1,+0)`
+- If `z` is `(x,+∞)` (for any finite x), the result is `(NaN,NaN)` and
+  `FE_INVALID` is raised.
+- If `z` is `(x,NaN)` (for any finite x), the result is `(NaN,NaN)` and
+  `FE_INVALID` may be raised.
+- If `z` is `(+∞,+0)`, the result is `(+∞,+0)`
+- If `z` is `(-∞,y)` (for any finite y), the result is `+0cis(y)`
+- If `z` is `(+∞,y)` (for any finite nonzero y), the result is `+∞cis(y)`
+- If `z` is `(-∞,+∞)`, the result is `(±0,±0)` (signs are unspecified)
+- If `z` is `(+∞,+∞)`, the result is `(±∞,NaN)` and `FE_INVALID` is raised (the
+  sign of the real part is unspecified)
+- If `z` is `(-∞,NaN)`, the result is `(±0,±0)` (signs are unspecified)
+- If `z` is `(+∞,NaN)`, the result is `(±∞,NaN)` (the sign of the real part is
+  unspecified)
+- If `z` is `(NaN,+0)`, the result is `(NaN,+0)`
+- If `z` is `(NaN,y)` (for any nonzero y), the result is `(NaN,NaN)` and
+  `FE_INVALID` may be raised
+- If `z` is `(NaN,NaN)`, the result is `(NaN,NaN)`
+
+where \(\small{\rm cis}(y)\)cis(y) is \(\small \cos(y)+{\rm i}\sin(y)\)cos(y) +
+i sin(y).
+
+### Notes
+
+The complex exponential function \(\small e^z\)ez for \(\small z = x + {\rm
+i}y\)z = x+iy equals \(\small e^x {\rm cis}(y)\)ex cis(y), or, \(\small e^x
+(\cos(y)+{\rm i}\sin(y))\)ex (cos(y) + i sin(y)).
+
+The exponential function is an *entire function* in the complex plane and has no
+branch cuts.
+
+The following have equivalent results when the real part is 0:
+
+- `std::exp(std::complex<float>(0, theta))`
+- `std::complex<float>(cosf(theta), sinf(theta))`
+- `std::polar(1.f, theta)`
+
+In this case `exp` can be about 4.5x slower. One of the other forms should be
+used instead of calling `exp` with an argument whose real part is literal 0.
+There is no benefit in trying to avoid `exp` with a runtime check of `z.real()
+== 0` though.
+
+### Example
+
+```cpp
+#include <cmath>
+#include <complex>
+#include <iostream>
+
+int main()
+{
+   const double pi = std::acos(-1.0);
+   const std::complex<double> i(0.0, 1.0);
+
+   std::cout << std::fixed << " exp(i * pi) = " << std::exp(i * pi) << '\n';
+}
+```
+
+Output:
+
+```text
+exp(i * pi) = (-1.000000,0.000000)
+```
+
+### See also
+
+- **log(std::complex)** — complex natural logarithm with the branch cuts along
+  the negative real axis (function template)
+- **expexpfexpl (C++11)(C++11)** — returns *e* raised to the given power
+  (\({\small e^x}\)ex) (function)
+- **exp(std::valarray)** — applies the function `std::exp` to each element of
+  valarray (function template)
+- **polar** — constructs a complex number from magnitude and phase angle
+  (function template)
+
+**C documentation for `cexp`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/numeric/complex/exp*

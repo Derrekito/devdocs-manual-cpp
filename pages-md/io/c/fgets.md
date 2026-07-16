@@ -1,0 +1,102 @@
+# std::fgets
+
+```cpp
+char* fgets( char* str, int count, std::FILE* stream );
+```
+
+Reads at most `count - 1` characters from the given file stream and stores them
+in the character array pointed to by `str`. Parsing stops if a newline character
+is found, in which case `str` will contain that newline character, or if
+end-of-file occurs. If bytes are read and no errors occur, writes a null
+character at the position immediately after the last character written to `str`.
+
+### Parameters
+
+- **str** — pointer to an element of a char array
+- **count** — maximum number of characters to write (typically the length of
+  `str`)
+- **stream** — file stream to read the data from
+
+### Return value
+
+`str` on success, null pointer on failure.
+
+If the end-of-file condition is encountered, sets the *eof* indicator on
+`stream` (see `std::feof()`). This is only a failure if it causes no bytes to be
+read, in which case a null pointer is returned and the contents of the array
+pointed to by `str` are not altered (i.e. the first byte is not overwritten with
+a null character).
+
+If the failure has been caused by some other error, sets the *error* indicator
+(see `std::ferror()`) on `stream`. The contents of the array pointed to by `str`
+are indeterminate (it may not even be null-terminated).
+
+### Notes
+
+POSIX additionally requires that `fgets` sets `errno` if it encounters a failure
+other than the end-of-file condition.
+
+Although the standard specification is unclear in the cases where `count <= 1`,
+common implementations do
+
+- if `count < 1`, do nothing, report error,
+- if `count == 1`,
+
+### Example
+
+```cpp
+#include <cstdio>
+#include <cstdlib>
+#include <iomanip>
+#include <iostream>
+#include <span>
+
+void dump(std::span<const char> buf, std::size_t offset)
+{
+    std::cout << std::dec;
+    for (char ch : buf)
+        std::cout << (ch >= ' ' ? ch : '.'), offset--;
+    std::cout << std::string(offset, ' ') << std::hex
+              << std::setfill('0') << std::uppercase;
+    for (unsigned ch : buf)
+        std::cout << std::setw(2) << ch << ' ';
+    std::cout << std::dec << '\n';
+}
+
+int main()
+{
+    std::FILE* tmpf = std::tmpfile();
+    std::fputs("Alan Turing\n", tmpf);
+    std::fputs("John von Neumann\n", tmpf);
+    std::fputs("Alonzo Church\n", tmpf);
+
+    std::rewind(tmpf);
+    for (char buf[8]; std::fgets(buf, sizeof buf, tmpf) != nullptr;)
+        dump(buf, 10);
+}
+```
+
+Output:
+
+```text
+Alan Tu.  41 6C 61 6E 20 54 75 00
+ring..u.  72 69 6E 67 0A 00 75 00
+John vo.  4A 6F 68 6E 20 76 6F 00
+n Neuma.  6E 20 4E 65 75 6D 61 00
+nn..uma.  6E 6E 0A 00 75 6D 61 00
+Alonzo .  41 6C 6F 6E 7A 6F 20 00
+Church..  43 68 75 72 63 68 0A 00
+```
+
+### See also
+
+- **scanffscanfsscanf** — reads formatted input from `stdin`, a file stream or a
+  buffer (function)
+- **gets (deprecated in C++11)(removed in C++14)** — reads a character string
+  from `stdin` (function)
+- **fputs** — writes a character string to a file stream (function)
+
+**C documentation for `fgets`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/io/c/fgets*

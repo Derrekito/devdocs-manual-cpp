@@ -1,0 +1,76 @@
+# std::contiguous_iterator
+
+```cpp
+template< class I >
+    concept contiguous_iterator =
+        std::random_access_iterator<I> &&
+        std::derived_from</*ITER_CONCEPT*/<I>, std::contiguous_iterator_tag> &&
+        std::is_lvalue_reference_v<std::iter_reference_t<I>> &&
+        std::same_as<
+            std::iter_value_t<I>, std::remove_cvref_t<std::iter_reference_t<I>>
+        > &&
+        requires(const I& i) {
+            { std::to_address(i) } ->
+              std::same_as<std::add_pointer_t<std::iter_reference_t<I>>>;
+        };  // (since C++20)
+```
+
+The `contiguous_iterator` concept refines `random_access_iterator` by providing
+a guarantee the denoted elements are stored contiguously in the memory.
+
+### Iterator concept determination
+
+Definition of this concept is specified via an exposition-only alias template
+`/*ITER_CONCEPT*/`.
+
+In order to determine `/*ITER_CONCEPT*/<I>`, let `ITER_TRAITS<I>` denote `I` if
+the specialization `std::iterator_traits<I>` is generated from the primary
+template, or `std::iterator_traits<I>` otherwise:
+
+- If `ITER_TRAITS<I>::iterator_concept` is valid and names a type,
+  `/*ITER_CONCEPT*/<I>` denotes the type.
+- Otherwise, if `ITER_TRAITS<I>::iterator_category` is valid and names a type,
+  `/*ITER_CONCEPT*/<I>` denotes the type.
+- Otherwise, if `std::iterator_traits<I>` is generated from the primary
+  template, `/*ITER_CONCEPT*/<I>` denotes `std::random_access_iterator_tag`.
+- Otherwise, `/*ITER_CONCEPT*/<I>` does not denote a type and results in a
+  substitution failure.
+
+### Semantic requirements
+
+Let `a` and `b` be dereferenceable iterators and `c` be a non-dereferenceable
+iterator of type `I` such that `b` is reachable from `a` and `c` is reachable
+from `b`. The type `I` models `contiguous_iterator` only if all the concepts it
+subsumes are modeled and:
+
+- `std::to_address(a) == std::addressof(*a)`,
+- `std::to_address(b) == std::to_address(a) + std::iter_difference_t<I>(b - a)`,
+  and
+- `std::to_address(c) == std::to_address(a) + std::iter_difference_t<I>(c - a)`.
+
+### Equality preservation
+
+Expressions declared in requires expressions of the standard library concepts
+are required to be equality-preserving (except where stated otherwise).
+
+### Implicit expression variations
+
+A requires expression that uses an expression that is non-modifying for some
+constant lvalue operand also requires implicit expression variations.
+
+### Notes
+
+`contiguous_iterator` is modeled by every pointer type to complete object type.
+
+Iterator types in the standard library that are required to satisfy the
+LegacyContiguousIterator requirements in C++17 are also required to model
+`contiguous_iterator` in C++20.
+
+### See also
+
+- **random_access_iterator (C++20)** — specifies that a `bidirectional_iterator`
+  is a random-access iterator, supporting advancement in constant time and
+  subscripting (concept)
+
+---
+*Source: https://en.cppreference.com/w/cpp/iterator/contiguous_iterator*

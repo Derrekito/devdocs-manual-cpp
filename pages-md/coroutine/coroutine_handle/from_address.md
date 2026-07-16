@@ -1,0 +1,43 @@
+# std::coroutine_handle<Promise>::from_address
+
+```cpp
+static constexpr coroutine_handle from_address( void *addr );  // (since C++20)
+```
+
+Creates a `coroutine_handle` from a null pointer value or an underlying address
+of another `coroutine_handle`. The underlying address of return value is `addr`.
+
+The behavior is undefined if `addr` is neither a null pointer value nor an
+underlying address of a `coroutine_handle`. The behavior is also undefined if
+the `addr` is an underlying address of a `std::coroutine_handle<P1>`, where both
+`Promise` and `P1` are not `void`, and `P1` is different from `Promise`.
+
+This function is not declared for specialization
+`std::coroutine_handle<std::noop_coroutine_promise>`.
+
+### Parameters
+
+- **addr** — underlying address to import
+
+### Return value
+
+A `std::coroutine_handle<Promise>` whose underlying address is `addr`.
+
+### Notes
+
+If `addr` is not a null pointer value, it must be obtained from a prior call to
+`address()` on a `coroutine_handle` referring to some coroutine.
+
+### Example
+
+### See also
+
+- **(constructor) (C++20)** — constructs a `coroutine_handle` object (public
+  member function)
+- **from_promise [static] (C++20)** — creates a `coroutine_handle` from the
+  promise object of a coroutine (public static member function)
+- **noop_coroutine (C++20)** — creates a coroutine handle that has no observable
+  effects when resumed or destroyed (function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/coroutine/coroutine_handle/from_address*

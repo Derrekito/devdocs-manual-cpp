@@ -1,0 +1,125 @@
+# std::nearbyint, std::nearbyintf, std::nearbyintl
+
+```cpp
+float       nearbyint ( float num );
+double      nearbyint ( double num );
+long double nearbyint ( long double num );  // (until C++23)
+/* floating-point-type */
+            nearbyint ( /* floating-point-type */ num );  // (since C++23)
+float       nearbyintf( float num );  // (2) (since C++11)
+long double nearbyintl( long double num );  // (3) (since C++11)
+Additional overloads (since C++11)
+template< class Integer >
+double      nearbyint ( Integer num );  // (A)
+```
+
+1-3) Rounds the floating-point argument `num` to an integer value in
+   floating-point format, using the current rounding mode. The library provides
+   overloads of `std::nearbyint` for all cv-unqualified floating-point types as
+   the type of the parameter.(since C++23)
+
+A) Additional overloads are provided for all integer types, which are treated as
+double.
+*(since C++11)*
+
+### Parameters
+
+- **num** — floating-point or integer value
+
+### Return value
+
+The nearest integer value to `num`, according to the current rounding mode, is
+returned.
+
+### Error handling
+
+This function is not subject to any of the errors specified in
+`math_errhandling`.
+
+If the implementation supports IEEE floating-point arithmetic (IEC 60559),
+
+- `FE_INEXACT` is never raised.
+- If `num` is ±∞, it is returned, unmodified.
+- If `num` is ±0, it is returned, unmodified.
+- If `num` is NaN, NaN is returned.
+
+### Notes
+
+The only difference between `std::nearbyint` and `std::rint` is that
+`std::nearbyint` never raises `FE_INEXACT`.
+
+The largest representable floating-point values are exact integers in all
+standard floating-point formats, so `std::nearbyint` never overflows on its own;
+however the result may overflow any integer type (including `std::intmax_t`),
+when stored in an integer variable.
+
+If the current rounding mode is `FE_TONEAREST`, this function rounds to even in
+halfway cases (like `std::rint`, but unlike `std::round`).
+
+The additional overloads are not required to be provided exactly as (A). They
+only need to be sufficient to ensure that for their argument `num` of integer
+type, `std::nearbyint(num)` has the same effect as
+`std::nearbyint(static_cast<double>(num))`.
+
+### Example
+
+```cpp
+#include <cfenv>
+#include <cmath>
+#include <iostream>
+#pragma STDC FENV_ACCESS ON
+
+int main()
+{
+    std::fesetround(FE_TONEAREST);
+    std::cout << "rounding to nearest: \n"
+              << "nearbyint(+2.3) = " << std::nearbyint(2.3)
+              << "  nearbyint(+2.5) = " << std::nearbyint(2.5)
+              << "  nearbyint(+3.5) = " << std::nearbyint(3.5) << '\n'
+              << "nearbyint(-2.3) = " << std::nearbyint(-2.3)
+              << "  nearbyint(-2.5) = " << std::nearbyint(-2.5)
+              << "  nearbyint(-3.5) = " << std::nearbyint(-3.5) << '\n';
+
+    std::fesetround(FE_DOWNWARD);
+    std::cout << "rounding down:\n"
+              << "nearbyint(+2.3) = " << std::nearbyint(2.3)
+              << "  nearbyint(+2.5) = " << std::nearbyint(2.5)
+              << "  nearbyint(+3.5) = " << std::nearbyint(3.5) << '\n'
+              << "nearbyint(-2.3) = " << std::nearbyint(-2.3)
+              << "  nearbyint(-2.5) = " << std::nearbyint(-2.5)
+              << "  nearbyint(-3.5) = " << std::nearbyint(-3.5) << '\n';
+
+    std::cout << "nearbyint(-0.0) = " << std::nearbyint(-0.0)  << '\n'
+              << "nearbyint(-Inf) = " << std::nearbyint(-INFINITY) << '\n';
+}
+```
+
+Output:
+
+```text
+rounding to nearest:
+nearbyint(+2.3) = 2  nearbyint(+2.5) = 2  nearbyint(+3.5) = 4
+nearbyint(-2.3) = -2  nearbyint(-2.5) = -2  nearbyint(-3.5) = -4
+rounding down:
+nearbyint(+2.3) = 2  nearbyint(+2.5) = 2  nearbyint(+3.5) = 3
+nearbyint(-2.3) = -3  nearbyint(-2.5) = -3  nearbyint(-3.5) = -4
+nearbyint(-0.0) = -0
+nearbyint(-Inf) = -inf
+```
+
+### See also
+
+- **rintrintfrintllrintlrintflrintlllrintllrintfllrintl
+  (C++11)(C++11)(C++11)(C++11)(C++11)(C++11)(C++11)(C++11)(C++11)** — nearest
+  integer using current rounding mode with exception if the result differs
+  (function)
+- **roundroundfroundllroundlroundflroundlllroundllroundfllroundl
+  (C++11)(C++11)(C++11)(C++11)(C++11)(C++11)(C++11)(C++11)(C++11)** — nearest
+  integer, rounding away from zero in halfway cases (function)
+- **fegetroundfesetround (C++11)(C++11)** — gets or sets rounding direction
+  (function)
+
+**C documentation for `nearbyint`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/numeric/math/nearbyint*

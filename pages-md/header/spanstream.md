@@ -1,0 +1,247 @@
+# Standard library header <spanstream> (C++23)
+
+This header is part of the Input/Output library.
+
+**Classes**
+
+- **basic_spanbuf (C++23)** — implements raw fixed character buffer device
+  (class template)
+- **basic_ispanstream (C++23)** — implements fixed character buffer input
+  operations (class template)
+- **basic_ospanstream (C++23)** — implements fixed character buffer output
+  operations (class template)
+- **basic_spanstream (C++23)** — implements fixed character buffer input/output
+  operations (class template)
+- **`spanbuf` (C++23)** — `std::basic_spanbuf<char>` (typedef)
+- **`wspanbuf` (C++23)** — `std::basic_spanbuf<wchar_t>` (typedef)
+- **`ispanstream` (C++23)** — `std::basic_ispanstream<char>` (typedef)
+- **`wispanstream` (C++23)** — `std::basic_ispanstream<wchar_t>` (typedef)
+- **`ospanstream` (C++23)** — `std::basic_ospanstream<char>` (typedef)
+- **`wospanstream` (C++23)** — `std::basic_ospanstream<wchar_t>` (typedef)
+- **`spanstream` (C++23)** — `std::basic_spanstream<char>` (typedef)
+- **`wspanstream` (C++23)** — `std::basic_spanstream<wchar_t>` (typedef)
+
+**Functions**
+
+- **std::swap(std::basic_spanbuf) (C++23)** — specializes the `std::swap`
+  algorithm (function template)
+- **std::swap(std::basic_ispanstream) (C++23)** — specializes the `std::swap`
+  algorithm (function template)
+- **std::swap(std::basic_ospanstream) (C++23)** — specializes the `std::swap`
+  algorithm (function template)
+- **std::swap(std::basic_spanstream) (C++23)** — specializes the `std::swap`
+  algorithm (function template)
+
+### Synopsis
+
+```cpp
+namespace std {
+  template<class CharT, class Traits = char_traits<CharT>>
+    class basic_spanbuf;
+
+  using spanbuf = basic_spanbuf<char>;
+  using wspanbuf = basic_spanbuf<wchar_t>;
+
+  template<class CharT, class Traits = char_traits<CharT>>
+    class basic_ispanstream;
+
+  using ispanstream = basic_ispanstream<char>;
+  using wispanstream = basic_ispanstream<wchar_t>;
+
+  template<class CharT, class Traits = char_traits<CharT>>
+    class basic_ospanstream;
+
+  using ospanstream = basic_ospanstream<char>;
+  using wospanstream = basic_ospanstream<wchar_t>;
+
+  template<class CharT, class Traits = char_traits<CharT>>
+    class basic_spanstream;
+
+  using spanstream = basic_spanstream<char>;
+  using wspanstream = basic_spanstream<wchar_t>;
+}
+```
+
+#### Class template `std::basic_spanbuf`
+
+```cpp
+namespace std {
+  template<class CharT, class Traits = char_traits<CharT>>
+  class basic_spanbuf
+    : public basic_streambuf<CharT, Traits> {
+  public:
+    using char_type      = CharT;
+    using int_type       = typename Traits::int_type;
+    using pos_type       = typename Traits::pos_type;
+    using off_type       = typename Traits::off_type;
+    using traits_type    = Traits;
+
+    // constructors
+    basic_spanbuf() : basic_spanbuf(ios_base::in | ios_base::out) {}
+    explicit basic_spanbuf(ios_base::openmode which)
+      : basic_spanbuf(std::span<CharT>(), which) {}
+    explicit basic_spanbuf(
+      std::span<CharT> s,
+      ios_base::openmode which = ios_base::in | ios_base::out);
+    basic_spanbuf(const basic_spanbuf&) = delete;
+    basic_spanbuf(basic_spanbuf&& rhs);
+
+    // assign and swap
+    basic_spanbuf& operator=(const basic_spanbuf&) = delete;
+    basic_spanbuf& operator=(basic_spanbuf&& rhs);
+    void swap(basic_spanbuf& rhs);
+
+    // get and set
+    std::span<CharT> span() const noexcept;
+    void span(std::span<CharT> s) noexcept;
+
+    protected:
+    // overridden virtual functions
+    basic_streambuf<CharT, Traits>* setbuf(CharT*, streamsize) override;
+    pos_type seekoff(off_type off, ios_base::seekdir way,
+                     ios_base::openmode which
+                       = ios_base::in | ios_base::out) override;
+    pos_type seekpos(pos_type sp,
+                     ios_base::openmode which
+                       = ios_base::in | ios_base::out) override;
+
+  private:
+    ios_base::openmode mode; // exposition only
+    std::span<CharT> buf; // exposition only
+  };
+
+  template<class CharT, class Traits>
+    void swap(basic_spanbuf<CharT, Traits>& x,
+              basic_spanbuf<CharT, Traits>& y);
+}
+```
+
+#### Class template `std::basic_ispanstream`
+
+```cpp
+namespace std {
+  template<class CharT, class Traits = char_traits<CharT>>
+  class basic_ispanstream
+    : public basic_istream<CharT, Traits> {
+  public:
+    using char_type      = CharT;
+    using int_type       = typename Traits::int_type;
+    using pos_type       = typename Traits::pos_type;
+    using off_type       = typename Traits::off_type;
+    using traits_type    = Traits;
+
+    // constructors
+    explicit basic_ispanstream(
+      std::span<CharT> s,
+      ios_base::openmode which = ios_base::in);
+    basic_ispanstream(const basic_ispanstream&) = delete;
+    basic_ispanstream(basic_ispanstream&& rhs);
+    template<class ROS>
+    explicit basic_ispanstream(ROS&& s);
+
+    // assign and swap
+    basic_ispanstream& operator=(const basic_ispanstream&) = delete;
+    basic_ispanstream& operator=(basic_ispanstream&& rhs);
+    void swap(basic_ispanstream& rhs);
+
+    // members
+    basic_spanbuf<CharT, Traits>* rdbuf() const noexcept;
+    std::span<const CharT> span() const noexcept;
+    void span(std::span<CharT> s) noexcept;
+    template<class ROS>
+    void span(ROS&& s) noexcept;
+
+  private:
+    basic_spanbuf<CharT, Traits> sb; // exposition only
+  };
+
+  template<class CharT, class Traits>
+    void swap(basic_ispanstream<CharT, Traits>& x,
+              basic_ispanstream<CharT, Traits>& y);
+}
+```
+
+#### Class template `std::basic_ospanstream`
+
+```cpp
+namespace std {
+  template<class CharT, class Traits = char_traits<CharT>>
+  class basic_ospanstream
+    : public basic_ostream<CharT, Traits> {
+  public:
+    using char_type      = CharT;
+    using int_type       = typename Traits::int_type;
+    using pos_type       = typename Traits::pos_type;
+    using off_type       = typename Traits::off_type;
+    using traits_type    = Traits;
+
+    // constructors
+    explicit basic_ospanstream(
+      std::span<CharT> s,
+      ios_base::openmode which = ios_base::out);
+    basic_ospanstream(const basic_ospanstream&) = delete;
+    basic_ospanstream(basic_ospanstream&& rhs);
+
+    // assign and swap
+    basic_ospanstream& operator=(const basic_ospanstream&) = delete;
+    basic_ospanstream& operator=(basic_ospanstream&& rhs);
+    void swap(basic_ospanstream& rhs);
+
+    // members
+    basic_spanbuf<CharT, Traits>* rdbuf() const noexcept;
+    std::span<CharT> span() const noexcept;
+    void span(std::span<CharT> s) noexcept;
+
+  private:
+    basic_spanbuf<CharT, Traits> sb; // exposition only
+  };
+
+  template<class CharT, class Traits>
+    void swap(basic_ospanstream<CharT, Traits>& x,
+              basic_ospanstream<CharT, Traits>& y);
+}
+```
+
+#### Class template `std::basic_spanstream`
+
+```cpp
+namespace std {
+  template<class CharT, class Traits = char_traits<CharT>>
+  class basic_spanstream
+    : public basic_iostream<CharT, Traits> {
+  public:
+    using char_type     = CharT;
+    using int_type      = typename Traits::int_type;
+    using pos_type      = typename Traits::pos_type;
+    using off_type      = typename Traits::off_type;
+    using traits_type   = Traits;
+
+    // constructors
+    explicit basic_spanstream(
+      std::span<CharT> s,
+      ios_base::openmode which = ios_base::out | ios_base::in);
+    basic_spanstream(const basic_spanstream&) = delete;
+    basic_spanstream(basic_spanstream&& rhs);
+
+    // assign and swap
+    basic_spanstream& operator=(const basic_spanstream&) = delete;
+    basic_spanstream& operator=(basic_spanstream&& rhs);
+    void swap(basic_spanstream& rhs);
+
+    // members
+    basic_spanbuf<CharT, Traits>* rdbuf() const noexcept;
+    std::span<CharT> span() const noexcept;
+    void span(std::span<CharT> s) noexcept;
+
+  private:
+    basic_spanbuf<CharT, Traits> sb; // exposition only
+  };
+
+  template<class CharT, class Traits>
+    void swap(basic_spanstream<CharT, Traits>& x,
+              basic_spanstream<CharT, Traits>& y);
+}
+```
+
+---
+*Source: https://en.cppreference.com/w/cpp/header/spanstream*

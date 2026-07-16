@@ -1,0 +1,51 @@
+# std::indirectly_writable
+
+```cpp
+template< class Out, class T >
+    concept indirectly_writable =
+        requires(Out&& o, T&& t) {
+            *o = std::forward<T>(t);
+            *std::forward<Out>(o) = std::forward<T>(t);
+            const_cast<const std::iter_reference_t<Out>&&>(*o) = std::forward<T>(t);
+            const_cast<const std::iter_reference_t<Out>&&>(*std::forward<Out>(o)) =
+                std::forward<T>(t);
+        };
+        /* none of the four expressions above are required to be equality-preserving */  // (since C++20)
+```
+
+The concept `indirectly_writable<Out, T>` specifies the requirements for writing
+a value whose type and value category are encoded by `T` into an iterator
+`Out`'s referenced object.
+
+### Semantic requirements
+
+Let `e` be an expression such that `decltype((e))` is `T`, and `o` be a
+dereferenceable object of type `Out`, then `indirectly_writable<Out, T>` is
+modeled only if:
+
+- If `std::indirectly_readable<Out>` is modeled and `std::iter_value_t<Out>` is
+  the same type as `std::decay_t<T>`, then `*o` after any above assignment is
+  equal to the value of `e` before the assignment.
+
+`o` is not required to be dereferenceable after evaluating any of the assignment
+expressions above. If `e` is an xvalue, the resulting state of the object it
+denotes is valid but unspecified.
+
+### Equality preservation
+
+Expressions declared in requires expressions of the standard library concepts
+are required to be equality-preserving (except where stated otherwise).
+
+### Notes
+
+The only valid use of `operator*` is on the left side of an assignment
+expression. Assignment through the same value of an indirectly writable type may
+happen only once.
+
+The required expressions with `const_cast` prevent `indirectly_readable` objects
+with prvalue `reference` types from satisfying the syntactic requirements of
+`indirectly_writable` by accident, while permitting proxy references to continue
+to work as long as their constness is shallow. See Ranges TS issue 381.
+
+---
+*Source: https://en.cppreference.com/w/cpp/iterator/indirectly_writable*

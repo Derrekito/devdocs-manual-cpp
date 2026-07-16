@@ -1,0 +1,83 @@
+# std::basic_ofstream<CharT,Traits>::swap
+
+```cpp
+void swap( basic_ofstream& other );  // (since C++11)
+```
+
+Exchanges the state of the stream with those of `other`.
+
+This is done by calling `basic_ostream<CharT, Traits>::swap(other)` and
+`rdbuf()->swap(other.rdbuf())`.
+
+### Parameters
+
+- **other** — stream to exchange the state with
+
+### Return value
+
+(none)
+
+### Exceptions
+
+May throw implementation-defined exceptions.
+
+### Example
+
+```cpp
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <string>
+
+bool create_stream(std::fstream& fs, const std::string& path)
+{
+    try
+    {
+        std::fstream ts{path, ts.trunc | ts.in | ts.out};
+        if (ts.is_open())
+        {
+            ts.swap(fs); // stream objects are not copyable
+            return true;
+        }
+    }
+    catch (...)
+    {
+        std::cout << "Exception!\n";
+    }
+    return false;
+}
+
+void use_stream(std::fstream& fs)
+{
+    fs.seekg(0);
+    std::string data;
+    fs >> data;
+    std::cout << "data: " << std::quoted(data) << '\n';
+}
+
+int main()
+{
+    std::fstream fs;
+    std::string path = "/tmp/test_file.txt";
+    if (create_stream(fs, path))
+    {
+        fs.write(path.c_str(), path.length());
+        use_stream(fs);
+    }
+}
+```
+
+Possible output:
+
+```text
+data: "/tmp/test_file.txt"
+```
+
+### See also
+
+- **operator= (C++11)** — moves the file stream (public member function)
+- **swap (C++11)** — swaps two `basic_filebuf` objects (public member function
+  of `std::basic_filebuf<CharT,Traits>`)
+
+---
+*Source: https://en.cppreference.com/w/cpp/io/basic_ofstream/swap*

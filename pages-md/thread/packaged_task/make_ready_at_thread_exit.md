@@ -1,0 +1,82 @@
+# std::packaged_task<R(Args...)>::make_ready_at_thread_exit
+
+```cpp
+void make_ready_at_thread_exit( ArgTypes... args );  // (since C++11)
+```
+
+Calls the stored task as if by `INVOKE<R>(f, args...)`, where `f` is the stored
+task. The return value of the task or any exception thrown by it is stored in
+the shared state of `*this`.
+
+The shared state is only made ready after the current thread exits and all
+objects of thread-local storage duration are destroyed.
+
+### Parameters
+
+- **args** — the parameters to pass on invocation of the stored task
+
+### Return value
+
+(none)
+
+### Exceptions
+
+`std::future_error` on the following error conditions:
+
+- The stored task has already been invoked. The error category is set to
+  `promise_already_satisfied`.
+- `*this` has no shared state. The error category is set to `no_state`.
+
+### Example
+
+```cpp
+#include <chrono>
+#include <functional>
+#include <future>
+#include <iostream>
+#include <thread>
+#include <utility>
+
+void worker(std::future<void>& output)
+{
+    std::packaged_task<void(bool&)> my_task{[](bool& done) { done = true; }};
+    auto result = my_task.get_future();
+
+    bool done = false;
+    my_task.make_ready_at_thread_exit(done); // execute task right away
+
+    std::cout << "worker: done = " << std::boolalpha << done << std::endl;
+
+    auto status = result.wait_for(std::chrono::seconds(0));
+    if (status == std::future_status::timeout)
+        std::cout << "worker: result is not ready yet" << std::endl;
+
+    output = std::move(result);
+}
+
+int main()
+{
+    std::future<void> result;
+
+    std::thread{worker, std::ref(result)}.join();
+
+    auto status = result.wait_for(std::chrono::seconds(0));
+    if (status == std::future_status::ready)
+        std::cout << "main: result is ready" << std::endl;
+}
+```
+
+Output:
+
+```text
+worker: done = true
+worker: result is not ready yet
+main: result is ready
+```
+
+### See also
+
+- **operator()** — executes the function (public member function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/thread/packaged_task/make_ready_at_thread_exit*

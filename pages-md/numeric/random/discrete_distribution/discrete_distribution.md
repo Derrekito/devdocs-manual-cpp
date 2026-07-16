@@ -1,0 +1,52 @@
+# std::discrete_distribution<IntType>::discrete_distribution
+
+```cpp
+discrete_distribution();  // (1) (since C++11)
+template< class InputIt >
+discrete_distribution( InputIt first, InputIt last );  // (2) (since C++11)
+discrete_distribution( std::initializer_list<double> weights );  // (3) (since C++11)
+template< class UnaryOperation >
+discrete_distribution( std::size_t count, double xmin, double xmax,
+                       UnaryOperation unary_op );  // (4) (since C++11)
+explicit discrete_distribution( const param_type& params );  // (5) (since C++11)
+```
+
+Constructs a new distribution object.
+
+1) Default constructor. Constructs the distribution with a single weight p =
+   {1}. This distribution will always generate `​0​`.
+
+2) Constructs the distribution with weights in the range `[``first``,``last``)`.
+   If `first == last`, the effects are the same as of the default constructor.
+
+3) Constructs the distribution with weights in `weights`. Effectively calls
+   `discrete_distribution(weights.begin(), weights.end())`.
+
+4) Constructs the distribution with `count` weights that are generated using
+   function `unary_op`. Each of the weights is equal to wi = unary_op(xmin + δ(i
+   + 0.5)), where δ = (xmax − xmin)/count and i ∈ {0, ..., count − 1}. `xmin`
+   and `xmax` must be such that δ > 0. If `count == 0` the effects are the same
+   as of the default constructor.
+
+5) Constructs the distribution with `params` as the distribution parameters.
+
+### Parameters
+
+- **first, last** — the range of elements defining the numbers to use as
+  weights. The type of the elements referred by `InputIterator` must be
+  convertible to `double`
+- **weights** — initializer list containing the weights
+- **unary_op** — unary operation function object that will be applied. The
+  signature of the function should be equivalent to the following: `Ret
+  fun(const Type &a);` The signature does not need to have `const &`. The type
+  Type must be such that an object of type double can be dereferenced and then
+  implicitly converted to Type. The type `Ret` must be such that an object of
+  type `double` can be dereferenced and assigned a value of type `Ret`. ​
+- **params** — the distribution parameter set
+
+**Type requirements**
+
+**-`InputIt` must meet the requirements of LegacyInputIterator.**
+
+---
+*Source: https://en.cppreference.com/w/cpp/numeric/random/discrete_distribution/discrete_distribution*

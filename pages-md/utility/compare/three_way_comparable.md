@@ -1,0 +1,120 @@
+# std::three_way_comparable, std::three_way_comparable_with
+
+```cpp
+template< class T, class Cat = std::partial_ordering >
+concept three_way_comparable =
+    __WeaklyEqualityComparableWith<T, T> &&
+    __PartiallyOrderedWith<T, T> &&
+    requires(const std::remove_reference_t<T>& a,
+             const std::remove_reference_t<T>& b) {
+        { a <=> b } -> __ComparesAs<Cat>;
+    };  // (1) (since C++20)
+template< class T, class U, class Cat = std::partial_ordering >
+concept three_way_comparable_with =
+    std::three_way_comparable<T, Cat> &&
+    std::three_way_comparable<U, Cat> &&
+    __ComparisonCommonTypeWith<T, U> &&
+    std::three_way_comparable<
+        std::common_reference_t<
+            const std::remove_reference_t<T>&,
+            const std::remove_reference_t<U>&>, Cat> &&
+    __WeaklyEqualityComparableWith<T, U> &&
+    __PartiallyOrderedWith<T, U> &&
+    requires(const std::remove_reference_t<T>& t,
+             const std::remove_reference_t<U>& u) {
+        { t <=> u } -> __ComparesAs<Cat>;
+        { u <=> t } -> __ComparesAs<Cat>;
+    };  // (2) (since C++20)
+template< class T, class Cat >
+concept __ComparesAs =
+    std::same_as<std::common_comparison_category_t<T, Cat>, Cat>;  // (3) (exposition only*)
+```
+
+1) The concept `std::three_way_comparable` specifies that the three way
+   comparison operator `<=>` on `T` yield results consistent with the comparison
+   category implied by `Cat`.
+
+2) The concept `std::three_way_comparable_with` specifies that the three way
+   comparison operator `<=>` on (possibly mixed) `T` and `U` operands yield
+   results consistent with the comparison category implied by `Cat`. Comparing
+   mixed operands yields results equivalent to comparing the operands converted
+   to their common type.
+
+`__WeaklyEqualityComparableWith`, `__PartiallyOrderedWith`, and
+`__ComparisonCommonTypeWith` are exposition-only concepts. See descriptions of
+`equality_comparable` and `totally_ordered`.
+
+### Semantic requirements
+
+These concepts are modeled only if they are satisfied and all concepts they
+subsume are modeled.
+
+1) `T` and `Cat` model `std::three_way_comparable<T, Cat>` only if, given
+lvalues `a` and `b` of type `const std::remove_reference_t<T>`, following are
+true:
+
+- `(a <=> b == 0) == bool(a == b)`,
+- `(a <=> b != 0) == bool(a != b)`,
+- `((a <=> b) <=> 0)` and `(0 <=> (b <=> a))` are equal,
+- `bool(a > b) == bool(b < a)`,
+- `bool(a >= b) == !bool(a < b)`,
+- `bool(a <= b) == !bool(b < a)`,
+- `(a <=> b < 0) == bool(a < b)`,
+- `(a <=> b > 0) == bool(a > b)`,
+- `(a <=> b <= 0) == bool(a <= b)`, and
+- `(a <=> b >= 0) == bool(a >= b)`, and
+- if `Cat` is convertible to `std::strong_ordering`, `T` models
+  `totally_ordered`.
+
+2) `T`, `U`, and `Cat` model `std::three_way_comparable_with<T, U, Cat>` only if
+given
+
+- `t` and `t2`, lvalues denoting distinct equal objects of types `const
+  std::remove_reference_t<T>` and `std::remove_reference_t<T>` respectively, and
+- `u` and `u2`, lvalues denoting distinct equal objects of types `const
+  std::remove_reference_t<U>` and `std::remove_reference_t<U>` respectively.
+
+Let `C` be `std::common_reference_t<const std::remove_reference_t<T>&, const
+std::remove_reference_t<U>&>` and given an expression `E` and a type `C`, let
+`CONVERT_TO<C>(E)` be:
+
+- `static_cast<C>(std::as_const(E))`.
+*(until C++23)*
+
+- `static_cast<const C&>(std::as_const(E))` if that is a valid expression,
+- `static_cast<const C&>(std::move(E))` otherwise.
+*(since C++23)*
+
+the following are true:
+
+- `t <=> u` and `u <=> t` have the same domain,
+- `((t <=> u) <=> 0)` and `(0 <=> (u <=> t))` are equal,
+- `(t <=> u == 0) == bool(t == u)`,
+- `(t <=> u != 0) == bool(t != u)`,
+- `Cat(t <=> u) == Cat(CONVERT_TO<C>(t2) <=> CONVERT_TO<C>(u2))`,
+- `(t <=> u < 0) == bool(t < u)`,
+- `(t <=> u > 0) == bool(t > u)`,
+- `(t <=> u <= 0) == bool(t <= u)`,
+- `(t <=> u >= 0) == bool(t >= u)`, and
+- if `Cat` is convertible to `std::strong_ordering`, `T` and `U` model
+  `std::totally_ordered_with<T, U>`.
+
+### Equality preservation
+
+Expressions declared in requires expressions of the standard library concepts
+are required to be equality-preserving (except where stated otherwise).
+
+### Implicit expression variations
+
+A requires expression that uses an expression that is non-modifying for some
+constant lvalue operand also requires implicit expression variations.
+
+### See also
+
+- **equality_comparableequality_comparable_with (C++20)** — specifies that
+  operator `==` is an equivalence relation (concept)
+- **totally_orderedtotally_ordered_with (C++20)** — specifies that the
+  comparison operators on the type yield a total order (concept)
+
+---
+*Source: https://en.cppreference.com/w/cpp/utility/compare/three_way_comparable*

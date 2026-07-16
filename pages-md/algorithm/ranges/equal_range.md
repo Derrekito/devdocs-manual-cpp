@@ -1,0 +1,193 @@
+# std::ranges::equal_range
+
+```cpp
+Call signature
+template< std::forward_iterator I, std::sentinel_for<I> S,
+          class T, class Proj = std::identity,
+          std::indirect_strict_weak_order<
+              const T*,
+              std::projected<I, Proj>> Comp = ranges::less >
+constexpr ranges::subrange<I>
+    equal_range( I first, S last, const T& value, Comp comp = {}, Proj proj = {} );  // (1) (since C++20)
+template< ranges::forward_range R, class T, class Proj = std::identity,
+          std::indirect_strict_weak_order<
+              const T*,
+              std::projected<ranges::iterator_t<R>, Proj>> Comp = ranges::less >
+constexpr ranges::borrowed_subrange_t<R>
+    equal_range( R&& r, const T& value, Comp comp = {}, Proj proj = {} );  // (2) (since C++20)
+```
+
+1) Returns a view containing all elements equivalent to `value` in the range
+   `[``first``,``last``)`.
+
+The range `[``first``,``last``)` must be at least partially ordered with respect
+to `value`, i.e. it must satisfy all of the following requirements:
+
+- partitioned with respect to `element < value` or `comp(element, value)` (that
+  is, all elements for which the expression is `true` precedes all elements for
+  which the expression is `false`).
+- partitioned with respect to `!(value < element)` or `!comp(value, element)`.
+- for all elements, if `element < value` or `comp(element, value)` is `true`
+  then `!(value < element)` or `!comp(value, element)` is also `true`.
+
+A fully-sorted range meets these criteria.
+
+The returned view is constructed from two iterators, one pointing to the first
+element that is *not less* than `value` and another pointing to the first
+element *greater* than `value`. The first iterator may be alternatively obtained
+with `std::ranges::lower_bound()`, the second - with
+`std::ranges::upper_bound()`.
+
+2) Same as (1), but uses `r` as the source range, as if using the range
+   `ranges::begin(r)` as `first` and `ranges::end(r)` as `last`.
+
+The function-like entities described on this page are *niebloids*, that is:
+
+- Explicit template argument lists cannot be specified when calling any of them.
+- None of them are visible to argument-dependent lookup.
+- When any of them are found by normal unqualified lookup as the name to the
+  left of the function-call operator, argument-dependent lookup is inhibited.
+
+In practice, they may be implemented as function objects, or with special
+compiler extensions.
+
+### Parameters
+
+- **first, last** — the range of elements to examine
+- **r** — the range of the elements to examine
+- **value** — value to compare the elements to
+- **comp** — if the first argument is *less* than (i.e. is ordered before) the
+  second
+- **proj** — projection to apply to the elements
+
+### Return value
+
+`std::ranges::subrange` containing a pair of iterators defining the wanted
+range, the first pointing to the first element that is *not less* than `value`
+and the second pointing to the first element *greater* than `value`.
+
+If there are no elements *not less* than `value`, the last iterator (iterator
+that is equal to `last` or `ranges::end(r)`) is returned as the first element.
+Similarly if there are no elements *greater* than `value`, the last iterator is
+returned as the second element.
+
+### Complexity
+
+The number of comparisons performed is logarithmic in the distance between
+`first` and `last` (at most 2 * log2(last - first) + O(1) comparisons). However,
+for an iterator that does not model `random_access_iterator`, the number of
+iterator increments is linear.
+
+### Possible implementation
+
+```cpp
+struct equal_range_fn
+{
+    template<std::forward_iterator I, std::sentinel_for<I> S,
+             class T, class Proj = std::identity,
+             std::indirect_strict_weak_order<
+                 const T*,
+                 std::projected<I, Proj>> Comp = ranges::less>
+    constexpr ranges::subrange<I>
+        operator()(I first, S last, const T& value, Comp comp = {}, Proj proj = {}) const
+    {
+        return ranges::subrange(
+            ranges::lower_bound(first, last, value, std::ref(comp), std::ref(proj)),
+            ranges::upper_bound(first, last, value, std::ref(comp), std::ref(proj)));
+    }
+
+    template<ranges::forward_range R, class T, class Proj = std::identity,
+             std::indirect_strict_weak_order<
+                 const T*,
+                 std::projected<std::ranges::iterator_t<R>, Proj>> Comp = ranges::less>
+    constexpr ranges::borrowed_subrange_t<R>
+        operator()(R&& r, const T& value, Comp comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), value,
+                       std::ref(comp), std::ref(proj));
+    }
+};
+
+inline constexpr equal_range_fn equal_range;
+```
+
+### Example
+
+```cpp
+#include <algorithm>
+#include <compare>
+#include <iostream>
+#include <vector>
+
+struct S
+{
+    int number {};
+    char name {};
+    // note: name is ignored by these comparison operators
+    friend bool operator== (const S s1, const S s2) { return s1.number == s2.number; }
+    friend auto operator<=>(const S s1, const S s2) { return s1.number <=> s2.number; }
+    friend std::ostream& operator<<(std::ostream& os, S o)
+    {
+        return os << '{' << o.number << ", '" << o.name << "'}";
+    }
+};
+
+void println(auto rem, auto const& v)
+{
+    for (std::cout << rem; auto const& e : v)
+        std::cout << e << ' ';
+    std::cout << '\n';
+}
+
+int main()
+{
+    // note: not ordered, only partitioned w.r.t. S defined below
+    std::vector<S> vec
+    {
+        {1,'A'}, {2,'B'}, {2,'C'}, {2,'D'}, {4, 'D'}, {4,'G'}, {3,'F'}
+    };
+
+    const S value {2, '?'};
+
+    namespace ranges = std::ranges;
+
+    auto a = ranges::equal_range(vec, value);
+    println("1. ", a);
+
+    auto b = ranges::equal_range(vec.begin(), vec.end(), value);
+    println("2. ", b);
+
+    auto c = ranges::equal_range(vec, 'D', ranges::less {}, &S::name);
+    println("3. ", c);
+
+    auto d = ranges::equal_range(vec.begin(), vec.end(), 'D', ranges::less {}, &S::name);
+    println("4. ", d);
+}
+```
+
+Output:
+
+```text
+1. {2, 'B'} {2, 'C'} {2, 'D'}
+2. {2, 'B'} {2, 'C'} {2, 'D'}
+3. {2, 'D'} {4, 'D'}
+4. {2, 'D'} {4, 'D'}
+```
+
+### See also
+
+- **ranges::lower_bound (C++20)** — returns an iterator to the first element
+  *not less* than the given value (niebloid)
+- **ranges::upper_bound (C++20)** — returns an iterator to the first element
+  *greater* than a certain value (niebloid)
+- **ranges::binary_search (C++20)** — determines if an element exists in a
+  partially-ordered range (niebloid)
+- **ranges::partition (C++20)** — divides a range of elements into two groups
+  (niebloid)
+- **ranges::equal (C++20)** — determines if two sets of elements are the same
+  (niebloid)
+- **equal_range** — returns range of elements matching a specific key (function
+  template)
+
+---
+*Source: https://en.cppreference.com/w/cpp/algorithm/ranges/equal_range*

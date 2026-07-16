@@ -1,0 +1,71 @@
+# std::regex_traits<CharT>::value
+
+```cpp
+int value( CharT ch, int radix ) const;  // (since C++11)
+```
+
+Determines the value represented by the digit `ch` in the numeric base `radix`,
+given the currently imbued locale. This function is called by `std::regex` when
+processing Quantifiers such as `{1`} or `{2,5`}, Backreferences such as `\1`,
+and hexadecimal and Unicode character escapes.
+
+### Parameters
+
+- **ch** — the character that may represent a digit
+- **radix** — either 8, 10, or 16
+
+### Return value
+
+The numeric value if `ch` indeed represents a digit in the currently imbued
+locale that is valid for the numeric base `radix`, or `-1` on error.
+
+### Example
+
+```cpp
+#include <iostream>
+#include <locale>
+#include <map>
+#include <regex>
+
+// This custom regex traits allows japanese numerals
+struct jnum_traits : std::regex_traits<wchar_t>
+{
+    static std::map<wchar_t, int> data;
+    int value(wchar_t ch, int radix) const
+    {
+        wchar_t up = std::toupper(ch, getloc());
+        return data.count(up) ? data[up] : regex_traits::value(ch, radix);
+    }
+};
+std::map<wchar_t, int> jnum_traits::data = {{L'〇',0}, {L'一',1}, {L'二',2},
+                                            {L'三',3}, {L'四',4}, {L'五',5},
+                                            {L'六',6}, {L'七',7}, {L'八',8},
+                                            {L'九',9}, {L'Ａ',10}, {L'Ｂ',11},
+                                            {L'Ｃ',12}, {L'Ｄ',13}, {L'Ｅ',14},
+                                            {L'Ｆ',15}};
+
+int main()
+{
+    std::locale::global(std::locale("ja_JP.utf8"));
+    std::wcout.sync_with_stdio(false);
+    std::wcout.imbue(std::locale());
+
+    std::wstring in = L"風";
+
+    if (std::regex_match(in, std::wregex(L"\\u98a8")))
+        std::wcout << "\\u98a8 matched " << in << '\n';
+
+    if (std::regex_match(in, std::basic_regex<wchar_t, jnum_traits>(L"\\u九八ａ八")))
+        std::wcout << L"\\u九八ａ八 with custom traits matched " << in << '\n';
+}
+```
+
+Output:
+
+```text
+\u98a8 matched 風
+\u九八ａ八 with custom traits matched 風
+```
+
+---
+*Source: https://en.cppreference.com/w/cpp/regex/regex_traits/value*

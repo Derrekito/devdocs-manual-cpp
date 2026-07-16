@@ -1,0 +1,39 @@
+# std::indirectly_swappable
+
+```cpp
+template< class I1, class I2 = I1 >
+concept indirectly_swappable =
+    std::indirectly_readable<I1> &&
+    std::indirectly_readable<I2> &&
+    requires( const I1 i1, const I2 i2 )
+    {
+        ranges::iter_swap(i1, i1);
+        ranges::iter_swap(i1, i2);
+        ranges::iter_swap(i2, i1);
+        ranges::iter_swap(i2, i2);
+    };  // (since C++20)
+```
+
+The concept `indirectly_swappable` specifies a relationship between two types
+respectively modelling `std::indirectly_readable`, where their referenced types
+can be swapped.
+
+### Semantic requirements
+
+`I1` and `I2` model `indirectly_swappable` only if all concepts it subsumes are
+modeled.
+
+### Equality preservation
+
+Expressions declared in requires expressions of the standard library concepts
+are required to be equality-preserving (except where stated otherwise).
+
+### See also
+
+- **indirectly_readable (C++20)** — specifies that a type is indirectly readable
+  by applying operator `*` (concept)
+- **iter_swap (C++20)** — swaps the values referenced by two dereferenceable
+  objects (customization point object)
+
+---
+*Source: https://en.cppreference.com/w/cpp/iterator/indirectly_swappable*

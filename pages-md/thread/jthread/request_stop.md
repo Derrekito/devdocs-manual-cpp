@@ -1,0 +1,116 @@
+# std::jthread::request_stop
+
+```cpp
+bool request_stop() noexcept;  // (since C++20)
+```
+
+Issues a stop request to the internal stop-state, if it has not yet already had
+stop requested.
+
+The determination is made atomically, and if stop was requested, the stop-state
+is atomically updated to avoid race conditions, such that:
+
+- `stop_requested()` and `stop_possible()` can be concurrently invoked on other
+  `std::stop_token`s and `std::stop_source`s of the same shared stop-state.
+- `request_stop()` can be concurrently invoked from multiple threads on the same
+  `jthread` object or on other `std::stop_source` objects associated with the
+  same stop-state, and only one will actually perform the stop request.
+
+However, see the Notes section.
+
+### Parameters
+
+(none)
+
+### Return value
+
+`true` if this invocation made a stop request, otherwise `false`.
+
+### Postconditions
+
+For a `std::stop_token` retrieved by `get_stop_token()` or a `std::stop_source`
+retrieved by `get_stop_source()`, `stop_requested()` is `true`.
+
+### Notes
+
+If the `request_stop()` does issue a stop request (i.e., returns `true`), then
+any `std::stop_callbacks` registered for the same associated stop-state will be
+invoked synchronously, on the same thread `request_stop()` is issued on. If an
+invocation of a callback exits via an exception, `std::terminate` is called.
+
+If a stop request has already been made, this function returns `false`. However
+there is no guarantee that another thread or `std::stop_source` object which has
+just (successfully) requested stop for the same stop-state is not still in the
+middle of invoking a `std::stop_callback` function.
+
+If the `request_stop()` does issue a stop request (i.e., returns `true`), then
+all condition variables of base type `std::condition_variable_any` registered
+with an interruptible wait for `std::stop_token`s associated with the
+`jthread`'s internal stop-state will be awoken.
+
+### Example
+
+```cpp
+#include <chrono>
+#include <condition_variable>
+#include <iostream>
+#include <mutex>
+#include <thread>
+
+using namespace std::chrono_literals;
+
+int main()
+{
+    // A sleepy worker thread
+    std::jthread sleepy_worker([](std::stop_token stoken)
+    {
+        for (int i = 10; i; --i)
+        {
+            std::this_thread::sleep_for(300ms);
+            if (stoken.stop_requested())
+            {
+                std::cout << "Sleepy worker is requested to stop\n";
+                return;
+            }
+            std::cout << "Sleepy worker goes back to sleep\n";
+        }
+    });
+
+    // A waiting worker thread
+    // The condition variable will be awoken by the stop request.
+    std::jthread waiting_worker([](std::stop_token stoken)
+    {
+        std::mutex mutex;
+        std::unique_lock lock(mutex);
+        std::condition_variable_any().wait(lock, stoken,
+            [&stoken] { return false; });
+        if (stoken.stop_requested())
+        {
+            std::cout << "Waiting worker is requested to stop\n";
+            return;
+        }
+    });
+
+    // std::jthread::request_stop() can be called explicitly:
+    std::cout << "Requesting stop of sleepy worker\n";
+    sleepy_worker.request_stop();
+    sleepy_worker.join();
+    std::cout << "Sleepy worker joined\n";
+
+    // Or automatically using RAII:
+    // waiting_worker's destructor will call request_stop()
+    // and join the thread automatically.
+}
+```
+
+Possible output:
+
+```text
+Requesting stop of sleepy worker
+Sleepy worker is requested to stop
+Sleepy worker joined
+Waiting worker is requested to stop
+```
+
+---
+*Source: https://en.cppreference.com/w/cpp/thread/jthread/request_stop*

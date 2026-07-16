@@ -1,0 +1,92 @@
+# std::rethrow_exception
+
+```cpp
+[[noreturn]] void rethrow_exception( std::exception_ptr p );  // (since C++11)
+```
+
+Throws the previously captured exception object referred-to by the exception
+pointer `p`, or a copy of that object.
+
+It is unspecified whether a copy is made. If a copy is made, the storage for it
+is allocated in an unspecified way.
+
+The behavior is undefined if `p` is null.
+
+### Parameters
+
+- **p** — non-null `std::exception_ptr`
+
+### Return value
+
+(none)
+
+### Exceptions
+
+The exception object referred-to by `p` if no copy is made.
+
+Otherwise, a copy of such exception object if the implementation successfully
+copied the exception object.
+
+Otherwise, `std::bad_alloc` or the exception thrown when copying the exception
+object, if allocation or copying fails, respectively.
+
+### Notes
+
+Before P1675R2, `rethrow_exception` was not allowed to copy the exception
+object, which is unimplementable on some platforms where exception objects are
+allocated on the stack.
+
+### Example
+
+```cpp
+#include <exception>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+
+void handle_eptr(std::exception_ptr eptr) // passing by value is ok
+{
+    try
+    {
+        if (eptr)
+            std::rethrow_exception(eptr);
+    }
+    catch(const std::exception& e)
+    {
+        std::cout << "Caught exception: '" << e.what() << "'\n";
+    }
+}
+
+int main()
+{
+    std::exception_ptr eptr;
+
+    try
+    {
+        std::string().at(1); // this generates a std::out_of_range
+    }
+    catch(...)
+    {
+        eptr = std::current_exception(); // capture
+    }
+
+    handle_eptr(eptr);
+
+} // destructor for std::out_of_range called here, when the eptr is destructed
+```
+
+Possible output:
+
+```text
+Caught exception: 'basic_string::at: __n (which is 1) >= this->size() (which is 0)'
+```
+
+### See also
+
+- **exception_ptr (C++11)** — shared pointer type for handling exception objects
+  (typedef)
+- **current_exception (C++11)** — captures the current exception in a
+  `std::exception_ptr` (function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/error/rethrow_exception*

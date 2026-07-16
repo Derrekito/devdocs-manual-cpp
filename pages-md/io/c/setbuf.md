@@ -1,0 +1,84 @@
+# std::setbuf
+
+```cpp
+void setbuf( std::FILE* stream, char* buffer );
+```
+
+Sets the internal buffer to use for I/O operations performed on the C stream
+`stream`.
+
+If `buffer` is not null, equivalent to `std::setvbuf(stream, buffer, _IOFBF,
+BUFSIZ)`.
+
+If `buffer` is null, equivalent to `std::setvbuf(stream, nullptr, _IONBF, 0)`,
+which turns off buffering.
+
+### Parameters
+
+- **stream** — the file stream to set the buffer to
+- **buffer** — pointer to a buffer for the stream to use. If a null pointer is
+  supplied, the buffering is turned off. If not null, must be able to hold at
+  least `BUFSIZ` characters
+
+### Return value
+
+(none)
+
+### Notes
+
+If `BUFSIZ` is not the appropriate buffer size, `std::setvbuf` can be used to
+change it.
+
+`std::setvbuf` should also be used to detect errors, since `std::setbuf` does
+not indicate success or failure.
+
+This function may only be used after `stream` has been associated with an open
+file, but before any other operation (other than a failed call to
+`std::setbuf`/`std::setvbuf`).
+
+A common error is setting the buffer of `stdin` or `stdout` to an array whose
+lifetime ends before the program terminates:
+
+```cpp
+int main()
+{
+    char buf[BUFSIZ];
+    std::setbuf(stdin, buf);
+} // lifetime of buf ends, undefined behavior
+```
+
+### Example
+
+`std::setbuf` may be used to disable buffering on streams that require immediate
+output.
+
+```cpp
+#include <chrono>
+#include <cstdio>
+#include <thread>
+
+int main()
+{
+    using namespace std::chrono_literals;
+
+    std::setbuf(stdout, nullptr); // unbuffered stdout
+    std::putchar('a'); // appears immediately on unbuffered stream
+    std::this_thread::sleep_for(1s);
+    std::putchar('b');
+}
+```
+
+Output:
+
+```text
+ab
+```
+
+### See also
+
+- **setvbuf** — sets the buffer and its size for a file stream (function)
+
+**C documentation for `setbuf`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/io/c/setbuf*

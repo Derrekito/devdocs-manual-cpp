@@ -1,0 +1,187 @@
+# std::atomic_compare_exchange_weak, std::atomic_compare_exchange_strong, std::atomic_compare_exchange_weak_explicit, std::atomic_compare_exchange_strong_explicit
+
+```cpp
+template< class T >
+bool atomic_compare_exchange_weak
+    ( std::atomic<T>* obj, typename std::atomic<T>::value_type* expected,
+      typename std::atomic<T>::value_type desired ) noexcept;  // (1) (since C++11)
+template< class T >
+bool atomic_compare_exchange_weak
+    ( volatile std::atomic<T>* obj,
+      typename std::atomic<T>::value_type* expected,
+      typename std::atomic<T>::value_type desired ) noexcept;  // (2) (since C++11)
+template< class T >
+bool atomic_compare_exchange_strong
+    ( std::atomic<T>* obj, typename std::atomic<T>::value_type* expected,
+      typename std::atomic<T>::value_type desired ) noexcept;  // (3) (since C++11)
+template< class T >
+bool atomic_compare_exchange_strong
+    ( volatile std::atomic<T>* obj,
+      typename std::atomic<T>::value_type* expected,
+      typename std::atomic<T>::value_type desired ) noexcept;  // (4) (since C++11)
+template< class T >
+bool atomic_compare_exchange_weak_explicit
+    ( std::atomic<T>* obj, typename std::atomic<T>::value_type* expected,
+      typename std::atomic<T>::value_type desired,
+      std::memory_order success, std::memory_order failure ) noexcept;  // (5) (since C++11)
+template< class T >
+bool atomic_compare_exchange_weak_explicit
+    ( volatile std::atomic<T>* obj,
+      typename std::atomic<T>::value_type* expected,
+      typename std::atomic<T>::value_type desired,
+      std::memory_order success, std::memory_order failure ) noexcept;  // (6) (since C++11)
+template< class T >
+bool atomic_compare_exchange_strong_explicit
+    ( std::atomic<T>* obj, typename std::atomic<T>::value_type* expected,
+      typename std::atomic<T>::value_type desired,
+      std::memory_order success, std::memory_order failure ) noexcept;  // (7) (since C++11)
+template< class T >
+bool atomic_compare_exchange_strong_explicit
+    ( volatile std::atomic<T>* obj,
+      typename std::atomic<T>::value_type* expected,
+      typename std::atomic<T>::value_type desired,
+      std::memory_order success, std::memory_order failure ) noexcept;  // (8) (since C++11)
+```
+
+Atomically compares the object representation(until C++20)value
+representation(since C++20) of the object pointed to by `obj` with that of the
+object pointed to by `expected`, and if those are bitwise-equal, replaces the
+former with `desired` (performs read-modify-write operation). Otherwise, loads
+the actual value pointed to by `obj` into `*expected` (performs load operation).
+
+  Overloads | Memory model for
+  read‑modify‑write operation | load operation
+  (1-4) | `std::memory_order_seq_cst` | `std::memory_order_seq_cst`
+  (5-8) | `success` | `failure`
+
+These functions are defined in terms of member functions of `std::atomic`:
+
+1,2) `obj->compare_exchange_weak(*expected, desired)`
+
+3,4) `obj->compare_exchange_strong(*expected, desired)`
+
+5,6) `obj->compare_exchange_weak(*expected, desired, success, failure)`
+
+7,8) `obj->compare_exchange_strong(*expected, desired, success, failure)`
+
+If `failure` is stronger than `success` or(until C++17) is one of
+`std::memory_order_release` and `std::memory_order_acq_rel`, the behavior is
+undefined.
+
+### Parameters
+
+- **obj** — pointer to the atomic object to test and modify
+- **expected** — pointer to the value expected to be found in the atomic object
+- **desired** — the value to store in the atomic object if it is as expected
+- **success** — the memory synchronization ordering for the read-modify-write
+  operation if the comparison succeeds
+- **failure** — the memory synchronization ordering for the load operation if
+  the comparison fails
+
+### Return value
+
+The result of the comparison: `true` if `*obj` was equal to `*expected`, `false`
+otherwise.
+
+### Notes
+
+`std::atomic_compare_exchange_weak` and
+`std::atomic_compare_exchange_weak_explicit` (the weak versions) are allowed to
+fail spuriously, that is, act as if `*obj != *expected` even if they are equal.
+When a compare-and-exchange is in a loop, they will yield better performance on
+some platforms.
+
+When a weak compare-and-exchange would require a loop and a strong one would
+not, the strong one is preferable unless the object representation of `T` may
+include padding bits,(until C++20) trap bits, or offers multiple object
+representations for the same value (e.g. floating-point NaN). In those cases,
+weak compare-and-exchange typically works because it quickly converges on some
+stable object representation.
+
+For a union with bits that participate in the value representations of some
+members but not the others, compare-and-exchange might always fail because such
+padding bits have indeterminate values when they do not participate in the value
+representation of the active member.
+
+Padding bits that never participate in an object's value representation are
+ignored.
+*(since C++20)*
+
+### Example
+
+Compare and exchange operations are often used as basic building blocks of
+lockfree data structures.
+
+```cpp
+#include <atomic>
+
+template<class T>
+struct node
+{
+    T data;
+    node* next;
+    node(const T& data) : data(data), next(nullptr) {}
+};
+
+template<class T>
+class stack
+{
+    std::atomic<node<T>*> head;
+public:
+    void push(const T& data)
+    {
+        node<T>* new_node = new node<T>(data);
+
+        // put the current value of head into new_node->next
+        new_node->next = head.load(std::memory_order_relaxed);
+
+        // now make new_node the new head, but if the head
+        // is no longer what's stored in new_node->next
+        // (some other thread must have inserted a node just now)
+        // then put that new head into new_node->next and try again
+        while (!std::atomic_compare_exchange_weak_explicit(
+                   &head, &new_node->next, new_node,
+                   std::memory_order_release, std::memory_order_relaxed))
+            ; // the body of the loop is empty
+// note: the above loop is not thread-safe in at least
+// GCC prior to 4.8.3 (bug 60272), clang prior to 2014-05-05 (bug 18899)
+// MSVC prior to 2014-03-17 (bug 819819). See member function version for workaround
+    }
+};
+
+int main()
+{
+    stack<int> s;
+    s.push(1);
+    s.push(2);
+    s.push(3);
+}
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  P0558R1 | C++11 | exact type match was required because `T` was deduced from
+      multiple arguments | `T` is only deduced from `obj`
+
+### See also
+
+- **compare_exchange_weakcompare_exchange_strong** — atomically compares the
+  value of the atomic object with non-atomic argument and performs atomic
+  exchange if equal or atomic load if not (public member function of
+  `std::atomic<T>`)
+- **atomic_exchangeatomic_exchange_explicit (C++11)(C++11)** — atomically
+  replaces the value of the atomic object with non-atomic argument and returns
+  the old value of the atomic (function template)
+
+- **std::atomic_compare_exchange_weak(std::shared_ptr)
+  std::atomic_compare_exchange_strong(std::shared_ptr) (deprecated in C++20)** —
+  specializes atomic operations for std::shared_ptr (function template)
+
+**C documentation for `atomic_compare_exchange, atomic_compare_exchange_explicit`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/atomic/atomic_compare_exchange*

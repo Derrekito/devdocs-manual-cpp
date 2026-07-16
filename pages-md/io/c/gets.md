@@ -1,0 +1,89 @@
+# std::gets
+
+```cpp
+char* gets( char* str );  // (deprecated in C++11) (removed in C++14)
+```
+
+Reads `stdin` into given character string until a newline character is found or
+end-of-file occurs.
+
+### Parameters
+
+- **str** — character string to be written
+
+### Return value
+
+`str` on success, a null pointer on failure.
+
+If the failure has been caused by end of file condition, additionally sets the
+*eof* indicator (see `std::feof()`) on `stdin`. If the failure has been caused
+by some other error, sets the *error* indicator (see `std::ferror()`) on
+`stdin`.
+
+### Notes
+
+The `std::gets()` function does not perform bounds checking. Therefore, this
+function is extremely vulnerable to buffer-overflow attacks. It cannot be used
+safely (unless the program runs in an environment which restricts what can
+appear on `stdin`). For this reason, the function was deprecated in C++11 and
+removed altogether in C++14. `std::fgets()` may be used instead.
+
+### Example
+
+```cpp
+#include <array>
+#include <cstdio>
+#include <cstring>
+
+int main()
+{
+    std::puts("Never use std::gets(). Use std::fgets() instead!");
+
+    std::array<char, 16> buf;
+
+    std::printf("Enter a string:\n>");
+
+    if (std::fgets(buf.data(), buf.size(), stdin))
+    {
+        const auto len = std::strlen(buf.data());
+        std::printf(
+            "The input string:\n[%s] is %s and has the length %li characters.\n",
+            buf.data(), len + 1 < buf.size() ? "not truncated" : "truncated", len
+        );
+    }
+    else if (std::feof(stdin))
+    {
+        std::puts("Error: the end of stdin stream has been reached.");
+    }
+    else if (std::ferror(stdin))
+    {
+        std::puts("I/O error when reading from stdin.");
+    }
+    else
+    {
+        std::puts("Unknown stdin error.");
+    }
+}
+```
+
+Possible output:
+
+```text
+Never use std::gets(). Use std::fgets() instead!
+Enter a string:
+>Living on Earth is expensive, but it does include a free trip around the Sun.
+The input string:
+[Living on Earth] is truncated and has the length 15 characters.
+```
+
+### See also
+
+- **scanffscanfsscanf** — reads formatted input from `stdin`, a file stream or a
+  buffer (function)
+- **fgets** — gets a character string from a file stream (function)
+- **fputs** — writes a character string to a file stream (function)
+
+**C documentation for `gets`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/io/c/gets*

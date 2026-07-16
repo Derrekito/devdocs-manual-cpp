@@ -1,0 +1,55 @@
+# std::ios_base::Init
+
+```cpp
+class Init;
+```
+
+This class is used to ensure that the default C++ streams (`std::cin`,
+`std::cout`, etc.) are properly initialized and destructed. The class tracks how
+many instances of it are created and initializes the C++ streams when the first
+instance is constructed as well as flushes the output streams when the last
+instance is destructed.
+
+The header `<iostream>` behaves as if it defines (directly or indirectly) an
+instance of `std::ios_base::Init` with static storage duration: this makes it
+safe to access the standard I/O streams in the constructors and destructors of
+static objects with ordered initialization (as long as `<iostream>` is included
+in the translation unit before these objects were defined).
+
+Each C++ library module in a hosted implementation behaves as if it contains an
+interface unit that defines an unexported `std::ios_base::Init` variable with
+ordered initialization.
+As a result, the definition of that variable is appearance-ordered before any
+declaration following the point of importation of a C++ library module. Whether
+such a definition exists is unobservable by a program that does not reference
+any of the standard iostream objects.
+*(since C++23)*
+
+### Member functions
+
+- **(constructor)** — initializes the default C++ streams if they have not been
+  created yet (public member function)
+- **(destructor)** — flushes the default C++ streams if `*this` is the last
+  instance to be destroyed (public member function)
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 1123 | C++98 | the behaviors of the constructor and the destructor depend
+      on an exposition-only static data member `init_cnt` | removed the
+      dependency
+
+### See also
+
+- **cinwcin** — reads from the standard C input stream `stdin` (global object)
+- **coutwcout** — writes to the standard C output stream `stdout` (global
+  object)
+- **cerrwcerr** — writes to the standard C error stream `stderr`, unbuffered
+  (global object)
+- **clogwclog** — writes to the standard C error stream `stderr` (global object)
+
+---
+*Source: https://en.cppreference.com/w/cpp/io/ios_base/Init*

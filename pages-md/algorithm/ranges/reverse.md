@@ -1,0 +1,125 @@
+# std::ranges::reverse
+
+```cpp
+Call signature
+template< std::bidirectional_iterator I, std::sentinel_for<I> S >
+requires std::permutable<I>
+constexpr I
+    reverse( I first, S last );  // (1) (since C++20)
+template< ranges::bidirectional_range R >
+requires std::permutable<ranges::iterator_t<R>>
+constexpr ranges::borrowed_iterator_t<R>
+    reverse( R&& r );  // (2) (since C++20)
+```
+
+1) Reverses the order of the elements in the range `[``first``,``last``)`.
+
+Behaves as if applying `ranges::iter_swap` to every pair of iterators `first +
+   i, last - i - 1` for each integer `i`, where `0 ≤ i < (last - first) / 2`.
+
+2) Same as (1), but uses `r` as the range, as if using `ranges::begin(r)` as
+   `first` and `ranges::end(r)` as `last`.
+
+The function-like entities described on this page are *niebloids*, that is:
+
+- Explicit template argument lists cannot be specified when calling any of them.
+- None of them are visible to argument-dependent lookup.
+- When any of them are found by normal unqualified lookup as the name to the
+  left of the function-call operator, argument-dependent lookup is inhibited.
+
+In practice, they may be implemented as function objects, or with special
+compiler extensions.
+
+### Parameters
+
+- **first, last** — the range of elements to reverse
+- **r** — the range of elements to reverse
+
+### Return value
+
+An iterator equal to `last`.
+
+### Complexity
+
+Exactly `(last - first) / 2` swaps.
+
+### Notes
+
+Implementations (e.g. MSVC STL) may enable vectorization when the iterator type
+models `contiguous_iterator` and swapping its value type calls neither
+non-trivial special member function nor ADL-found `swap`.
+
+### Possible implementation
+
+See also implementations in libstdc++ and MSVC STL.
+
+```cpp
+struct reverse_fn
+{
+    template<std::bidirectional_iterator I, std::sentinel_for<I> S>
+    requires std::permutable<I>
+    constexpr I operator()(I first, S last) const
+    {
+        auto last2 {ranges::next(first, last)};
+        for (auto tail {last2}; !(first == tail or first == --tail); ++first)
+            ranges::iter_swap(first, tail);
+        return last2;
+    }
+
+    template<ranges::bidirectional_range R>
+    requires std::permutable<ranges::iterator_t<R>>
+    constexpr ranges::borrowed_iterator_t<R>
+        operator()(R&& r) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r));
+    }
+};
+
+inline constexpr reverse_fn reverse {};
+```
+
+### Example
+
+```cpp
+#include <algorithm>
+#include <array>
+#include <iostream>
+#include <string>
+
+int main()
+{
+    std::string s {"ABCDEF"};
+    std::cout << s << " → ";
+    std::ranges::reverse(s.begin(), s.end());
+    std::cout << s << " → ";
+    std::ranges::reverse(s);
+    std::cout << s << " │ ";
+
+    std::array a {1, 2, 3, 4, 5};
+    for (auto e : a)
+        std::cout << e << ' ';
+    std::cout << "→ ";
+    std::ranges::reverse(a);
+    for (auto e : a)
+        std::cout << e << ' ';
+    std::cout << '\n';
+}
+```
+
+Output:
+
+```text
+ABCDEF → FEDCBA → ABCDEF │ 1 2 3 4 5 → 5 4 3 2 1
+```
+
+### See also
+
+- **ranges::reverse_copy (C++20)** — creates a copy of a range that is reversed
+  (niebloid)
+- **ranges::reverse_viewviews::reverse (C++20)** — a `view` that iterates over
+  the elements of another bidirectional view in reverse order (class template)
+  (range adaptor object)
+- **reverse** — reverses the order of elements in a range (function template)
+
+---
+*Source: https://en.cppreference.com/w/cpp/algorithm/ranges/reverse*

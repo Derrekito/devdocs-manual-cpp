@@ -1,0 +1,42 @@
+# std::indirectly_movable_storable
+
+```cpp
+template< class In, class Out >
+concept indirectly_movable_storable =
+    std::indirectly_movable<In, Out> &&
+    std::indirectly_writable<Out, std::iter_value_t<In>> &&
+    std::movable<std::iter_value_t<In>> &&
+    std::constructible_from<std::iter_value_t<In>, std::iter_rvalue_reference_t<In>> &&
+    std::assignable_from<std::iter_value_t<In>&, std::iter_rvalue_reference_t<In>>;  // (since C++20)
+```
+
+The `indirectly_movable_storable` concept specifies the relationship between an
+`indirectly_readable` type and an `indirectly_writable` type. In addition to
+`indirectly_movable`, this concept specifies that the move from the
+`indirectly_readable` type can be performed via an intermediate object.
+
+### Semantic requirements
+
+`In` and `Out` model `std::indirectly_movable_storable<In, Out>` only if given a
+dereferenceable value `i` of type `In`:
+
+- After the definition `std::iter_value_t<In> obj(ranges::iter_move(i));`, `obj`
+  is equal to the value previously denoted by `*i`, and
+- if `std::iter_rvalue_reference_t<In>` is an rvalue reference type, `*i` is
+  placed in a valid but unspecified state after the initialization of `obj`.
+
+### Equality preservation
+
+Expressions declared in requires expressions of the standard library concepts
+are required to be equality-preserving (except where stated otherwise).
+
+### See also
+
+- **indirectly_movable (C++20)** — specifies that values may be moved from an
+  `indirectly_readable` type to an `indirectly_writable` type (concept)
+- **indirectly_copyable_storable (C++20)** — specifies that values may be copied
+  from an `indirectly_readable` type to an `indirectly_writable` type and that
+  the copy may be performed via an intermediate object (concept)
+
+---
+*Source: https://en.cppreference.com/w/cpp/iterator/indirectly_movable_storable*

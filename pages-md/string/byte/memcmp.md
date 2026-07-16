@@ -1,0 +1,88 @@
+# std::memcmp
+
+```cpp
+int memcmp( const void* lhs, const void* rhs, std::size_t count );
+```
+
+Reinterprets the objects pointed to by `lhs` and `rhs` as arrays of unsigned
+char and compares the first `count` bytes of these arrays. The comparison is
+done lexicographically.
+
+The sign of the result is the sign of the difference between the values of the
+first pair of bytes (both interpreted as unsigned char) that differ in the
+objects being compared.
+
+### Parameters
+
+- **lhs, rhs** — pointers to the memory buffers to compare
+- **count** — number of bytes to examine
+
+### Return value
+
+Negative value if the first differing byte (reinterpreted as unsigned char) in
+`lhs` is less than the corresponding byte in `rhs`.
+
+`​0​` if all `count` bytes of `lhs` and `rhs` are equal.
+
+Positive value if the first differing byte in `lhs` is greater than the
+corresponding byte in `rhs`.
+
+### Notes
+
+This function reads object representations, not the object values, and is
+typically meaningful for only trivially-copyable objects that have no padding.
+For example, `memcmp()` between two objects of type `std::string` or
+`std::vector` will not compare their contents, `memcmp()` between two objects of
+type `struct { char c; int n; }` will compare the padding bytes whose values may
+differ when the values of `c` and `n` are the same, and even if there were no
+padding bytes, the `int` would be compared without taking into account
+endianness.
+
+### Example
+
+```cpp
+#include <cstring>
+#include <iostream>
+
+void demo(const char* lhs, const char* rhs, std::size_t sz)
+{
+    std::cout << std::string(lhs, sz);
+    const int rc = std::memcmp(lhs, rhs, sz);
+    if (rc < 0)
+        std::cout << " precedes ";
+    else if (rc > 0)
+        std::cout << " follows ";
+    else
+        std::cout << " compares equal to ";
+    std::cout << std::string(rhs, sz) << " in lexicographical order\n";
+}
+
+int main()
+{
+    char a1[] = {'a', 'b', 'c'};
+    char a2[sizeof a1] = {'a', 'b', 'd'};
+
+    demo(a1, a2, sizeof a1);
+    demo(a2, a1, sizeof a1);
+    demo(a1, a1, sizeof a1);
+}
+```
+
+Output:
+
+```text
+abc precedes abd in lexicographical order
+abd follows abc in lexicographical order
+abc compares equal to abc in lexicographical order
+```
+
+### See also
+
+- **strcmp** — compares two strings (function)
+- **strncmp** — compares a certain number of characters from two strings
+  (function)
+
+**C documentation for `memcmp`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/string/byte/memcmp*

@@ -1,0 +1,98 @@
+# std::filesystem::directory_entry::assign
+
+```cpp
+void assign( const std::filesystem::path& p );  // (1) (since C++17)
+void assign( const std::filesystem::path& p, std::error_code& ec );  // (2) (since C++17)
+```
+
+Assigns new content to the directory entry object. Sets the path to `p` and
+calls `refresh` to update the cached attributes. If an error occurs, the values
+of the cached attributes are unspecified.
+
+This function does not commit any changes to the filesystem.
+
+### Parameters
+
+- **p** — path to the filesystem object to which the directory entry will refer
+- **ec** — out-parameter for error reporting in the non-throwing overload
+
+### Return value
+
+(none)
+
+### Exceptions
+
+Any overload not marked `noexcept` may throw `std::bad_alloc` if memory
+allocation fails.
+
+1) Throws `std::filesystem::filesystem_error` on underlying OS API errors,
+   constructed with `p` as the first path argument and the OS error code as the
+   error code argument.
+
+2) Sets a `std::error_code&` parameter to the OS API error code if an OS API
+   call fails, and executes `ec.clear()` if no errors occur.
+
+### Example
+
+```cpp
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+
+void print_entry_info(const std::filesystem::directory_entry& entry)
+{
+    if (std::cout << "The entry " << entry; not entry.exists())
+    {
+        std::cout << " does not exists on the file system\n";
+        return;
+    }
+    std::cout << " is ";
+    if (entry.is_directory())
+        std::cout << "a directory\n";
+    if (entry.is_regular_file())
+        std::cout << "a regular file\n";
+    /*...*/
+}
+
+int main()
+{
+    std::filesystem::current_path(std::filesystem::temp_directory_path());
+
+    std::filesystem::directory_entry entry{std::filesystem::current_path()};
+    print_entry_info(entry);
+
+    std::filesystem::path name{"cppreference.html"};
+    std::ofstream{name} << "C++";
+
+    std::cout << "entry.assign();\n";
+    entry.assign(entry/name);
+    print_entry_info(entry);
+
+    std::cout << "remove(entry);\n";
+    std::filesystem::remove(entry);
+    print_entry_info(entry); // the entry still contains old "state"
+
+    std::cout << "entry.assign();\n";
+    entry.assign(entry); // or just call entry.refresh()
+    print_entry_info(entry);
+}
+```
+
+Possible output:
+
+```text
+The entry "/tmp" is a directory
+entry.assign();
+The entry "/tmp/cppreference.html" is a regular file
+remove(entry);
+The entry "/tmp/cppreference.html" is a regular file
+entry.assign();
+The entry "/tmp/cppreference.html" does not exists on the file system
+```
+
+### See also
+
+- **operator=** — assigns contents (public member function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/filesystem/directory_entry/assign*

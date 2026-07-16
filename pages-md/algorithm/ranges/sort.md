@@ -1,0 +1,200 @@
+# std::ranges::sort
+
+```cpp
+Call signature
+template< std::random_access_iterator I, std::sentinel_for<I> S,
+          class Comp = ranges::less, class Proj = std::identity >
+requires std::sortable<I, Comp, Proj>
+constexpr I
+    sort( I first, S last, Comp comp = {}, Proj proj = {} );  // (1) (since C++20)
+template< ranges::random_access_range R, class Comp = ranges::less,
+          class Proj = std::identity >
+requires std::sortable<ranges::iterator_t<R>, Comp, Proj>
+constexpr ranges::borrowed_iterator_t<R>
+    sort( R&& r, Comp comp = {}, Proj proj = {} );  // (2) (since C++20)
+```
+
+Sorts the elements in the range `[``first``,``last``)` in non-descending order.
+The order of equivalent elements is not guaranteed to be preserved.
+
+A sequence is sorted with respect to a comparator `comp` if for any iterator
+`it` pointing to the sequence and any non-negative integer `n` such that `it +
+n` is a valid iterator pointing to an element of the sequence,
+`std::invoke(comp, std::invoke(proj, *(it + n)), std::invoke(proj, *it))`
+evaluates to `false`.
+
+1) Elements are compared using the given binary comparison function `comp`.
+
+2) Same as (1), but uses `r` as the source range, as if using `ranges::begin(r)`
+   as `first` and `ranges::end(r)` as `last`.
+
+The function-like entities described on this page are *niebloids*, that is:
+
+- Explicit template argument lists cannot be specified when calling any of them.
+- None of them are visible to argument-dependent lookup.
+- When any of them are found by normal unqualified lookup as the name to the
+  left of the function-call operator, argument-dependent lookup is inhibited.
+
+In practice, they may be implemented as function objects, or with special
+compiler extensions.
+
+### Parameters
+
+- **first, last** — iterator-sentinel defining the range to sort
+- **r** — the range to sort
+- **comp** — comparison to apply to the projected elements
+- **proj** — projection to apply to the elements
+
+### Return value
+
+An iterator equal to `last`.
+
+### Complexity
+
+\(\scriptsize \mathcal{O}(N\cdot\log{(N)})\)𝓞(N·log(N)) comparisons and
+projections, where `N = ranges::distance(first, last)`.
+
+### Possible implementation
+
+Note that typical implementations use Introsort. See also the implementation in
+MSVC STL and libstdc++.
+
+```cpp
+struct sort_fn
+{
+    template<std::random_access_iterator I, std::sentinel_for<I> S,
+             class Comp = ranges::less, class Proj = std::identity>
+    requires std::sortable<I, Comp, Proj>
+    constexpr I
+        operator()(I first, S last, Comp comp = {}, Proj proj = {}) const
+    {
+        if (first == last)
+            return first;
+
+        I last_iter = ranges::next(first, last);
+        ranges::make_heap(first, last_iter, std::ref(comp), std::ref(proj));
+        ranges::sort_heap(first, last_iter, std::ref(comp), std::ref(proj));
+
+        return last_iter;
+    }
+
+    template<ranges::random_access_range R, class Comp = ranges::less,
+             class Proj = std::identity>
+    requires std::sortable<ranges::iterator_t<R>, Comp, Proj>
+    constexpr ranges::borrowed_iterator_t<R>
+        operator()(R&& r, Comp comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(comp), std::move(proj));
+    }
+};
+
+inline constexpr sort_fn sort {};
+```
+
+### Notes
+
+`std::sort` uses `std::iter_swap` to swap elements, whereas `ranges::sort`
+instead uses `ranges::iter_swap` (which performs ADL for `iter_swap`, unlike
+`std::iter_swap`)
+
+### Example
+
+```cpp
+#include <algorithm>
+#include <array>
+#include <functional>
+#include <iomanip>
+#include <iostream>
+
+void print(auto comment, auto const& seq, char term = ' ')
+{
+    for (std::cout << comment << '\n'; auto const& elem : seq)
+        std::cout << elem << term;
+    std::cout << '\n';
+}
+
+struct Particle
+{
+    std::string name; double mass; // MeV
+    template<class Os> friend
+    Os& operator<<(Os& os, Particle const& p)
+    {
+        return os << std::left << std::setw(8) << p.name << " : " << p.mass << ' ';
+    }
+};
+
+int main()
+{
+    std::array s {5, 7, 4, 2, 8, 6, 1, 9, 0, 3};
+
+    namespace ranges = std::ranges;
+
+    ranges::sort(s);
+    print("Sort using the default operator<", s);
+
+    ranges::sort(s, ranges::greater());
+    print("Sort using a standard library compare function object", s);
+
+    struct
+    {
+        bool operator()(int a, int b) const { return a < b; }
+    } customLess;
+    ranges::sort(s.begin(), s.end(), customLess);
+    print("Sort using a custom function object", s);
+
+    ranges::sort(s, [](int a, int b) { return a > b; });
+    print("Sort using a lambda expression", s);
+
+    Particle particles[]
+    {
+        {"Electron", 0.511}, {"Muon", 105.66}, {"Tau", 1776.86},
+        {"Positron", 0.511}, {"Proton", 938.27}, {"Neutron", 939.57}
+    };
+    ranges::sort(particles, {}, &Particle::name);
+    print("\nSort by name using a projection", particles, '\n');
+    ranges::sort(particles, {}, &Particle::mass);
+    print("Sort by mass using a projection", particles, '\n');
+}
+```
+
+Output:
+
+```text
+Sort using the default operator<
+0 1 2 3 4 5 6 7 8 9
+Sort using a standard library compare function object
+9 8 7 6 5 4 3 2 1 0
+Sort using a custom function object
+0 1 2 3 4 5 6 7 8 9
+Sort using a lambda expression
+9 8 7 6 5 4 3 2 1 0
+
+Sort by name using a projection
+Electron : 0.511
+Muon     : 105.66
+Neutron  : 939.57
+Positron : 0.511
+Proton   : 938.27
+Tau      : 1776.86
+
+Sort by mass using a projection
+Electron : 0.511
+Positron : 0.511
+Muon     : 105.66
+Proton   : 938.27
+Neutron  : 939.57
+Tau      : 1776.86
+```
+
+### See also
+
+- **ranges::partial_sort (C++20)** — sorts the first N elements of a range
+  (niebloid)
+- **ranges::stable_sort (C++20)** — sorts a range of elements while preserving
+  order between equal elements (niebloid)
+- **ranges::partition (C++20)** — divides a range of elements into two groups
+  (niebloid)
+- **sort** — sorts a range into ascending order (function template)
+
+---
+*Source: https://en.cppreference.com/w/cpp/algorithm/ranges/sort*

@@ -1,0 +1,80 @@
+# std::bit_width
+
+```cpp
+template< class T >
+constexpr int bit_width( T x ) noexcept;  // (since C++20)
+```
+
+If `x` is not zero, calculates the number of bits needed to store the value `x`,
+that is, \(1 + \lfloor \log_2(x) \rfloor\)1 + floor(log2(x)). If `x` is zero,
+returns zero.
+
+This overload participates in overload resolution only if `T` is an unsigned
+integer type (that is, `unsigned char`, `unsigned short`, `unsigned int`,
+`unsigned long`, `unsigned long long`, or an extended unsigned integer type).
+
+### Parameters
+
+- **x** — unsigned integer value
+
+### Return value
+
+Zero if `x` is zero; otherwise, one plus the base-2 logarithm of `x`, with any
+fractional part discarded.
+
+### Notes
+
+This function is equivalent to `return std::numeric_limits<T>::digits -
+std::countl_zero(x);`.
+
+  Feature-test macro | Value | Std | Feature
+  `__cpp_lib_int_pow2` | 202002L | (C++20) | Integral power-of-2 operations
+
+### Example
+
+```cpp
+#include <bit>
+#include <bitset>
+#include <iostream>
+
+int main()
+{
+    for (unsigned x{0}; x != 8; ++x)
+    {
+        std::cout
+            << "bit_width( "
+            << std::bitset<4>{x} << " ) = "
+            << std::bit_width(x) << '\n';
+    }
+}
+```
+
+Output:
+
+```text
+bit_width( 0000 ) = 0
+bit_width( 0001 ) = 1
+bit_width( 0010 ) = 2
+bit_width( 0011 ) = 2
+bit_width( 0100 ) = 3
+bit_width( 0101 ) = 3
+bit_width( 0110 ) = 3
+bit_width( 0111 ) = 3
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 3656 | C++20 | the return type of `bit_width` is the same as the type of
+      its function argument | made it `int`
+
+### See also
+
+- **countl_zero (C++20)** — counts the number of consecutive `​0​` bits,
+  starting from the most significant bit (function template)
+
+---
+*Source: https://en.cppreference.com/w/cpp/numeric/bit_width*

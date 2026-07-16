@@ -1,0 +1,63 @@
+# std::initializer_list<T>::initializer_list
+
+```cpp
+initializer_list() noexcept;  // (since C++11) (until C++14)
+constexpr initializer_list() noexcept;  // (since C++14)
+```
+
+Constructs an empty initializer list.
+
+### Parameters
+
+(none)
+
+### Complexity
+
+Constant
+
+### Notes
+
+Despite a lack of constructors, it is possible to create non-empty initializer
+lists. Instances of `std::initializer_list` are implicitly constructed when:
+
+- a *braced-init-list* is used in list-initialization, including function-call
+  list initialization and assignment expressions (not to be confused with
+  constructor initializer lists)
+- a *braced-init-list* is bound to `auto`, including in a ranged for loop
+
+### Example
+
+```cpp
+#include <iostream>
+#include <initializer_list>
+
+int main()
+{
+    std::initializer_list<int> empty_list;
+    std::cout << "empty_list.size(): " << empty_list.size() << '\n';
+
+    // create initializer lists using list-initialization
+    std::initializer_list<int> digits {1, 2, 3, 4, 5};
+    std::cout << "digits.size(): " << digits.size() << '\n';
+
+    // special rule for auto means 'fractions' has the
+    // type std::initializer_list<double>
+    auto fractions = {3.14159, 2.71828};
+    std::cout << "fractions.size(): " << fractions.size() << '\n';
+
+    // create constexpr initializer list (since C++14)
+    static constexpr auto ab = {'a', 'b'};
+    static_assert(ab.size() == 2 and *ab.begin() == 'a');
+}
+```
+
+Output:
+
+```text
+empty_list.size(): 0
+digits.size(): 5
+fractions.size(): 2
+```
+
+---
+*Source: https://en.cppreference.com/w/cpp/utility/initializer_list/initializer_list*

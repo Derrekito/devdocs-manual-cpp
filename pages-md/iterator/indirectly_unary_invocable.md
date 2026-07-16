@@ -1,0 +1,43 @@
+# std::indirectly_unary_invocable, std::indirectly_regular_unary_invocable
+
+```cpp
+template< class F, class I >
+    concept indirectly_unary_invocable =
+        std::indirectly_readable<I> &&
+        std::copy_constructible<F> &&
+        std::invocable<F&, std::iter_value_t<I>&> &&
+        std::invocable<F&, std::iter_reference_t<I>> &&
+        std::invocable<F&, std::iter_common_reference_t<I>> &&
+        std::common_reference_with<
+            std::invoke_result_t<F&, std::iter_value_t<I>&>,
+            std::invoke_result_t<F&, std::iter_reference_t<I>>>;  // (since C++20)
+template< class F, class I >
+    concept indirectly_regular_unary_invocable =
+        std::indirectly_readable<I> &&
+        std::copy_constructible<F> &&
+        std::regular_invocable<F&, std::iter_value_t<I>&> &&
+        std::regular_invocable<F&, std::iter_reference_t<I>> &&
+        std::regular_invocable<F&, std::iter_common_reference_t<I>> &&
+        std::common_reference_with<
+            std::invoke_result_t<F&, std::iter_value_t<I>&>,
+            std::invoke_result_t<F&, std::iter_reference_t<I>>>;  // (since C++20)
+```
+
+The concepts `indirectly_unary_invocable` and
+`indirectly_regular_unary_invocable` specify requirements for algorithms that
+call (regular) unary invocables as their arguments. The key difference between
+these concepts and `std::invocable` is that they are applied to the type the `I`
+references, rather than `I` itself.
+
+### Semantic requirements
+
+Each concept is modeled by `F` and `I` only if all concepts it subsume are
+modeled.
+
+### Notes
+
+The distinction between `indirectly_unary_invocable` and
+`indirectly_regular_unary_invocable` is purely semantic.
+
+---
+*Source: https://en.cppreference.com/w/cpp/iterator/indirectly_unary_invocable*

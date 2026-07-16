@@ -1,0 +1,93 @@
+# std::chrono::duration<Rep,Period>::duration
+
+```cpp
+constexpr duration() = default;  // (1) (since C++11)
+duration( const duration& ) = default;  // (2) (since C++11)
+template< class Rep2 >
+constexpr explicit duration( const Rep2& r );  // (3) (since C++11)
+template< class Rep2, class Period2 >
+constexpr duration( const duration<Rep2,Period2>& d );  // (4) (since C++11)
+```
+
+Constructs a new `duration` from one of several optional data sources.
+
+1) The default constructor is defaulted.
+
+2) The copy constructor is defaulted (makes a bitwise copy of the tick count).
+
+3) Constructs a duration with `r` ticks. Note that this constructor only
+   participates in overload resolution if `const Rep2&` (the argument type) is
+   implicitly convertible to `rep` (the type of this duration's ticks) and
+
+- `std::chrono::treat_as_floating_point<rep>::value` is true, or
+- `std::chrono::treat_as_floating_point<Rep2>::value` is false.
+
+(that is, a duration with an integer tick count cannot be constructed from a
+   floating-point value, but a duration with a floating-point tick count can be
+   constructed from an integer value).
+
+4) Constructs a duration by converting `d` to an appropriate period and tick
+   count, as if by `std::chrono::duration_cast<duration>(d).count()`. In order
+   to prevent truncation during conversion, this constructor only participates
+   in overload resolution if computation of the conversion factor (by
+   `std::ratio_divide<Period2, Period>`) does not overflow and:
+
+- `std::chrono::treat_as_floating_point<rep>::value == true`
+
+or both:
+
+- `std::ratio_divide<Period2, period>::den == 1`, and
+- `std::chrono::treat_as_floating_point<Rep2>::value == false`.
+
+(that is, either the duration uses floating-point ticks, or `Period2` is exactly
+   divisible by period).
+
+### Parameters
+
+- **r** — a tick count
+- **d** — a duration to copy from
+
+### Example
+
+The following code shows several examples (both valid and invalid) of how to
+construct durations:
+
+```cpp
+#include <chrono>
+
+int main()
+{
+    std::chrono::hours h(1); // one hour
+    std::chrono::milliseconds ms{3}; // 3 milliseconds
+    std::chrono::duration<int, std::kilo> ks(3); // 3000 seconds
+
+    // error: treat_as_floating_point<int>::value == false,
+    // This duration allows whole tick counts only
+//  std::chrono::duration<int, std::kilo> d3(3.5);
+
+    // 30Hz clock using fractional ticks
+    std::chrono::duration<double, std::ratio<1, 30>> hz30(3.5);
+
+    // 3000 microseconds constructed from 3 milliseconds
+    std::chrono::microseconds us = ms;
+    // error: 1/1000000 is not divisible by 1/1000
+//  std::chrono::milliseconds ms2 = us
+    std::chrono::duration<double, std::milli> ms2 = us; // 3.0 milliseconds
+}
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 3050 | C++11 | convertibility constraint used non-const xvalue | use const
+      lvalues instead
+
+### See also
+
+- **operator=** — assigns the contents (public member function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/chrono/duration/duration*

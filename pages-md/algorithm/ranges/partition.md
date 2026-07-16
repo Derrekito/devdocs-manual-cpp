@@ -1,0 +1,178 @@
+# std::ranges::partition
+
+```cpp
+Call signature
+template< std::permutable I, std::sentinel_for<I> S, class Proj = std::identity,
+          std::indirect_unary_predicate<std::projected<I, Proj>> Pred >
+constexpr ranges::subrange<I>
+    partition( I first, S last, Pred pred, Proj proj = {} );  // (1) (since C++20)
+template< ranges::forward_range R, class Proj = std::identity,
+          std::indirect_unary_predicate<
+              std::projected<ranges::iterator_t<R>, Proj>> Pred >
+requires std::permutable<ranges::iterator_t<R>>
+constexpr ranges::borrowed_subrange_t<R>
+    partition( R&& r, Pred pred, Proj proj = {} );  // (2) (since C++20)
+```
+
+1) Reorders the elements in the range `[``first``,``last``)` in such a way that
+   the projection `proj` of all elements for which the predicate `pred` returns
+   `true` precede the projection `proj` of elements for which predicate `pred`
+   returns `false`. Relative order of elements is not preserved.
+
+2) Same as (1), but uses `r` as the source range, as if using `ranges::begin(r)`
+   as `first` and `ranges::end(r)` as `last`.
+
+The function-like entities described on this page are *niebloids*, that is:
+
+- Explicit template argument lists cannot be specified when calling any of them.
+- None of them are visible to argument-dependent lookup.
+- When any of them are found by normal unqualified lookup as the name to the
+  left of the function-call operator, argument-dependent lookup is inhibited.
+
+In practice, they may be implemented as function objects, or with special
+compiler extensions.
+
+### Parameters
+
+- **first, last** — the range of elements to reorder
+- **r** — the range of elements to reorder
+- **pred** — predicate to apply to the projected elements
+- **proj** — projection to apply to the elements
+
+### Return value
+
+A subrange starting with an iterator to the first element of the second group
+and finishing with an iterator equal to `last`. (2) returns
+`std::ranges::dangling` if `r` is an rvalue of non-`borrowed_range` type.
+
+### Complexity
+
+Given `N = ranges::distance(first, last)`, exactly N applications of the
+predicate and projection. At most N / 2 swaps if `I` models
+`ranges::bidirectional_iterator`, and at most N swaps otherwise.
+
+### Possible implementation
+
+```cpp
+struct partition_fn
+{
+    template<std::permutable I, std::sentinel_for<I> S, class Proj = std::identity,
+             std::indirect_unary_predicate<std::projected<I, Proj>> Pred>
+    constexpr ranges::subrange<I>
+        operator()(I first, S last, Pred pred, Proj proj = {}) const
+    {
+        first = ranges::find_if_not(first, last, std::ref(pred), std::ref(proj));
+        if (first == last)
+            return {first, first};
+
+        for (auto i = ranges::next(first); i != last; ++i)
+        {
+            if (std::invoke(pred, std::invoke(proj, *i)))
+            {
+                ranges::iter_swap(i, first);
+                ++first;
+            }
+        }
+        return {std::move(first), std::move(last)};
+    }
+
+    template<ranges::forward_range R, class Proj = std::identity,
+             std::indirect_unary_predicate<
+                 std::projected<ranges::iterator_t<R>, Proj>> Pred>
+    requires std::permutable<ranges::iterator_t<R>>
+    constexpr ranges::borrowed_subrange_t<R>
+        operator()(R&& r, Pred pred, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r),
+                       std::ref(pred), std::ref(proj));
+    }
+};
+
+inline constexpr partition_fn partition;
+```
+
+### Example
+
+```cpp
+#include <algorithm>
+#include <forward_list>
+#include <functional>
+#include <iostream>
+#include <iterator>
+#include <ranges>
+#include <vector>
+
+namespace ranges = std::ranges;
+
+template<class I, std::sentinel_for<I> S, class Cmp = ranges::less>
+requires std::sortable<I, Cmp>
+void quicksort(I first, S last, Cmp cmp = Cmp {})
+{
+    using reference = std::iter_reference_t<I>;
+
+    if (first == last)
+        return;
+
+    auto size = ranges::distance(first, last);
+    auto pivot = ranges::next(first, size - 1);
+    ranges::iter_swap(pivot, ranges::next(first, size / 2));
+
+    auto tail = ranges::partition(first, pivot, [=](reference em)
+    {
+        return std::invoke(cmp, em, *pivot); // em < pivot
+    });
+
+    ranges::iter_swap(pivot, tail.begin());
+    quicksort(first, tail.begin(), std::ref(cmp));
+    quicksort(ranges::next(tail.begin()), last, std::ref(cmp));
+}
+
+int main()
+{
+    std::ostream_iterator<int> cout {std::cout, " "};
+
+    std::vector<int> v {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    std::cout << "Original vector:  \t";
+    ranges::copy(v, cout);
+
+    auto tail = ranges::partition(v, [](int i) { return i % 2 == 0; });
+
+    std::cout << "\nPartitioned vector: \t";
+    ranges::copy(ranges::begin(v), ranges::begin(tail), cout);
+    std::cout << "│ ";
+    ranges::copy(tail, cout);
+
+    std::forward_list<int> fl {1, 30, -4, 3, 5, -4, 1, 6, -8, 2, -5, 64, 1, 92};
+    std::cout << "\nUnsorted list: \t\t";
+    ranges::copy(fl, cout);
+
+    quicksort(ranges::begin(fl), ranges::end(fl), ranges::greater {});
+    std::cout << "\nQuick-sorted list: \t";
+    ranges::copy(fl, cout);
+
+    std::cout << '\n';
+}
+```
+
+Possible output:
+
+```text
+Original vector:        0 1 2 3 4 5 6 7 8 9
+Partitioned vector:     0 8 2 6 4 │ 5 3 7 1 9
+Unsorted list:          1 30 -4 3 5 -4 1 6 -8 2 -5 64 1 92
+Quick-sorted list:      92 64 30 6 5 3 2 1 1 1 -4 -4 -5 -8
+```
+
+### See also
+
+- **ranges::partition_copy (C++20)** — copies a range dividing the elements into
+  two groups (niebloid)
+- **ranges::is_partitioned (C++20)** — determines if the range is partitioned by
+  the given predicate (niebloid)
+- **ranges::stable_partition (C++20)** — divides elements into two groups while
+  preserving their relative order (niebloid)
+- **partition** — divides a range of elements into two groups (function
+  template)
+
+---
+*Source: https://en.cppreference.com/w/cpp/algorithm/ranges/partition*

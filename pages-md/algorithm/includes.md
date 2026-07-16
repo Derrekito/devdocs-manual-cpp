@@ -1,0 +1,197 @@
+# std::includes
+
+```cpp
+template< class InputIt1, class InputIt2 >
+bool includes( InputIt1 first1, InputIt1 last1,
+               InputIt2 first2, InputIt2 last2 );  // (until C++20)
+template< class InputIt1, class InputIt2 >
+constexpr bool includes( InputIt1 first1, InputIt1 last1,
+                         InputIt2 first2, InputIt2 last2 );  // (since C++20)
+template< class ExecutionPolicy, class ForwardIt1, class ForwardIt2 >
+bool includes( ExecutionPolicy&& policy, ForwardIt1 first1, ForwardIt1 last1,
+               ForwardIt2 first2, ForwardIt2 last2 );  // (2) (since C++17)
+template< class InputIt1, class InputIt2, class Compare >
+bool includes( InputIt1 first1, InputIt1 last1,
+               InputIt2 first2, InputIt2 last2, Compare comp );  // (until C++20)
+template< class InputIt1, class InputIt2, class Compare >
+constexpr bool includes( InputIt1 first1, InputIt1 last1,
+                         InputIt2 first2, InputIt2 last2, Compare comp );  // (since C++20)
+template< class ExecutionPolicy, class ForwardIt1, class ForwardIt2,
+          class Compare >
+bool includes( ExecutionPolicy&& policy, ForwardIt1 first1, ForwardIt1 last1,
+               ForwardIt2 first2, ForwardIt2 last2, Compare comp );  // (4) (since C++17)
+```
+
+Returns `true` if the sorted range `[``first2``,``last2``)` is a subsequence of
+the sorted range `[``first1``,``last1``)` (a subsequence need not be
+contiguous).
+
+1) Both ranges must be sorted with `operator<`.
+
+3) Both ranges must be sorted with the given comparison function `comp`.
+
+2,4) Same as (1,3), but executed according to `policy`. These overloads do not
+   participate in overload resolution unless
+   `std::is_execution_policy_v<std::decay_t<ExecutionPolicy>>` is `true`. (until
+   C++20) `std::is_execution_policy_v<std::remove_cvref_t<ExecutionPolicy>>` is
+   `true`. (since C++20)
+
+### Parameters
+
+- **first1, last1** — the sorted range of elements to examine
+- **first2, last2** — the sorted range of elements to search for
+- **policy** — the execution policy to use. See execution policy for details.
+- **comp** — comparison function object (i.e. an object that satisfies the
+  requirements of Compare) which returns ​`true` if the first argument is *less*
+  than (i.e. is ordered *before*) the second. The signature of the comparison
+  function should be equivalent to the following: `bool cmp(const Type1& a,
+  const Type2& b);` While the signature does not need to have const&, the
+  function must not modify the objects passed to it and must be able to accept
+  all values of type (possibly const) `Type1` and `Type2` regardless of value
+  category (thus, `Type1&` is not allowed, nor is `Type1` unless for `Type1` a
+  move is equivalent to a copy(since C++11)). The types Type1 and Type2 must be
+  such that an object of type InputIt can be dereferenced and then implicitly
+  converted to both of them. ​
+
+**Type requirements**
+
+**-`InputIt1, InputIt2` must meet the requirements of LegacyInputIterator.**
+
+**-`ForwardIt1, ForwardIt2` must meet the requirements of LegacyForwardIterator.**
+
+### Return value
+
+`true` if `[``first2``,``last2``)` is a subsequence of `[``first1``,``last1``)`;
+otherwise `false`.
+
+An empty sequence is a subsequence of any sequence, so `true` is returned if
+`[``first2``,``last2``)` is empty.
+
+### Complexity
+
+Given \(\scriptsize N_1\)N1 as `std::distance(first1, last1)` and \(\scriptsize
+N_2\)N2 as `std::distance(first2, last2)`:
+
+1,2) At most \(\scriptsize 2 \cdot (N_1+N_2)-1\)2·(N1+N2)-1 comparisons using
+   `operator<`.
+
+3,4) At most \(\scriptsize 2 \cdot (N_1+N_2)-1\)2·(N1+N2)-1 applications of the
+   comparison function `comp`.
+
+### Exceptions
+
+The overloads with a template parameter named `ExecutionPolicy` report errors as
+follows:
+
+- If execution of a function invoked as part of the algorithm throws an
+  exception and `ExecutionPolicy` is one of the standard policies,
+  `std::terminate` is called. For any other `ExecutionPolicy`, the behavior is
+  implementation-defined.
+- If the algorithm fails to allocate memory, `std::bad_alloc` is thrown.
+
+### Possible implementation
+
+```cpp
+template<class InputIt1, class InputIt2>
+bool includes(InputIt1 first1, InputIt1 last1,
+              InputIt2 first2, InputIt2 last2)
+{
+    for (; first2 != last2; ++first1)
+    {
+        if (first1 == last1 || *first2 < *first1)
+            return false;
+        if (!(*first1 < *first2))
+            ++first2;
+    }
+    return true;
+}
+```
+
+```cpp
+template<class InputIt1, class InputIt2, class Compare>
+bool includes(InputIt1 first1, InputIt1 last1,
+              InputIt2 first2, InputIt2 last2, Compare comp)
+{
+    for (; first2 != last2; ++first1)
+    {
+        if (first1 == last1 || comp(*first2, *first1))
+            return false;
+        if (!comp(*first1, *first2))
+            ++first2;
+    }
+    return true;
+}
+```
+
+### Example
+
+```cpp
+#include <algorithm>
+#include <cctype>
+#include <iostream>
+
+template<class Os, class Co>
+Os& operator<<(Os& os, const Co& v)
+{
+    for (const auto& i : v)
+        os << i << ' ';
+    return os << '\t';
+}
+
+int main()
+{
+    const auto
+        v1 = {'a', 'b', 'c', 'f', 'h', 'x'},
+        v2 = {'a', 'b', 'c'},
+        v3 = {'a', 'c'},
+        v4 = {'a', 'a', 'b'},
+        v5 = {'g'},
+        v6 = {'a', 'c', 'g'},
+        v7 = {'A', 'B', 'C'};
+
+    auto no_case = [](char a, char b) { return std::tolower(a) < std::tolower(b); };
+
+    std::cout
+    << v1 << "\nincludes:\n" << std::boolalpha
+    << v2 << ": " << std::includes(v1.begin(), v1.end(), v2.begin(), v2.end()) << '\n'
+    << v3 << ": " << std::includes(v1.begin(), v1.end(), v3.begin(), v3.end()) << '\n'
+    << v4 << ": " << std::includes(v1.begin(), v1.end(), v4.begin(), v4.end()) << '\n'
+    << v5 << ": " << std::includes(v1.begin(), v1.end(), v5.begin(), v5.end()) << '\n'
+    << v6 << ": " << std::includes(v1.begin(), v1.end(), v6.begin(), v6.end()) << '\n'
+    << v7 << ": " << std::includes(v1.begin(), v1.end(), v7.begin(), v7.end(), no_case)
+          << " (case-insensitive)\n";
+}
+```
+
+Output:
+
+```text
+a b c f h x
+includes:
+a b c   : true
+a c     : true
+a a b   : false
+g       : false
+a c g   : false
+A B C   : true (case-insensitive)
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 1205 | C++98 | the return value was unclear if `[``first2``,``last2``)` is
+      empty | returns `true` in this case
+
+### See also
+
+- **set_difference** — computes the difference between two sets (function
+  template)
+- **search** — searches for a range of elements (function template)
+- **ranges::includes (C++20)** — returns `true` if one sequence is a subsequence
+  of another (niebloid)
+
+---
+*Source: https://en.cppreference.com/w/cpp/algorithm/includes*

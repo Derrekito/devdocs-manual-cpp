@@ -1,0 +1,98 @@
+# std::sub_sat
+
+```cpp
+template< class T >
+constexpr T sub_sat( T x, T y ) noexcept;  // (since C++26)
+```
+
+Computes the saturating subtraction `x - y`. This operation (unlike built-in
+arithmetic operations on integers) behaves as-if it is a mathematical operation
+with an *infinite* range. Let `q` denote the result of such operation. Returns:
+
+- `q`, if `q` is representable as a value of type `T`. Otherwise,
+- the largest or smallest value of type `T`, whichever is closer to the `q`.
+
+This overload participates in overload resolution only if `T` is an integer
+type, that is: signed char, short, int, long, long long, an extended signed
+integer type, or an unsigned version of such types. In particular, `T` must not
+be (possibly cv-qualified) bool, char, wchar_t, char8_t, char16_t, and char32_t,
+as these types are not intended for arithmetic.
+
+### Parameters
+
+- **x, y** — integer values
+
+### Return value
+
+Saturated `x - y`.
+
+### Exceptions
+
+Throws no exceptions.
+
+### Notes
+
+Unlike the built-in arithmetic operators on integers, the integral promotion
+does not apply to the `x` and `y` arguments.
+
+If two arguments of different type are passed, the call fails to compile, i.e.
+the behavior relative to template argument deduction is the same as for
+`std::min` or `std::max`.
+
+Most modern hardware architectures have efficient support for saturation
+arithmetic on SIMD vectors, including SSE2 for x86 and NEON for ARM.
+
+  Feature-test macro | Value | Std | Feature
+  `__cpp_lib_saturation_arithmetic` | 202311L | (C++26) | Saturation arithmetic
+
+### Possible implementation
+
+See libstdc++ (gcc).
+
+### Example
+
+Can be previewed on Compiler Explorer
+
+```cpp
+#include <climits>
+#include <numeric>
+
+static_assert
+(""
+    && (std::sub_sat<int>(INT_MIN + 4, 3) == INT_MIN + 1) // not saturated
+    && (std::sub_sat<int>(INT_MIN + 4, 5) == INT_MIN) // saturated
+    && (std::sub_sat<int>(INT_MAX - 4, -3) == INT_MAX - 1) // not saturated
+    && (std::sub_sat<int>(INT_MAX - 4, -5) == INT_MAX) // saturated
+    && (std::sub_sat<unsigned>(4, 3) == 1) // not saturated
+    && (std::sub_sat<unsigned>(4, 5) == 0) // saturated
+);
+
+int main() {}
+```
+
+### See also
+
+- **add_sat (C++26)** — saturating addition operation on two integers (function
+  template)
+- **mul_sat (C++26)** — saturating multiplication operation on two integers
+  (function template)
+- **div_sat (C++26)** — saturating division operation on two integers (function
+  template)
+- **saturate_cast (C++26)** — returns an integer value clamped to the range of a
+  another integer type (function template)
+- **clamp (C++17)** — clamps a value between a pair of boundary values (function
+  template)
+- **in_range (C++20)** — checks if an integer value is in the range of a given
+  integer type (function template)
+- **min [static]** — returns the smallest finite value of the given type (public
+  static member function of `std::numeric_limits<T>`)
+- **max [static]** — returns the largest finite value of the given type (public
+  static member function of `std::numeric_limits<T>`)
+
+### External links
+
+  1. | A branch-free implementation of saturation arithmetic — Locklessinc.com,
+      2012
+
+---
+*Source: https://en.cppreference.com/w/cpp/numeric/sub_sat*

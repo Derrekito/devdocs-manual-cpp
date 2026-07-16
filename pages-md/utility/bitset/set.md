@@ -1,0 +1,74 @@
+# std::bitset<N>::set
+
+```cpp
+bitset& set();  // (until C++11)
+bitset& set() noexcept;  // (since C++11) (constexpr since C++23)
+bitset& set( std::size_t pos, bool value = true );  // (2) (constexpr since C++23)
+```
+
+Sets all bits to `true` or sets one bit to specified value.
+
+1) Sets all bits to `true`.
+
+2) Sets the bit at position `pos` to the value `value`.
+
+### Parameters
+
+- **pos** — the position (counting from `​0​`, i.e. from least significant to
+  most significant) of the bit to set
+- **value** — the value to set the bit to
+
+### Return value
+
+`*this`
+
+### Exceptions
+
+2) Throws `std::out_of_range` if `pos` does not correspond to a valid position
+   within the bitset.
+
+### Example
+
+```cpp
+#include <bitset>
+#include <cstddef>
+#include <iostream>
+
+int main()
+{
+    std::bitset<8> b;
+    std::cout << b << '\n';
+    std::cout << b.set() << '\n';
+    std::cout << b.reset() << '\n';
+
+    for (std::size_t i = 1; i < b.size(); i += 2)
+        b.set(i);
+
+    std::cout << b << '\n';
+}
+```
+
+Output:
+
+```text
+00000000
+11111111
+00000000
+10101010
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 186 | C++98 | the type of `value` was `int` | corrected to `bool`
+
+### See also
+
+- **reset** — sets bits to `false` (public member function)
+- **flip** — toggles the values of bits (public member function)
+
+---
+*Source: https://en.cppreference.com/w/cpp/utility/bitset/set*

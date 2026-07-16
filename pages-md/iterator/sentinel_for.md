@@ -1,0 +1,51 @@
+# std::sentinel_for
+
+```cpp
+template< class S, class I >
+    concept sentinel_for =
+        std::semiregular<S> &&
+        std::input_or_output_iterator<I> &&
+        __WeaklyEqualityComparableWith<S, I>;  // (since C++20)
+```
+
+The `sentinel_for` concept specifies the relationship between an
+`input_or_output_iterator` type and a `semiregular` type whose values denote a
+range. The exposition-only concept `__WeaklyEqualityComparableWith` is described
+in `equality_comparable`.
+
+### Semantic requirements
+
+Let `s` and `i` be values of type `S` and `I`, respectively, such that
+`[``i``,``s``)` denotes a range. `sentinel_for<S, I>` is modeled only if:
+
+- `i == s` is well-defined.
+- If `bool(i != s)` then `i` is dereferenceable and `[``++i``,``s``)` denotes a
+  range.
+- `std::assignable_from<I&, S>` is either modeled or not satisfied.
+
+The domain of `==` can change over time. Given an iterator `i` and sentinel `s`
+such that `[``i``,``s``)` denotes a range and `i != s`, `[``i``,``s``)` is not
+required to continue to denote a range after incrementing any iterator equal to
+`i` (and so `i == s` is no longer required to be well-defined after such an
+increment).
+
+### Notes
+
+A sentinel type and its corresponding iterator type are not required to model
+`equality_comparable_with`, because the sentinel type may not be comparable with
+itself, and they are not required to have a common reference type.
+
+It has been permitted to use a sentinel type different from the iterator type in
+the range-based `for` loop since C++17.
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 3453 | C++20 | semantic requirements for `sentinel_for` were too loose for
+      `ranges::advance` | strengthened
+
+---
+*Source: https://en.cppreference.com/w/cpp/iterator/sentinel_for*

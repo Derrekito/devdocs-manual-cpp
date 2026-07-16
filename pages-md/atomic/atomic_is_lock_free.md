@@ -1,0 +1,106 @@
+# std::atomic_is_lock_free, ATOMIC_xxx_LOCK_FREE
+
+```cpp
+template< class T >
+bool atomic_is_lock_free( const volatile std::atomic<T>* obj ) noexcept;  // (1) (since C++11)
+template< class T >
+bool atomic_is_lock_free( const std::atomic<T>* obj ) noexcept;  // (2) (since C++11)
+#define ATOMIC_BOOL_LOCK_FREE     /* unspecified */
+#define ATOMIC_CHAR_LOCK_FREE     /* unspecified */
+#define ATOMIC_CHAR16_T_LOCK_FREE /* unspecified */
+#define ATOMIC_CHAR32_T_LOCK_FREE /* unspecified */
+#define ATOMIC_WCHAR_T_LOCK_FREE  /* unspecified */
+#define ATOMIC_SHORT_LOCK_FREE    /* unspecified */
+#define ATOMIC_INT_LOCK_FREE      /* unspecified */
+#define ATOMIC_LONG_LOCK_FREE     /* unspecified */
+#define ATOMIC_LLONG_LOCK_FREE    /* unspecified */
+#define ATOMIC_POINTER_LOCK_FREE  /* unspecified */  // (3) (since C++11)
+#define ATOMIC_CHAR8_T_LOCK_FREE  /* unspecified */  // (4) (since C++20)
+```
+
+1,2) Determines if the atomic object pointed to by `obj` is implemented
+   lock-free, as if by calling `obj->is_lock_free()`. In any given program
+   execution, the result of the lock-free query is the same for all atomic
+   objects of the same type.
+3,4) Expands to an integer constant expression with value
+
+- `​0​` for the built-in atomic types that are never lock-free,
+- `1` for the built-in atomic types that are *sometimes* lock-free,
+- `2` for the built-in atomic types that are always lock-free.
+
+### Parameters
+
+- **obj** — pointer to the atomic object to examine
+
+### Return value
+
+`true` if `*obj` is a lock-free atomic, `false` otherwise.
+
+### Notes
+
+All atomic types except for `std::atomic_flag` may be implemented using mutexes
+or other locking operations, rather than using the lock-free atomic CPU
+instructions. Atomic types are also allowed to be *sometimes* lock-free: for
+example, if only some subarchitectures support lock-free atomic access for a
+given type (such as the CMPXCHG16B instruction on x86-64), whether atomics are
+lock-free may not be known until runtime.
+
+The C++ standard recommends (but does not require) that lock-free atomic
+operations are also address-free, that is, suitable for communication between
+processes using shared memory.
+
+### Example
+
+```cpp
+#include <atomic>
+#include <iostream>
+#include <utility>
+
+struct A { int a[100]; };
+struct B { int x, y; };
+
+int main()
+{
+    std::atomic<A> a;
+    std::atomic<B> b;
+    std::cout << std::boolalpha
+              << "std::atomic<A> is lock free? "
+              << std::atomic_is_lock_free(&a) << '\n'
+              << "std::atomic<B> is lock free? "
+              << std::atomic_is_lock_free(&b) << '\n';
+}
+```
+
+Possible output:
+
+```text
+std::atomic<A> is lock free? false
+std::atomic<B> is lock free? true
+```
+
+### Defect reports
+
+The following behavior-changing defect reports were applied retroactively to
+previously published C++ standards.
+
+  DR | Applied to | Behavior as published | Correct behavior
+  LWG 3249 | C++11 | `atomic_is_lock_free` was specified via pointers, which was
+      ambiguous and might accept invalid pointer values | specified via atomic
+      objects
+
+### See also
+
+- **is_lock_free** — checks if the atomic object is lock-free (public member
+  function of `std::atomic<T>`)
+- **std::atomic_is_lock_free(std::shared_ptr)** — specializes atomic operations
+  for `std::shared_ptr` (function template)
+- **atomic_flag (C++11)** — the lock-free boolean atomic type (class)
+- **is_always_lock_free [static] (C++17)** — indicates that the type is always
+  lock-free (public static member constant of `std::atomic<T>`)
+
+**C documentation for `atomic_is_lock_free`**
+
+**C documentation for `ATOMIC_*_LOCK_FREE`**
+
+---
+*Source: https://en.cppreference.com/w/cpp/atomic/atomic_is_lock_free*
