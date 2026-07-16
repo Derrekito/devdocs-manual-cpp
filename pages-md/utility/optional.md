@@ -1,123 +1,72 @@
 # std::optional
 
-```cpp
-template< class T >
-class optional;  // (since C++17)
+`std::optional<T>` (C++17) wraps a value that may or may not be
+present — a type-safe alternative to a sentinel value (`-1`, `nullptr`,
+an out-parameter bool) for things like "the return of a lookup that can
+fail." The value, when present, lives inline inside the `optional`
+object itself; there is no heap allocation and no pointer semantics
+despite `operator*`/`operator->` being defined.
+
+```cpp skip
+std::optional<T> o;                 // empty
+std::optional<T> o{val};             // holds val
+std::optional<T> o = std::nullopt;   // empty, explicit
+if (o) ...                           // true iff it holds a value
+*o, o->member                        // access, UB if empty
+o.value()                            // access, throws if empty
+o.value_or(fallback)                 // access with a fallback
+o.and_then(f) / o.transform(f) / o.or_else(f)   // (since C++23)
 ```
 
-The class template `std::optional` manages an *optional* contained value, i.e. a
-value that may or may not be present.
+There are no optional references and no `optional<optional<T>>`-style
+tag types (`nullopt_t`, `in_place_t`) as the contained type — both are
+ill-formed.
 
-A common use case for `optional` is the return value of a function that may
-fail. As opposed to other approaches, such as std::pair<T, bool>, `optional`
-handles expensive-to-construct objects well and is more readable, as the intent
-is expressed explicitly.
+### What you provide
 
-Any instance of `optional<T>` at any given point in time either *contains a
-value* or *does not contain a value*.
-
-If an `optional<T>` *contains a value*, the value is guaranteed to be allocated
-as part of the `optional` object footprint, i.e. no dynamic memory allocation
-ever takes place. Thus, an `optional` object models an object, not a pointer,
-even though `operator*()` and `operator->()` are defined.
-
-When an object of type `optional<T>` is contextually converted to bool, the
-conversion returns `true` if the object *contains a value* and `false` if it
-*does not contain a value*.
-
-The `optional` object *contains a value* in the following conditions:
-
-- The object is initialized with/assigned from a value of type `T` or another
-  `optional` that *contains a value*.
-
-The object *does not contain a value* in the following conditions:
-
-- The object is default-initialized.
-- The object is initialized with/assigned from a value of type `std::nullopt_t`
-  or an `optional` object that *does not contain a value*.
-- The member function `reset()` is called.
-
-There are no optional references; a program is ill-formed if it instantiates an
-`optional` with a reference type. In addition, a program is ill-formed if it
-instantiates an `optional` with the (possibly cv-qualified) tag types
-`std::nullopt_t` or `std::in_place_t`.
-
-### Template parameters
-
-- **T** — the type of the value to manage initialization state for. The type
-  must meet the requirements of Destructible (in particular, array and reference
-  types are not allowed).
-
-### Member types
-
-- **`value_type`** — `T`
+- **T** — the value type; must be Destructible. Arrays and reference
+  types cannot be used.
 
 ### Member functions
 
-- **(constructor)** — constructs the optional object (public member function)
-- **(destructor)** — destroys the contained value, if there is one (public
-  member function)
-- **operator=** — assigns contents (public member function)
+| Member | What it does |
+| --- | --- |
+| `operator*`, `operator->` | access the value; **UB** if empty |
+| `value()` | access the value; throws `bad_optional_access` if empty |
+| `value_or(v)` | value if present, else `v` |
+| `has_value()`, `operator bool` | test presence |
+| `and_then(f)` (C++23) | apply `f` (returns `optional`), else empty |
+| `transform(f)` (C++23) | apply `f` (returns plain value), wrap it |
+| `or_else(f)` (C++23) | self if present, else call `f` for a fallback |
+| `reset()` | clear to empty |
+| `emplace(args...)` | construct the value in place, replacing prior one |
+| `swap(other)` | exchange contents |
 
-**Observers**
+Non-members: `std::make_optional`, comparison operators, `std::swap`,
+`std::hash<optional<T>>`.
 
-- **operator->operator*** — accesses the contained value (public member
-  function)
-- **operator boolhas_value** — checks whether the object contains a value
-  (public member function)
-- **value** — returns the contained value (public member function)
-- **value_or** — returns the contained value if available, another value
-  otherwise (public member function)
+### Guarantees and costs
 
-**Monadic operations**
+- No dynamic allocation: the value occupies space inside the
+  `optional` object, so a large `T` makes a large `optional`.
+- Comparisons and `swap` are defined; an empty `optional` compares
+  less than any `optional` that holds a value.
+- Monadic operations (`and_then`, `transform`, `or_else`) are
+  **C++23**; chain manually with `if` on C++17/20 (see the notes for
+  this page).
 
-- **and_then (C++23)** — returns the result of the given function on the
-  contained value if it exists, or an empty `optional` otherwise (public member
-  function)
-- **transform (C++23)** — returns an `optional` containing the transformed
-  contained value if it exists, or an empty `optional` otherwise (public member
-  function)
-- **or_else (C++23)** — returns the `optional` itself if it contains a value, or
-  the result of the given function otherwise (public member function)
+### Gotchas
 
-**Modifiers**
-
-- **swap** — exchanges the contents (public member function)
-- **reset** — destroys any contained value (public member function)
-- **emplace** — constructs the contained value in-place (public member function)
-
-### Non-member functions
-
-- **operator==operator!=operator<operator<=operator>operator>=operator<=>
-  (C++17)(C++17)(C++17)(C++17)(C++17)(C++17)(C++20)** — compares `optional`
-  objects (function template)
-- **make_optional (C++17)** — creates an `optional` object (function template)
-- **std::swap(std::optional) (C++17)** — specializes the `std::swap` algorithm
-  (function template)
-
-### Helper classes
-
-- **std::hash<std::optional> (C++17)** — hash support for **`std::optional`**
-  (class template specialization)
-- **nullopt_t (C++17)** — indicator of optional type with uninitialized state
-  (class)
-- **bad_optional_access (C++17)** — exception indicating checked access to an
-  optional that doesn't contain a value (class)
-
-### Helpers
-
-- **nullopt (C++17)** — an object of type `nullopt_t` (constant)
-- **in_placein_place_typein_place_indexin_place_tin_place_type_tin_place_index_t
-  (C++17)** — in-place construction tag (tag)
-
-### Deduction guides
-
-### Notes
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_optional` | 201606L | (C++17) | `std::optional`
-  `__cpp_lib_optional` | 202106L | (C++20) (DR) | Fully constexpr
-  `__cpp_lib_optional` | 202110L | (C++23) | Monadic operations
+- `*o` / `o->x` on an empty optional is **undefined behavior**;
+  `.value()` instead throws `std::bad_optional_access` — pick based on
+  whether "empty" is a bug (use `*`) or an expected outcome you handle
+  (use `value()`).
+- `std::optional<bool>` has two different "false"s: empty, and holding
+  `false`. Testing `if (o)` conflates them — check `has_value()`
+  explicitly when that distinction matters.
+- You cannot store a reference in an `optional` — instantiating
+  `optional<T&>` is ill-formed; wrap in `std::reference_wrapper` if you
+  need that.
 
 ### Example
 
@@ -134,35 +83,44 @@ std::optional<std::string> create(bool b)
     return {};
 }
 
-// std::nullopt can be used to create any (empty) std::optional
-auto create2(bool b)
-{
-    return b ? std::optional<std::string>{"Godzilla"} : std::nullopt;
-}
-
 int main()
 {
     std::cout << "create(false) returned "
               << create(false).value_or("empty") << '\n';
 
-    // optional-returning factory functions are usable as conditions of while and if
-    if (auto str = create2(true))
-        std::cout << "create2(true) returned " << *str << '\n';
+    if (auto str = create(true))
+        std::cout << "create(true) returned " << *str << '\n';
 }
 ```
 
-Output:
-
 ```text
 create(false) returned empty
-create2(true) returned Godzilla
+create(true) returned Godzilla
 ```
+
+### Reference
+
+```cpp skip
+template< class T >
+class optional;  // (since C++17)
+```
+
+Formally: an `optional<T>` *contains a value* once constructed or
+assigned from a `T` (or a value-holding `optional`), and *does not
+contain a value* when default-initialized, assigned from
+`std::nullopt`, assigned from an empty `optional`, or after `reset()`.
+`T` must be Destructible; `optional<void>`, `optional` of an array,
+reference, `nullopt_t`, or `in_place_t` are all ill-formed. The
+contextual conversion to `bool` reflects `has_value()`.
+
+Feature-test macro: `__cpp_lib_optional` — `201606L` (C++17, the type
+itself), `202106L` (C++20 DR, fully `constexpr`), `202110L` (C++23,
+monadic operations).
 
 ### See also
 
-- **variant (C++17)** — a type-safe discriminated union (class template)
-- **any (C++17)** — objects that hold instances of any CopyConstructible type
-  (class)
+- **variant (C++17)** — a type-safe discriminated union
+- **any (C++17)** — holds an instance of any CopyConstructible type
 
 ---
 *Source: https://en.cppreference.com/w/cpp/utility/optional*

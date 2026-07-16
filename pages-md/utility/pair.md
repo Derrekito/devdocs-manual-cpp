@@ -1,82 +1,112 @@
 # std::pair
 
+`std::pair<T1, T2>` bundles two values of possibly different types
+into a single object with named members `.first` and `.second`. It's
+the element type of every associative container (`map`, `unordered_map`)
+and a common lightweight "return two things" type — for more than two
+values use `std::tuple`, of which `pair` is the two-element special
+case.
+
+```cpp skip
+std::pair<T1, T2> p{a, b};
+auto p = std::make_pair(a, b);       // deduces types (decays arrays/refs)
+std::pair q{a, b};                   // CTAD, deduces exact types (C++17)
+p.first, p.second                    // named access
+auto [x, y] = p;                     // structured bindings (C++17)
+```
+
+### What you provide
+
+- **T1, T2** — the element types.
+
+### Member functions
+
+| Member | What it does |
+| --- | --- |
+| `first`, `second` | the two stored values (public data members) |
+| (constructor) | builds the pair from elements, another pair, or piecewise |
+| `operator=` | assigns from another pair |
+| `swap(other)` (C++11) | exchanges contents |
+
+Non-members: `std::make_pair`, comparison operators (lexicographic:
+`.first` compared first, `.second` breaks ties), `std::swap`,
+`std::get<I>(p)`/`std::get<T>(p)` (index or type access, C++11).
+
+### Guarantees and costs
+
+- The destructor is trivial unless `T1` or `T2` is a (possibly
+  array-of) class type with a non-trivial destructor — this triviality
+  was unspecified before a defect report clarified it for C++98.
+- Comparison is lexicographic and total: two pairs compare equal only
+  when both elements do; ordering compares `.first`, then `.second` to
+  break ties.
+- No hidden cost beyond storing the two members — no allocation, no
+  indirection.
+
+### Gotchas
+
+- `make_pair` decays its arguments the way a by-value function
+  parameter would (arrays become pointers, references are dropped,
+  `const` is stripped from prvalues) — brace-init a `std::pair<T1, T2>`
+  directly, or use CTAD (`std::pair p{a, b}`, C++17), when you need the
+  exact types.
+- Lexicographic comparison always looks at `.second` to break ties on
+  `.first`, even when that's not the ordering you meant — write a
+  custom comparator when the fields aren't meant to be compared
+  together.
+- Prefer structured bindings (`auto [a, b] = p;`, C++17) to
+  `.first`/`.second`, especially when iterating a map — it turns
+  `it->first`/`it->second` noise into named variables.
+
+### Example
+
 ```cpp
+#include <iostream>
+#include <string>
+#include <utility>
+
+int main()
+{
+    std::pair<int, std::string> p{1, "one"};
+    std::cout << p.first << " = " << p.second << '\n';
+
+    auto q = std::make_pair(2, std::string("two"));
+    auto [n, word] = q;                          // structured bindings
+    std::cout << n << " = " << word << '\n';
+
+    std::cout << std::boolalpha << (p < q) << '\n';  // lexicographic
+}
+```
+
+```text
+1 = one
+2 = two
+true
+```
+
+### Reference
+
+```cpp skip
 template<
     class T1,
     class T2
 > struct pair;
 ```
 
-`std::pair` is a class template that provides a way to store two heterogeneous
-objects as a single unit. A pair is a specific case of a `std::tuple` with two
-elements.
-
-If neither `T1` nor `T2` is a possibly cv-qualified class type with non-trivial
-destructor, or array thereof, the destructor of `pair` is trivial.
-
-### Template parameters
-
-- **T1, T2** — the types of the elements that the pair stores.
-
-### Member types
-
-- **`first_type`** — `T1`
-- **`second_type`** — `T2`
-
-### Member objects
-
-- **`first`** — `T1`
-- **`second`** — `T2`
-
-### Member functions
-
-- **(constructor)** — constructs new pair (public member function)
-- **operator=** — assigns the contents (public member function)
-- **swap (C++11)** — swaps the contents (public member function)
-
-### Non-member functions
-
-- **make_pair** — creates a `pair` object of type, defined by the argument types
-  (function template)
-- **operator==operator!=operator<operator<=operator>operator>=operator<=>
-  (removed in C++20)(removed in C++20)(removed in C++20)(removed in
-  C++20)(removed in C++20)(C++20)** — lexicographically compares the values in
-  the pair (function template)
-- **std::swap(std::pair) (C++11)** — specializes the `std::swap` algorithm
-  (function template)
-- **get(std::pair) (C++11)** — accesses an element of a `pair` (function
-  template)
-
-### Helper classes
-
-- **std::tuple_size<std::pair> (C++11)** — obtains the size of a `pair` (class
-  template specialization)
-- **std::tuple_element<std::pair> (C++11)** — obtains the type of the elements
-  of `pair` (class template specialization)
-- **std::basic_common_reference<std::pair> (C++23)** — determines the common
-  reference type of two `pair`s (class template specialization)
-- **std::common_type<std::pair> (C++23)** — determines the common type of two
-  `pair`s (class template specialization)
-- **std::formatter<*pair-or-tuple*> (C++23)** — formatting support for `pair`
-  and `tuple` (class template specialization)
-
-### Deduction guides(since C++17)
-
-### Defect reports
-
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
-
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 2796 | C++98 | triviality of the destructor of `pair` was unspecified |
-      specified
+Formally: `first_type` names `T1`, `second_type` names `T2`. Helper
+specializations `std::tuple_size<pair>` and `std::tuple_element<pair>`
+(C++11) let `pair` participate in the tuple protocol (structured
+bindings rely on this); `std::basic_common_reference` and
+`std::common_type` specializations for `pair`/`pair`-like types, and a
+`std::formatter` specialization shared with `tuple`, were added in
+C++23. CTAD deduction guides were added in C++17. A defect report
+(LWG 2796) specified pair's destructor triviality retroactively for
+C++98.
 
 ### See also
 
-- **tuple (C++11)** — implements fixed size container, which holds elements of
-  possibly different types (class template)
-- **tie (C++11)** — creates a `tuple` of lvalue references or unpacks a tuple
-  into individual objects (function template)
+- **tuple (C++11)** — a fixed-size collection of any number of values
+- **tie (C++11)** — creates lvalue references or unpacks a tuple into variables
 
 ---
 *Source: https://en.cppreference.com/w/cpp/utility/pair*

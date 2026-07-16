@@ -1,138 +1,91 @@
 # std::reverse
 
-```cpp
-template< class BidirIt >
-void reverse( BidirIt first, BidirIt last );  // (until C++20)
-template< class BidirIt >
-constexpr void reverse( BidirIt first, BidirIt last );  // (since C++20)
-template< class ExecutionPolicy, class BidirIt >
-void reverse( ExecutionPolicy&& policy, BidirIt first, BidirIt last );  // (2) (since C++17)
+Reverses a range in place by swapping elements from the outside in.
+
+```cpp skip
+std::reverse(first, last);          // in-place reversal
+std::reverse(policy, first, last);  // parallel        (since C++17)
 ```
 
-1) Reverses the order of the elements in the range `[``first``,``last``)`.
+Since C++20 the non-policy form is `constexpr`.
 
-Behaves as if applying `std::iter_swap` to every pair of iterators `first + i`
-   and `(last - i) - 1` for each integer `i` in `[``​0​``,``std::distance(first,
-   last) / 2``)`.
+### What you provide
 
-2) Same as (1), but executed according to `policy`. This overload does not
-   participate in overload resolution unless
-   `std::is_execution_policy_v<std::decay_t<ExecutionPolicy>>` is `true`. (until
-   C++20) `std::is_execution_policy_v<std::remove_cvref_t<ExecutionPolicy>>` is
-   `true`. (since C++20)
+- **first, last** — bidirectional iterators (a `vector`, `deque`,
+  `list`, `array`, or `std::string` all qualify; a forward-only range
+  or an input stream does not).
+- **policy** — an execution policy such as `std::execution::par`
+  (C++17) to run in parallel.
 
-### Parameters
+### Guarantees and costs
 
-- **first, last** — the range of elements to reverse
-- **policy** — the execution policy to use. See execution policy for details.
+- Exactly `distance(first, last) / 2` swaps — behaves as if
+  `iter_swap` were applied to each pair `first + i` and
+  `(last - i) - 1`.
+- Mutates the range in place; there is no return value.
+- Some implementations vectorize it for contiguous iterators whose
+  value type swaps without a non-trivial special member or ADL
+  `swap`.
+- Parallel overload: a throwing swap calls `std::terminate`;
+  allocation failure throws `std::bad_alloc`.
 
-**Type requirements**
+### Gotchas
 
-**-`BidirIt` must meet the requirements of ValueSwappable and LegacyBidirectionalIterator.**
-
-### Return value
-
-(none)
-
-### Complexity
-
-Exactly `std::distance(first, last) / 2` swaps.
-
-### Exceptions
-
-The overload with a template parameter named `ExecutionPolicy` reports errors as
-follows:
-
-- If execution of a function invoked as part of the algorithm throws an
-  exception and `ExecutionPolicy` is one of the standard policies,
-  `std::terminate` is called. For any other `ExecutionPolicy`, the behavior is
-  implementation-defined.
-- If the algorithm fails to allocate memory, `std::bad_alloc` is thrown.
-
-### Notes
-
-Implementations (e.g. MSVC STL) may enable vectorization when the iterator type
-satisfies LegacyContiguousIterator and swapping its value type calls neither
-non-trivial special member function nor ADL-found `swap`.
-
-### Possible implementation
-
-See also the implementations in libstdc++, libc++, and MSVC STL.
-
-```cpp
-template<class BidirIt>
-constexpr // since C++20
-void reverse(BidirIt first, BidirIt last)
-{
-    using iter_cat = typename std::iterator_traits<BidirIt>::iterator_category;
-
-    // Tag dispatch, e.g. calling reverse_impl(first, last, iter_cat()),
-    // can be used in C++14 and earlier modes.
-    if constexpr (std::is_base_of_v<std::random_access_iterator_tag, iter_cat>)
-    {
-        if (first == last)
-            return;
-
-        for (--last; first < last; (void)++first, --last)
-            std::iter_swap(first, last);
-    }
-    else
-        while (first != last && first != --last)
-            std::iter_swap(first++, last);
-}
-```
+- Needs **bidirectional** iterators — a forward list works with
+  `reverse` (it's bidirectional via `std::list`), but a true
+  forward-only range or an input stream does not compile.
+- It mutates in place. To read backwards without mutating, use
+  `rbegin()`/`rend()`, or `std::reverse_copy` to write the reversal
+  into a separate range.
+- Reversing a `std::string` byte-wise corrupts multi-byte UTF-8;
+  reverse by code point or grapheme if the text isn't plain ASCII.
 
 ### Example
 
 ```cpp
 #include <algorithm>
 #include <iostream>
-#include <iterator>
 #include <vector>
-
-void println(auto rem, auto const& v)
-{
-    for (std::cout << rem; auto e : v)
-        std::cout << e << ' ';
-    std::cout << '\n';
-}
 
 int main()
 {
-    std::vector<int> v {1, 2, 3};
+    std::vector<int> v{1, 2, 3, 4, 5};
     std::reverse(v.begin(), v.end());
-    println("after reverse, v = ", v);
 
-    int a[] = {4, 5, 6, 7};
-    std::reverse(std::begin(a), std::end(a));
-    println("after reverse, a = ", a);
+    for (int x : v)
+        std::cout << x << ' ';
+    std::cout << '\n';
 }
 ```
 
-Output:
-
 ```text
-after reverse, v = 3 2 1
-after reverse, a = 7 6 5 4
+5 4 3 2 1
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+Full declarations:
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 223 | C++98 | `std::swap` was applied to each pair of iterators | applies
-      `std::iter_swap` instead
-  LWG 2039 | C++98 | `std::iter_swap` was also applied when `i` equals
-      `std::distance(first, last) / 2` | not applied
+```cpp skip
+template< class BidirIt >
+void reverse( BidirIt first, BidirIt last );  // (until C++20)
+template< class BidirIt >
+constexpr void reverse( BidirIt first, BidirIt last );  // (since C++20)
+template< class ExecutionPolicy, class BidirIt >
+void reverse( ExecutionPolicy&& policy,
+              BidirIt first, BidirIt last );  // (2) (since C++17)
+```
+
+`BidirIt` must meet ValueSwappable and LegacyBidirectionalIterator.
+Two defect reports (both applied to C++98) fixed early wording: LWG
+223 corrected the spec to use `iter_swap` rather than `swap` on the
+iterators themselves; LWG 2039 removed an extra swap that would have
+fired when `i` equals `distance(first, last) / 2`.
 
 ### See also
 
-- **reverse_copy** — creates a copy of a range that is reversed (function
-  template)
-- **ranges::reverse (C++20)** — reverses the order of elements in a range
-  (niebloid)
+- **reverse_copy** — writes a reversed copy to a separate range
+- **ranges::reverse (C++20)** — constrained version taking a range
 
 ---
 *Source: https://en.cppreference.com/w/cpp/algorithm/reverse*

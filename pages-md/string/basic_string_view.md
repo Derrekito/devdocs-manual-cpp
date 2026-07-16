@@ -1,200 +1,83 @@
 # std::basic_string_view
 
-```cpp
-template<
-    class CharT,
-    class Traits = std::char_traits<CharT>
-> class basic_string_view;  // (since C++17)
+`std::string_view` (C++17) is `std::basic_string_view<char>` — a
+non-owning, read-only view over a contiguous run of characters:
+essentially a `{pointer, length}` pair, with no allocation and no
+ownership. That makes one rule dominate everything else about this
+type: **a `string_view` must never outlive the buffer it points into**
+(a `std::string`, a string literal, a `char` array). Nothing stops you
+from creating a dangling one, and reading through it afterward is
+undefined behavior. The family also includes `std::wstring_view`,
+`std::u8string_view` (C++20), `std::u16string_view`, and
+`std::u32string_view` (all C++17 except `u8string_view`).
+
+```cpp skip
+std::string_view sv = "hello";        // from a literal, no copy
+std::string_view sv = some_string;    // from a std::string, no copy
+sv.substr(pos, len);                  // another view, still no copy
+sv.find("lo");                        // returns npos on no match
+sv.starts_with(p);  sv.ends_with(p);  // (since C++20)
+sv.remove_prefix(n);  sv.remove_suffix(n);   // shrink the view in place
 ```
 
-The class template `basic_string_view` describes an object that can refer to a
-constant contiguous sequence of `CharT` with the first element of the sequence
-at position zero.
+### What you provide
 
-Every specialization of `std::basic_string_view` is a TriviallyCopyable type.
-*(since C++23)*
-
-A typical implementation holds only two members: a pointer to constant `CharT`
-and a size.
-
-Several typedefs for common character types are provided:
-
-- **`std::string_view` (C++17)** — std::basic_string_view<char>
-- **`std::wstring_view` (C++17)** — std::basic_string_view<wchar_t>
-- **`std::u8string_view` (C++20)** — std::basic_string_view<char8_t>
-- **`std::u16string_view` (C++17)** — std::basic_string_view<char16_t>
-- **`std::u32string_view` (C++17)** — std::basic_string_view<char32_t>
-
-### Template parameters
-
-- **CharT** — character type
-- **Traits** — CharTraits class specifying the operations on the character type.
-  Like for `std::basic_string`, `Traits::char_type` must name the same type as
+- **CharT** — the character type.
+- **Traits** — the CharTraits class for that character type; as with
+  `basic_string`, `Traits::char_type` must name the same type as
   `CharT` or the program is ill-formed.
-
-### Member types
-
-- **`traits_type`** — `Traits`
-- **`value_type`** — `CharT`
-- **`pointer`** — CharT*
-- **`const_pointer`** — const CharT*
-- **`reference`** — CharT&
-- **`const_reference`** — const CharT&
-- **`const_iterator`** — implementation-defined constant
-  LegacyRandomAccessIterator, and LegacyContiguousIterator (until C++20)
-  ConstexprIterator, and `contiguous_iterator` (since C++20) whose `value_type`
-  is `CharT`
-- **and LegacyContiguousIterator** — (until C++20)
-- **ConstexprIterator, and `contiguous_iterator`** — (since C++20)
-- **`iterator`** — `const_iterator`
-- **`const_reverse_iterator`** — std::reverse_iterator<const_iterator>
-- **`reverse_iterator`** — `const_reverse_iterator`
-- **`size_type`** — `std::size_t`
-- **`difference_type`** — `std::ptrdiff_t`
-
-Note: `iterator` and `const_iterator` are the same type because string views are
-views into constant character sequences.
-
-All requirements on the iterator types of a Container applies to the `iterator`
-and `const_iterator` types of `basic_string_view` as well.
 
 ### Member functions
 
-**Constructors and assignment**
+| Member | What it does |
+| --- | --- |
+| (constructor), `operator=` | build / reassign a view |
+| `begin`/`cbegin`, `end`/`cend` | forward iterators |
+| `rbegin`/`crbegin`, `rend`/`crend` | reverse iterators |
+| `operator[]`, `at` | unchecked / bounds-checked access |
+| `front`, `back` | first / last character |
+| `data` | pointer to the viewed characters |
+| `size`/`length`, `max_size`, `empty` | size queries |
+| `remove_prefix(n)`, `remove_suffix(n)` | shrink from either end, in place |
+| `swap` | exchange what two views point at |
+| `copy` | copy characters out to a raw buffer |
+| `substr` | another view over a slice |
+| `compare` | three-way lexicographic comparison |
+| `starts_with`, `ends_with` (C++20) | prefix / suffix test |
+| `contains` (C++23) | substring test |
+| `find`, `rfind` | locate a substring, forward / backward |
+| `find_first_of`, `find_last_of` | locate any of a set of characters |
+| `find_first_not_of`, `find_last_not_of` | first/last char *not* in a set |
+| `npos` [static] | "not found" / "to the end" sentinel value |
 
-- **(constructor)** — constructs a `basic_string_view` (public member function)
-- **operator=** — assigns a view (public member function)
+Non-members: the comparison operators (C++17; `<=>` since C++20
+replaces the individual overloads); `operator<<` (C++17, stream
+output); the `operator""sv` literal (C++17);
+`std::hash<basic_string_view>` and its typedef specializations
+(C++17, `u8string_view` in C++20).
 
-**Iterators**
+### Guarantees and costs
 
-- **begincbegin** — returns an iterator to the beginning (public member
-  function)
-- **endcend** — returns an iterator to the end (public member function)
-- **rbegincrbegin** — returns a reverse iterator to the beginning (public member
-  function)
-- **rendcrend** — returns a reverse iterator to the end (public member function)
+- Every operation is O(1) or O(view size) and never touches the
+  underlying buffer: `substr`, `remove_prefix`, `remove_suffix` just
+  adjust the pointer/length, they don't copy characters.
+- `iterator` and `const_iterator` are the same type — a view only ever
+  looks at `const` data, so there's no mutable-iterator form.
+- TriviallyCopyable is a formal requirement since C++23, but every
+  existing implementation already satisfied it — passing or storing a
+  `string_view` by value is always cheap.
 
-**Element access**
+### Gotchas
 
-- **operator[]** — accesses the specified character (public member function)
-- **at** — accesses the specified character with bounds checking (public member
-  function)
-- **front** — accesses the first character (public member function)
-- **back** — accesses the last character (public member function)
-- **data** — returns a pointer to the first character of a view (public member
-  function)
-
-**Capacity**
-
-- **sizelength** — returns the number of characters (public member function)
-- **max_size** — returns the maximum number of characters (public member
-  function)
-- **empty** — checks whether the view is empty (public member function)
-
-**Modifiers**
-
-- **remove_prefix** — shrinks the view by moving its start forward (public
-  member function)
-- **remove_suffix** — shrinks the view by moving its end backward (public member
-  function)
-- **swap** — swaps the contents (public member function)
-
-**Operations**
-
-- **copy** — copies characters (public member function)
-- **substr** — returns a substring (public member function)
-- **compare** — compares two views (public member function)
-- **starts_with (C++20)** — checks if the string view starts with the given
-  prefix (public member function)
-- **ends_with (C++20)** — checks if the string view ends with the given suffix
-  (public member function)
-- **contains (C++23)** — checks if the string view contains the given substring
-  or character (public member function)
-- **find** — find characters in the view (public member function)
-- **rfind** — find the last occurrence of a substring (public member function)
-- **find_first_of** — find first occurrence of characters (public member
-  function)
-- **find_last_of** — find last occurrence of characters (public member function)
-- **find_first_not_of** — find first absence of characters (public member
-  function)
-- **find_last_not_of** — find last absence of characters (public member
-  function)
-
-**Constants**
-
-- **npos [static]** — special value. The exact meaning depends on the context
-  (public static member constant)
-
-### Non-member functions
-
-- **operator==operator!=operator<operator>operator<=operator>=operator<=>
-  (C++17)(removed in C++20)(removed in C++20)(removed in C++20)(removed in
-  C++20)(removed in C++20)(C++20)** — lexicographically compares two string
-  views (function template)
-
-**Input/output**
-
-- **operator<< (C++17)** — performs stream output on string views (function
-  template)
-
-### Literals
-
-- **operator""sv (C++17)** — creates a string view of a character array literal
-  (function)
-
-### Helper classes
-
--
-  **std::hash<std::string_view>std::hash<std::wstring_view>std::hash<std::u8string_view>std::hash<std::u16string_view>std::hash<std::u32string_view>
-  (C++17)(C++17)(C++20)(C++17)(C++17)** — hash support for string views (class
-  template specialization)
-
-### Helper templates
-
-```cpp
-template< class CharT, class Traits >
-inline constexpr bool
-    ranges::enable_borrowed_range<std::basic_string_view<CharT, Traits>> = true;  // (since C++20)
-```
-
-This specialization of `ranges::enable_borrowed_range` makes `basic_string_view`
-satisfy `borrowed_range`.
-
-```cpp
-template< class CharT, class Traits >
-inline constexpr bool
-    ranges::enable_view<std::basic_string_view<CharT, Traits>> = true;  // (since C++20)
-```
-
-This specialization of `ranges::enable_view` makes `basic_string_view` satisfy
-`view`.
-
-### Deduction guides
-*(since C++20)*
-
-### Notes
-
-It is the programmer's responsibility to ensure that `std::string_view` does not
-outlive the pointed-to character array:
-
-```cpp
-std::string_view good{"a string literal"};
-    // "Good" case: `good` points to a static array.
-    // String literals reside in persistent data storage.
-
-std::string_view bad{"a temporary string"s};
-    // "Bad" case: `bad` holds a dangling pointer since the std::string temporary,
-    // created by std::operator""s, will be destroyed at the end of the statement.
-```
-
-Specializations of `std::basic_string_view` are already trivially copyable types
-in all existing implementations, even before the formal requirement introduced
-in C++23.
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_string_view` | 201606L | (C++17) | `std::string_view`
-  201803L | (C++20) | ConstexprIterator
-  `__cpp_lib_string_contains` | 202011L | (C++23) | `contains`
+- The classic dangling trap: binding a view to a temporary
+  `std::string` (an `operator""s` result, or a function returning
+  `std::string` by value) compiles cleanly and dangles the moment that
+  temporary is destroyed at the end of the full expression.
+- `Traits::char_type` must match `CharT` exactly, same constraint (and
+  same ill-formed-not-UB history) as `basic_string`.
+- A copy of a `string_view` is shallow: it duplicates the
+  pointer/length, not the characters. Mutating the underlying buffer
+  through any other path changes what every copy of the view sees.
 
 ### Example
 
@@ -206,34 +89,59 @@ int main()
 {
     constexpr std::string_view unicode[] { "▀▄─", "▄▀─", "▀─▄", "▄─▀" };
 
-    for (int y{}, p{}; y != 6; ++y, p = ((p + 1) % 4))
+    for (int y{}, p{}; y != 4; ++y, p = ((p + 1) % 4))
     {
-        for (int x{}; x != 16; ++x)
+        for (int x{}; x != 8; ++x)
             std::cout << unicode[p];
         std::cout << '\n';
     }
 }
 ```
 
-Output:
-
 ```text
-▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─
-▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─
-▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄
-▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀
-▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─
-▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─
+▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─
+▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─
+▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄▀─▄
+▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀▄─▀
 ```
+
+### Reference
+
+```cpp skip
+template<
+    class CharT,
+    class Traits = std::char_traits<CharT>
+> class basic_string_view;  // (since C++17)
+
+template< class CharT, class Traits >
+inline constexpr bool
+    ranges::enable_borrowed_range<std::basic_string_view<CharT, Traits>> = true;  // (since C++20)
+template< class CharT, class Traits >
+inline constexpr bool
+    ranges::enable_view<std::basic_string_view<CharT, Traits>> = true;  // (since C++20)
+```
+
+Formally: describes an object referring to a constant contiguous
+sequence of `CharT`, with the first element at position zero. A
+typical implementation holds only a pointer to constant `CharT` and a
+size. The `ranges::enable_borrowed_range` specialization makes
+`basic_string_view` satisfy `borrowed_range`; `ranges::enable_view`
+makes it satisfy `view` (both C++20) — together these let a
+`string_view` be used directly in range-based algorithm pipelines
+without the pipeline treating it as something that could dangle the
+way a temporary container would. Feature-test macro:
+`__cpp_lib_string_view` — `201606L` (C++17, the type itself),
+`201803L` (C++20, constexpr iterator support);
+`__cpp_lib_string_contains` (`202011L`, C++23, `contains`).
 
 ### See also
 
-- **basic_string** — stores and manipulates sequences of characters (class
-  template)
-- **span (C++20)** — a non-owning view over a contiguous sequence of objects
-  (class template)
-- **initializer_list (C++11)** — creates a temporary array in
-  list-initialization and then references it (class template)
+- **basic_string** — the owning counterpart; stores and manipulates
+  its own character sequence
+- **span** (C++20) — the equivalent non-owning view for any contiguous
+  sequence of objects, not just characters
+- **initializer_list** (C++11) — another lightweight, non-owning view
+  type, over a temporary array from list-initialization
 
 ---
 *Source: https://en.cppreference.com/w/cpp/string/basic_string_view*

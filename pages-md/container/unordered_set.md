@@ -1,6 +1,91 @@
 # std::unordered_set
 
-```cpp
+A hash table of unique keys — the fast membership test. Search,
+insertion, and removal are average O(1): the container hashes the
+value and jumps straight to its bucket. Iteration order is unspecified
+and can change on any insert that triggers a rehash; use `std::set`
+when order matters.
+
+A custom key type needs `std::hash<Key>` specialized (or a hasher
+passed as a template argument) before it can be used as a key.
+
+```cpp skip
+std::unordered_set<int> s;
+std::unordered_set<int> s{2, 7, 1, 8};
+
+s.insert(x);                         // returns {iterator, bool inserted}
+s.emplace(args...);                  // construct in place
+
+s.find(x);                           // iterator, or end() if absent
+s.contains(x);                       // bool                            (C++20)
+s.count(x);                          // 0 or 1 (elements are unique)
+s.erase(x);
+s.reserve(n);                        // pre-size, avoids rehashing during growth
+```
+
+### Guarantees and costs
+
+- `find`, `count`, `contains`, `insert`, `emplace`, `erase`: average
+  O(1); **worst case O(n)** if many elements collide into the same
+  bucket.
+- Iterator invalidation:
+  - Read-only operations, `swap`, `std::swap`: never invalidate
+    anything (though `swap` invalidates each container's `end()`
+    marking the swap boundary).
+  - `insert`, `emplace`, `emplace_hint`: invalidate iterators only if
+    the operation triggers a rehash.
+  - `erase`: invalidates only the iterator to the erased element.
+  - `clear`, `rehash`, `reserve`, `operator=`: invalidate everything.
+- References and pointers to stored elements are only invalidated by
+  erasing that specific element — never by a rehash, even though a
+  rehash does invalidate iterators.
+- After a move-assignment (unless incompatible allocators force an
+  element-wise move), references, pointers, and non-end iterators into
+  the moved-from container stay valid and now refer to elements in the
+  target container.
+- `reserve(n)` pre-sizes the bucket array for `n` elements, avoiding
+  the rehashes a growing table would otherwise trigger.
+- Elements cannot be modified in place, even through a non-const
+  iterator — mutating a value could change its hash and corrupt the
+  table.
+
+### Gotchas
+
+- Never rely on iteration order — it is unspecified and can reshuffle
+  after any insert that causes a rehash.
+- Use the member `s.count(x)` / `s.find(x)`, not the
+  `std::find(s.begin(), s.end(), x)` algorithm — the member is average
+  O(1), the generic algorithm is a linear O(n) scan.
+- Iterators do not survive a rehash even though pointers/references to
+  elements do — don't hold an iterator across an `insert` that might
+  grow the table.
+- Need ordered keys? Use `std::set`. Need duplicate keys?
+  `std::unordered_multiset`.
+
+### Example
+
+```cpp c++20
+#include <iostream>
+#include <unordered_set>
+
+int main()
+{
+    std::unordered_set<int> s{2, 7, 1, 8, 2, 8};   // duplicates dropped
+
+    s.insert(5);
+    std::cout << "has 5: " << std::boolalpha << s.contains(5) << '\n';
+    std::cout << "size: " << s.size() << '\n';
+}
+```
+
+```text
+has 5: true
+size: 5
+```
+
+### Reference
+
+```cpp skip
 template<
     class Key,
     class Hash = std::hash<Key>,
@@ -8,233 +93,67 @@ template<
     class Allocator = std::allocator<Key>
 > class unordered_set;  // (1) (since C++11)
 namespace pmr {
-    template<
-        class Key,
-        class Hash = std::hash<Key>,
-        class Pred = std::equal_to<Key>
-    > using unordered_set = std::unordered_set<Key, Hash, Pred,
-                                std::pmr::polymorphic_allocator<Key>>;
+    template< class Key, class Hash = std::hash<Key>,
+              class Pred = std::equal_to<Key> >
+    using unordered_set = std::unordered_set<Key, Hash, Pred,
+                               std::pmr::polymorphic_allocator<Key>>;
 }  // (2) (since C++17)
 ```
 
-`std::unordered_set` is an associative container that contains a set of unique
-objects of type `Key`. Search, insertion, and removal have average constant-time
-complexity.
+Elements are grouped into buckets by `Hash(value)`. Two keys are
+equivalent if `KeyEqual` returns true for them; if two keys are
+equivalent, `Hash` must return the same value for both. `value_type` is
+`Key`; `iterator` is a constant LegacyForwardIterator;
+`local_iterator`/`const_local_iterator` walk a single bucket only.
+`unordered_set` meets the requirements of Container,
+AllocatorAwareContainer, and UnorderedAssociativeContainer. `iterator`
+and `const_iterator` may alias the same type — prefer overloading on
+`const_iterator` to avoid an accidental ODR violation.
 
-Internally, the elements are not sorted in any particular order, but organized
-into buckets. Which bucket an element is placed into depends entirely on the
-hash of its value. This allows fast access to individual elements, since once a
-hash is computed, it refers to the exact bucket the element is placed into.
+**Member functions**, grouped as upstream groups them:
 
-Container elements may not be modified (even by non const iterators) since
-modification could change an element's hash and corrupt the container.
+- (constructor), (destructor), `operator=`, `get_allocator`
 
-`std::unordered_set` meets the requirements of Container,
-AllocatorAwareContainer, UnorderedAssociativeContainer.
+  Iterators
+  - `begin`/`cbegin`, `end`/`cend`
 
-### Iterator invalidation
+  Capacity
+  - `empty`, `size`, `max_size`
 
-  Operations | Invalidated
-  All read only operations, `swap`, `std::swap` | Never
-  `clear`, `rehash`, `reserve`, `operator=` | Always
-  `insert`, `emplace`, `emplace_hint` | Only if causes rehash
-  `erase` | Only to the element erased
+  Modifiers
+  - `clear`
+  - `insert`, `insert_range` (C++23)
+  - `emplace`, `emplace_hint`
+  - `erase`
+  - `swap`
+  - `extract`, `merge` (C++17) — move nodes out of / between containers
+    without copying keys
 
-#### Notes
+  Lookup
+  - `count`, `find`, `contains` (C++20), `equal_range`
 
-- The swap functions do not invalidate any of the iterators inside the
-  container, but they do invalidate the iterator marking the end of the swap
-  region.
-- References and pointers to data stored in the container are only invalidated
-  by erasing that element, even when the corresponding iterator is invalidated.
-- After container move assignment, unless elementwise move assignment is forced
-  by incompatible allocators, references, pointers, and iterators (other than
-  the past-the-end iterator) to moved-from container remain valid, but refer to
-  elements that are now in `*this`.
+  Bucket interface
+  - `begin(n)`/`cbegin(n)`, `end(n)`/`cend(n)` — iterate one bucket
+  - `bucket_count`, `max_bucket_count`, `bucket_size`, `bucket`
 
-### Template parameters
+  Hash policy
+  - `load_factor`, `max_load_factor`
+  - `rehash` — set bucket count directly
+  - `reserve` — set bucket count for at least n elements
 
-### Member types
+  Observers
+  - `hash_function`, `key_eq`
 
-- **`key_type`** — `Key`
-- **`value_type`** — `Key`
-- **`size_type`** — Unsigned integer type (usually `std::size_t`)
-- **`difference_type`** — Signed integer type (usually `std::ptrdiff_t`)
-- **`hasher`** — `Hash`
-- **`key_equal`** — `KeyEqual`
-- **`allocator_type`** — `Allocator`
-- **`reference`** — `value_type&`
-- **`const_reference`** — const value_type&
-- **`pointer`** — std::allocator_traits<Allocator>::pointer
-- **`const_pointer`** — std::allocator_traits<Allocator>::const_pointer
-- **`iterator`** — Constant LegacyForwardIterator to `value_type`
-- **`const_iterator`** — LegacyForwardIterator to const value_type
-- **`local_iterator`** — An iterator type whose category, value, difference,
-  pointer and reference types are the same as `iterator`. This iterator can be
-  used to iterate through a single bucket but not across buckets
-- **`const_local_iterator`** — An iterator type whose category, value,
-  difference, pointer and reference types are the same as `const_iterator`. This
-  iterator can be used to iterate through a single bucket but not across buckets
-- **`node_type` (since C++17)** — a specialization of node handle representing a
-  container node
-- **`insert_return_type` (since C++17)** — type describing the result of
-  inserting a `node_type`, a specialization of `template<class Iter, class
-  NodeType> struct /*unspecified*/ { Iter position; bool inserted; NodeType
-  node; };` instantiated with template arguments `iterator` and `node_type`.
-
-### Member functions
-
-- **(constructor)** — constructs the `unordered_set` (public member function)
-- **(destructor)** — destructs the `unordered_set` (public member function)
-- **operator=** — assigns values to the container (public member function)
-- **get_allocator** — returns the associated allocator (public member function)
-
-**Iterators**
-
-- **begincbegin** — returns an iterator to the beginning (public member
-  function)
-- **endcend** — returns an iterator to the end (public member function)
-
-**Capacity**
-
-- **empty** — checks whether the container is empty (public member function)
-- **size** — returns the number of elements (public member function)
-- **max_size** — returns the maximum possible number of elements (public member
-  function)
-
-**Modifiers**
-
-- **clear** — clears the contents (public member function)
-- **insert** — inserts elements or nodes(since C++17) (public member function)
-- **insert_range (C++23)** — inserts a range of elements (public member
-  function)
-- **emplace** — constructs element in-place (public member function)
-- **emplace_hint** — constructs elements in-place using a hint (public member
-  function)
-- **erase** — erases elements (public member function)
-- **swap** — swaps the contents (public member function)
-- **extract (C++17)** — extracts nodes from the container (public member
-  function)
-- **merge (C++17)** — splices nodes from another container (public member
-  function)
-
-**Lookup**
-
-- **count** — returns the number of elements matching specific key (public
-  member function)
-- **find** — finds element with specific key (public member function)
-- **contains (C++20)** — checks if the container contains element with specific
-  key (public member function)
-- **equal_range** — returns range of elements matching a specific key (public
-  member function)
-
-**Bucket interface**
-
-- **begin(size_type)cbegin(size_type)** — returns an iterator to the beginning
-  of the specified bucket (public member function)
-- **end(size_type)cend(size_type)** — returns an iterator to the end of the
-  specified bucket (public member function)
-- **bucket_count** — returns the number of buckets (public member function)
-- **max_bucket_count** — returns the maximum number of buckets (public member
-  function)
-- **bucket_size** — returns the number of elements in specific bucket (public
-  member function)
-- **bucket** — returns the bucket for specific key (public member function)
-
-**Hash policy**
-
-- **load_factor** — returns average number of elements per bucket (public member
-  function)
-- **max_load_factor** — manages maximum average number of elements per bucket
-  (public member function)
-- **rehash** — reserves at least the specified number of buckets and regenerates
-  the hash table (public member function)
-- **reserve** — reserves space for at least the specified number of elements and
-  regenerates the hash table (public member function)
-
-**Observers**
-
-- **hash_function** — returns function used to hash the keys (public member
-  function)
-- **key_eq** — returns the function used to compare keys for equality (public
-  member function)
-
-### Non-member functions
-
-- **operator==operator!= (C++11)(C++11)(removed in C++20)** — compares the
-  values in the unordered_set (function template)
-- **std::swap(std::unordered_set) (C++11)** — specializes the `std::swap`
-  algorithm (function template)
-- **erase_if(std::unordered_set) (C++20)** — erases all elements satisfying
-  specific criteria (function template)
-
-### Deduction guides
-*(since C++17)*
-
-### Notes
-
-The member types `iterator` and `const_iterator` may be aliases to the same
-type. This means defining a pair of function overloads using the two types as
-parameter types may violate the One Definition Rule. Since `iterator` is
-convertible to `const_iterator`, a single function with a `const_iterator` as
-parameter type will work instead.
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_containers_ranges` | 202202L | (C++23) | Ranges construction and
-      insertion for containers
-
-### Example
-
-```cpp
-#include <iostream>
-#include <unordered_set>
-
-void print(const auto& set)
-{
-    for (const auto& elem : set)
-        std::cout << elem << ' ';
-    std::cout << '\n';
-}
-
-int main()
-{
-    std::unordered_set<int> mySet{2, 7, 1, 8, 2, 8}; // creates a set of ints
-    print(mySet);
-
-    mySet.insert(5); // puts an element 5 in the set
-    print(mySet);
-
-    if (auto iter = mySet.find(5); iter != mySet.end())
-        mySet.erase(iter); // removes an element pointed to by iter
-    print(mySet);
-
-    mySet.erase(7); // removes an element 7
-    print(mySet);
-}
-```
-
-Possible output:
-
-```text
-8 1 7 2
-5 8 1 7 2
-8 1 7 2
-8 1 2
-```
-
-### Defect reports
-
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
-
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 2050 | C++11 | the definitions of `reference`, `const_reference`,
-      `pointer` and `const_pointer` were based on `allocator_type` | based on
-      `value_type` and `std::allocator_traits`
+Non-member: `operator==`/`operator!=` (C++11; `operator!=` removed in
+C++20 since `==` implies it), `std::swap` (C++11), `std::erase_if`
+(C++20). A `pmr::unordered_set` alias and deduction guides (C++17) are
+also provided.
 
 ### See also
 
-- **set** — collection of unique keys, sorted by keys (class template)
+- **set** — same uniqueness semantics, sorted by key, O(log n) instead
+  of average O(1)
+- **unordered_multiset** — same, but allows duplicate keys
 
 ---
 *Source: https://en.cppreference.com/w/cpp/container/unordered_set*

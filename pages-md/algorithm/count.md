@@ -1,6 +1,79 @@
 # std::count, std::count_if
 
+Tallies how many elements in a range match a condition: `count` counts
+elements equal to a value, `count_if` counts elements satisfying a
+predicate. Always O(n) — it scans the whole range regardless of how
+many matches it finds.
+
+```cpp skip
+std::count(first, last, value);           // # elements == value
+std::count_if(first, last, pred);         // # elements pred() accepts
+std::count(policy, first, last, value);   // parallel        (since C++17)
+std::count_if(policy, first, last, pred); // parallel        (since C++17)
+```
+
+Since C++20 the non-policy forms are `constexpr`.
+
+### What you provide
+
+- **first, last** — input iterators bounding the range to scan
+  (forward iterators for the parallel overloads).
+- **value** — compared to each element with `operator==`.
+- **pred** — a callable taking one element (by value or const
+  reference) and returning something convertible to `bool`. It must
+  not modify the element it's given.
+- **policy** — an execution policy such as `std::execution::par`
+  (C++17) to count with multiple threads.
+
+### Guarantees and costs
+
+- Exactly N comparisons/predicate applications, where N is
+  `std::distance(first, last)` — every element is visited, always.
+- Returns `iterator_traits<InputIt>::difference_type` — a signed
+  integer type (typically `long` or `long long`), not `int`.
+- Parallel overloads: if the predicate throws, `std::terminate` is
+  called; allocation failure throws `std::bad_alloc`.
+
+### Gotchas
+
+- Capture the result with `auto`; treating it as `int` invites
+  `-Wsign-compare` warnings or narrowing when the range is large.
+- It's O(n) even when the range is sorted or the container is a
+  `std::set`/`std::map` — those have their own `.count()` member in
+  O(log n); prefer it. For a sorted range, `std::equal_range` gives the
+  matching span in O(log n).
+- If you only need to know whether *any* element matches, `count_if`
+  still scans everything — `std::any_of` (or `std::find` compared
+  against `end()`) stops at the first match instead.
+
+### Example
+
 ```cpp
+#include <algorithm>
+#include <iostream>
+#include <vector>
+
+int main()
+{
+    std::vector<int> v{1, 2, 2, 3, 2, 4};
+
+    auto twos = std::count(v.begin(), v.end(), 2);
+    auto evens = std::count_if(v.begin(), v.end(),
+                               [](int x) { return x % 2 == 0; });
+
+    std::cout << "2s: " << twos << ", evens: " << evens << '\n';
+}
+```
+
+```text
+2s: 3, evens: 4
+```
+
+### Reference
+
+Full declarations:
+
+```cpp skip
 template< class InputIt, class T >
 typename iterator_traits<InputIt>::difference_type
     count( InputIt first, InputIt last, const T& value );  // (until C++20)
@@ -10,7 +83,7 @@ constexpr typename iterator_traits<InputIt>::difference_type
 template< class ExecutionPolicy, class ForwardIt, class T >
 typename iterator_traits<ForwardIt>::difference_type
     count( ExecutionPolicy&& policy,
-           ForwardIt first, ForwardIt last, const T& value );  // (2) (since C++17)
+           ForwardIt first, ForwardIt last, const T& value );  // (since C++17)
 template< class InputIt, class UnaryPredicate >
 typename iterator_traits<InputIt>::difference_type
     count_if( InputIt first, InputIt last, UnaryPredicate p );  // (until C++20)
@@ -20,164 +93,25 @@ constexpr typename iterator_traits<InputIt>::difference_type
 template< class ExecutionPolicy, class ForwardIt, class UnaryPredicate >
 typename iterator_traits<ForwardIt>::difference_type
     count_if( ExecutionPolicy&& policy,
-              ForwardIt first, ForwardIt last, UnaryPredicate p );  // (4) (since C++17)
+              ForwardIt first, ForwardIt last, UnaryPredicate p );  // (since C++17)
 ```
 
-Returns the number of elements in the range `[``first``,``last``)` satisfying
-specific criteria.
-
-1) Counts the elements that are equal to `value` (using `operator==`).
-
-3) Counts elements for which predicate `p` returns `true`.
-
-2,4) Same as (1,3), but executed according to `policy`. These overloads do not
-   participate in overload resolution unless
-   `std::is_execution_policy_v<std::decay_t<ExecutionPolicy>>` is `true`. (until
-   C++20) `std::is_execution_policy_v<std::remove_cvref_t<ExecutionPolicy>>` is
-   `true`. (since C++20)
-
-### Parameters
-
-- **first, last** — the range of elements to examine
-- **value** — the value to search for
-- **policy** — the execution policy to use. See execution policy for details.
-- **p** — unary predicate which returns ​`true` for the required elements. The
-  expression `p(v)` must be convertible to `bool` for every argument `v` of type
-  (possibly const) `VT`, where `VT` is the value type of `InputIt`, regardless
-  of value category, and must not modify `v`. Thus, a parameter type of `VT&`is
-  not allowed, nor is `VT` unless for `VT` a move is equivalent to a copy(since
-  C++11). ​
-
-**Type requirements**
-
-**-`InputIt` must meet the requirements of LegacyInputIterator.**
-
-**-`ForwardIt` must meet the requirements of LegacyForwardIterator.**
-
-### Return value
-
-The number of iterators `it` in the range `[``first``,``last``)` satisfying the
-following condition:
-
-1,2) `*it == value` is `true`.
-
-3,4) `p(*it) != false` is `true`.
-
-### Complexity
-
-Given `N` as `std::distance(first, last)`:
-
-1,2) Exactly `N` comparisons with `value` using `operator==`.
-
-3,4) Exactly `N` applications of the predicate `p`.
-
-### Exceptions
-
-The overloads with a template parameter named `ExecutionPolicy` report errors as
-follows:
-
-- If execution of a function invoked as part of the algorithm throws an
-  exception and `ExecutionPolicy` is one of the standard policies,
-  `std::terminate` is called. For any other `ExecutionPolicy`, the behavior is
-  implementation-defined.
-- If the algorithm fails to allocate memory, `std::bad_alloc` is thrown.
-
-### Notes
-
-For the number of elements in the range `[``first``,``last``)` without any
-additional criteria, see `std::distance`.
-
-### Possible implementation
-
-See also the implementations of `count` in libstdc++ and libc++.
-
-See also the implementations of `count_if` in libstdc++ and libc++.
-
-```cpp
-template<class InputIt, class T>
-typename iterator_traits<InputIt>::difference_type
-    count(InputIt first, InputIt last, const T& value)
-{
-    typename iterator_traits<InputIt>::difference_type ret = 0;
-    for (; first != last; ++first)
-        if (*first == value)
-            ++ret;
-    return ret;
-}
-```
-
-```cpp
-template<class InputIt, class UnaryPredicate>
-typename iterator_traits<InputIt>::difference_type
-    count_if(InputIt first, InputIt last, UnaryPredicate p)
-{
-    typename iterator_traits<InputIt>::difference_type ret = 0;
-    for (; first != last; ++first)
-        if (p(*first))
-            ++ret;
-    return ret;
-}
-```
-
-### Example
-
-```cpp
-#include <algorithm>
-#include <array>
-#include <iostream>
-#include <iterator>
-
-int main()
-{
-    constexpr std::array v{1, 2, 3, 4, 4, 3, 7, 8, 9, 10};
-    std::cout << "v: ";
-    std::copy(v.cbegin(), v.cend(), std::ostream_iterator<int>(std::cout, " "));
-    std::cout << '\n';
-
-    // Determine how many integers match a target value.
-    for (const int target : {3, 4, 5})
-    {
-        const int num_items = std::count(v.cbegin(), v.cend(), target);
-        std::cout << "number: " << target << ", count: " << num_items << '\n';
-    }
-
-    // Use a lambda expression to count elements divisible by 4.
-    int count_div4 = std::count_if(v.begin(), v.end(), [](int i) { return i % 4 == 0; });
-    std::cout << "numbers divisible by four: " << count_div4 << '\n';
-
-    // A simplified version of `distance` with O(N) complexity:
-    auto distance = [](auto first, auto last)
-    {
-        return std::count_if(first, last, [](auto) { return true; });
-    };
-    static_assert(distance(v.begin(), v.end()) == 10);
-}
-```
-
-Output:
-
-```text
-v: 1 2 3 4 4 3 7 8 9 10
-number: 3, count: 2
-number: 4, count: 2
-number: 5, count: 0
-numbers divisible by four: 3
-```
-
-### Defect reports
-
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
-
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 283 | C++98 | `T` was required to be EqualityComparable, but the value
-      type of `InputIt` is not always `T` | removed the requirement
+`InputIt` must meet LegacyInputIterator; the policy overloads'
+`ForwardIt` must meet LegacyForwardIterator. The predicate's parameter
+must accept the value type by const reference or value, regardless of
+value category, and must not modify it. Return value: the number of
+iterators `it` for which `*it == value` (count) or `p(*it) != false`
+(count_if) holds. For the size of the range with no filtering
+criterion, use `std::distance` instead. A defect report (LWG 283,
+applied to C++98) removed the requirement that `T` be
+EqualityComparable, since the value type of `InputIt` need not be `T`.
 
 ### See also
 
-- **distance** — returns the distance between two iterators (function template)
-- **ranges::countranges::count_if (C++20)(C++20)** — returns the number of
-  elements satisfying specific criteria (niebloid)
+- **distance** — returns the distance between two iterators, with no
+  filtering
+- **ranges::count, ranges::count_if** — constrained versions with
+  projections (C++20)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/algorithm/count*

@@ -1,164 +1,139 @@
 # std::set
 
+A sorted collection of unique keys, kept in ascending order by a
+comparison function (`std::less<Key>` by default). Typically
+implemented as a red-black tree. Use it when you need a membership
+test *and* ordered iteration or range queries; if you only need
+membership, `std::unordered_set` is usually faster.
+
+Search, insertion, and removal are all O(log n).
+
+```cpp skip
+std::set<int> s;
+std::set<int> s{3, 1, 4, 1, 5};      // duplicates dropped
+
+s.insert(x);                         // returns {iterator, bool inserted}
+s.emplace(args...);                  // construct in place
+
+s.find(x);                           // iterator, or end() if absent
+s.contains(x);                       // bool                            (C++20)
+s.count(x);                          // 0 or 1 (elements are unique)
+s.erase(x);
+
+s.lower_bound(x); s.upper_bound(x);  // range queries, O(log n)
+
+for (int x : s) { ... }              // visits elements in ascending order
+```
+
+### Guarantees and costs
+
+- `find`, `count`, `contains`, `insert`, `emplace`, `erase`,
+  `lower_bound`, `upper_bound`: all O(log n).
+- Iterators, pointers, and references to existing elements are never
+  invalidated by `insert`, `emplace`, or `erase`, except for the
+  element actually erased — nodes don't move.
+- `erase(it)` returns an iterator to the element that followed the
+  erased one.
+- Elements are immutable through the container (`iterator` and
+  `const_iterator` may even be the same type): modifying an element in
+  place would break the ordering invariant, so only erase-and-reinsert
+  changes a value.
+
+### Gotchas
+
+- Use the member `s.find(x)` / `s.count(x)`, not the
+  `std::find(s.begin(), s.end(), x)` algorithm — the member is
+  O(log n), the generic algorithm is a linear O(n) scan that ignores
+  the ordering.
+- Because `iterator` and `const_iterator` may alias the same type,
+  overloading a function on both can silently violate the One
+  Definition Rule; write one overload taking `const_iterator` (an
+  `iterator` converts to it implicitly) instead.
+- Need duplicate keys? Use `std::multiset`. Don't need ordering?
+  `std::unordered_set` gives average O(1) instead of O(log n).
+
+### Example
+
 ```cpp
+#include <iostream>
+#include <set>
+
+int main()
+{
+    std::set<int> s{3, 1, 4, 1, 5};   // duplicates dropped
+
+    auto [it, inserted] = s.insert(9);
+    std::cout << "inserted 9: " << std::boolalpha << inserted << '\n';
+
+    for (int x : s)
+        std::cout << x << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+inserted 9: true
+1 3 4 5 9 
+```
+
+### Reference
+
+```cpp skip
 template<
     class Key,
     class Compare = std::less<Key>,
     class Allocator = std::allocator<Key>
 > class set;  // (1)
 namespace pmr {
-    template<
-        class Key,
-        class Compare = std::less<Key>
-    > using set = std::set<Key, Compare, std::pmr::polymorphic_allocator<Key>>;
+    template< class Key, class Compare = std::less<Key> >
+    using set = std::set<Key, Compare, std::pmr::polymorphic_allocator<Key>>;
 }  // (2) (since C++17)
 ```
 
-`std::set` is an associative container that contains a sorted set of unique
-objects of type `Key`. Sorting is done using the key comparison function
-Compare. Search, removal, and insertion operations have logarithmic complexity.
-Sets are usually implemented as Red–black trees.
+Two keys `a`, `b` are equivalent (treated as the same key) when
+neither compares less than the other: `!comp(a, b) && !comp(b, a)` —
+this is the uniqueness test the container uses, not `operator==`.
+`value_type` is `Key`; `iterator` is a constant
+LegacyBidirectionalIterator. `set` meets the requirements of Container,
+AllocatorAwareContainer, AssociativeContainer, and ReversibleContainer.
 
-Everywhere the standard library uses the Compare requirements, uniqueness is
-determined by using the equivalence relation. In imprecise terms, two objects
-`a` and `b` are considered equivalent if neither compares less than the other:
-`!comp(a, b) && !comp(b, a)`.
+**Member functions**, grouped as upstream groups them:
 
-`std::set` meets the requirements of Container, AllocatorAwareContainer,
-AssociativeContainer and ReversibleContainer.
+- (constructor), (destructor), `operator=`, `get_allocator`
 
-### Template parameters
+  Iterators
+  - `begin`/`cbegin`, `end`/`cend` (C++11)
+  - `rbegin`/`crbegin`, `rend`/`crend` (C++11)
 
-### Member types
+  Capacity
+  - `empty`, `size`, `max_size`
 
-- **`key_type`** — `Key`
-- **`value_type`** — `Key`
-- **`size_type`** — Unsigned integer type (usually `std::size_t`)
-- **`difference_type`** — Signed integer type (usually `std::ptrdiff_t`)
-- **`key_compare`** — `Compare`
-- **`value_compare`** — `Compare`
-- **`allocator_type`** — `Allocator`
-- **`reference`** — `value_type&`
-- **`const_reference`** — const value_type&
-- **`pointer`** — `Allocator::pointer` (until C++11)
-  std::allocator_traits<Allocator>::pointer (since C++11)
-- **`Allocator::pointer`** — (until C++11)
-- **std::allocator_traits<Allocator>::pointer** — (since C++11)
-- **`const_pointer`** — `Allocator::const_pointer` (until C++11)
-  std::allocator_traits<Allocator>::const_pointer (since C++11)
-- **`Allocator::const_pointer`** — (until C++11)
-- **std::allocator_traits<Allocator>::const_pointer** — (since C++11)
-- **`iterator`** — Constant LegacyBidirectionalIterator to `value_type`
-- **`const_iterator`** — LegacyBidirectionalIterator to const value_type
-- **`reverse_iterator`** — std::reverse_iterator<iterator>
-- **`const_reverse_iterator`** — std::reverse_iterator<const_iterator>
-- **`node_type` (since C++17)** — a specialization of node handle representing a
-  container node
-- **`insert_return_type` (since C++17)** — type describing the result of
-  inserting a `node_type`, a specialization of `template<class Iter, class
-  NodeType> struct /*unspecified*/ { Iter position; bool inserted; NodeType
-  node; };` instantiated with template arguments `iterator` and `node_type`.
+  Modifiers
+  - `clear`
+  - `insert`, `insert_range` (C++23)
+  - `emplace`, `emplace_hint` (C++11)
+  - `erase`
+  - `swap`
+  - `extract`, `merge` (C++17) — move nodes out of / between containers
+    without copying keys
 
-### Member functions
+  Lookup
+  - `count`, `find`, `contains` (C++20), `equal_range`
+  - `lower_bound`, `upper_bound`
 
-- **(constructor)** — constructs the `set` (public member function)
-- **(destructor)** — destructs the `set` (public member function)
-- **operator=** — assigns values to the container (public member function)
-- **get_allocator** — returns the associated allocator (public member function)
+  Observers
+  - `key_comp`, `value_comp` — the comparison function in use
 
-**Iterators**
+Non-member: lexicographic `operator==`/`<=>` (C++20 replaces the
+individual comparisons with `<=>`), `std::swap`, `std::erase_if`
+(C++20). A `pmr::set` alias and deduction guides (C++17) are also
+provided.
 
-- **begincbegin (C++11)** — returns an iterator to the beginning (public member
-  function)
-- **endcend (C++11)** — returns an iterator to the end (public member function)
-- **rbegincrbegin (C++11)** — returns a reverse iterator to the beginning
-  (public member function)
-- **rendcrend (C++11)** — returns a reverse iterator to the end (public member
-  function)
+### See also
 
-**Capacity**
-
-- **empty** — checks whether the container is empty (public member function)
-- **size** — returns the number of elements (public member function)
-- **max_size** — returns the maximum possible number of elements (public member
-  function)
-
-**Modifiers**
-
-- **clear** — clears the contents (public member function)
-- **insert** — inserts elements or nodes(since C++17) (public member function)
-- **insert_range (C++23)** — inserts a range of elements (public member
-  function)
-- **emplace (C++11)** — constructs element in-place (public member function)
-- **emplace_hint (C++11)** — constructs elements in-place using a hint (public
-  member function)
-- **erase** — erases elements (public member function)
-- **swap** — swaps the contents (public member function)
-- **extract (C++17)** — extracts nodes from the container (public member
-  function)
-- **merge (C++17)** — splices nodes from another container (public member
-  function)
-
-**Lookup**
-
-- **count** — returns the number of elements matching specific key (public
-  member function)
-- **find** — finds element with specific key (public member function)
-- **contains (C++20)** — checks if the container contains element with specific
-  key (public member function)
-- **equal_range** — returns range of elements matching a specific key (public
-  member function)
-- **lower_bound** — returns an iterator to the first element *not less* than the
-  given key (public member function)
-- **upper_bound** — returns an iterator to the first element *greater* than the
-  given key (public member function)
-
-**Observers**
-
-- **key_comp** — returns the function that compares keys (public member
-  function)
-- **value_comp** — returns the function that compares keys in objects of type
-  `value_type` (public member function)
-
-### Non-member functions
-
-- **operator==operator!=operator<operator<=operator>operator>=operator<=>
-  (removed in C++20)(removed in C++20)(removed in C++20)(removed in
-  C++20)(removed in C++20)(C++20)** — lexicographically compares the values of
-  two `sets` (function template)
-- **std::swap(std::set)** — specializes the `std::swap` algorithm (function
-  template)
-- **erase_if(std::set) (C++20)** — erases all elements satisfying specific
-  criteria (function template)
-
-### Deduction guides
-*(since C++17)*
-
-### Notes
-
-The member types `iterator` and `const_iterator` may be aliases to the same
-type. This means defining a pair of function overloads using the two types as
-parameter types may violate the One Definition Rule. Since `iterator` is
-convertible to `const_iterator`, a single function with a `const_iterator` as
-parameter type will work instead.
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_containers_ranges` | 202202L | (C++23) | Ranges construction and
-      insertion for containers
-
-### Example
-
-### Defect Reports
-
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
-
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 103 | C++98 | iterator allows modification of keys | iterator made
-      constant
-  LWG 230 | C++98 | `Key` was not required to be CopyConstructible (a key of
-      type `Key` might not be able to be constructed) | `Key` is also required
-      to be CopyConstructible
+- **unordered_set** — same uniqueness semantics, average O(1) instead
+  of O(log n), no ordering (C++11)
+- **multiset** — same, but allows duplicate keys
 
 ---
 *Source: https://en.cppreference.com/w/cpp/container/set*

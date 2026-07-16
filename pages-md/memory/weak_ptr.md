@@ -1,142 +1,108 @@
 # std::weak_ptr
 
-```cpp
-template< class T > class weak_ptr;  // (since C++11)
+`std::weak_ptr` observes an object owned by a `shared_ptr` without
+owning it — holding one does not keep the object alive. It exists for
+two jobs: safely checking whether a shared object is still around
+(and briefly promoting to a `shared_ptr` to use it), and breaking
+reference cycles between `shared_ptr`s that would otherwise leak
+forever.
+
+```cpp skip
+std::weak_ptr<T> w = shared;      // observe; does not bump the strong count
+if (auto sp = w.lock())           // sp is non-null only if still alive
+    use(*sp);
+w.expired();                      // snapshot only — see Gotchas
+w.use_count();                    // number of owning shared_ptrs, for debugging
 ```
 
-`std::weak_ptr` is a smart pointer that holds a non-owning ("weak") reference to
-an object that is managed by `std::shared_ptr`. It must be converted to
-`std::shared_ptr` in order to access the referenced object.
+### Member table
 
-`std::weak_ptr` models temporary ownership: when an object needs to be accessed
-only if it exists, and it may be deleted at any time by someone else,
-`std::weak_ptr` is used to track the object, and it is converted to
-`std::shared_ptr` to assume temporary ownership. If the original
-`std::shared_ptr` is destroyed at this time, the object's lifetime is extended
-until the temporary `std::shared_ptr` is destroyed as well.
+- **Member types** — `element_type` (`T`, or `remove_extent_t<T>`
+  since C++17).
+- **(constructor) / (destructor) / operator=** — construct, destroy,
+  reassign.
+- **Modifiers** — `reset`, `swap`.
+- **Observers** — `use_count`; `expired`; `lock` (promote to
+  `shared_ptr`); `owner_before`; `owner_hash` / `owner_equal` (C++26).
+- **Non-member** — `std::swap` (C++11).
+- **Helper classes** — `std::atomic<std::weak_ptr>` (C++20).
 
-Another use for `std::weak_ptr` is to break reference cycles formed by objects
-managed by `std::shared_ptr`. If such cycle is orphaned (i.e., there are no
-outside shared pointers into the cycle), the `shared_ptr` reference counts
-cannot reach zero and the memory is leaked. To prevent this, one of the pointers
-in the cycle can be made weak.
+### Guarantees and costs
 
-### Member types
+- `lock()` is the atomic, race-free way to use a possibly-expired
+  object: it returns a `shared_ptr` that owns the object if it's still
+  alive, or an empty `shared_ptr` otherwise, in one step.
+- Typical layout mirrors `shared_ptr`: a `weak_ptr` stores a pointer to
+  the control block and the stored pointer of the `shared_ptr` it was
+  built from. Keeping a separate stored pointer is what makes
+  `shared_ptr` → `weak_ptr` → `shared_ptr` round-trip correctly, even
+  for a `shared_ptr` created via the aliasing constructor.
+- A `weak_ptr` keeps the *control block* alive, not the managed
+  object — the object is destroyed as soon as the last `shared_ptr`
+  owner is gone, regardless of how many `weak_ptr`s still point at the
+  control block.
+- Since C++26, `weak_ptr` can be used as a key in unordered
+  associative containers (`__cpp_lib_smart_ptr_owner_equality`).
 
-- **`element_type`** — `T` (until C++17) `std::remove_extent_t<T>` (since C++17)
-- **`T`** — (until C++17)
-- **`std::remove_extent_t<T>`** — (since C++17)
+### Gotchas
 
-### Member functions
-
-- **(constructor)** — creates a new `weak_ptr` (public member function)
-- **(destructor)** — destroys a `weak_ptr` (public member function)
-- **operator=** — assigns the `weak_ptr` (public member function)
-
-**Modifiers**
-
-- **reset** — releases the ownership of the managed object (public member
-  function)
-- **swap** — swaps the managed objects (public member function)
-
-**Observers**
-
-- **use_count** — returns the number of `shared_ptr` objects that manage the
-  object (public member function)
-- **expired** — checks whether the referenced object was already deleted (public
-  member function)
-- **lock** — creates a `shared_ptr` that manages the referenced object (public
-  member function)
-- **owner_before** — provides owner-based ordering of weak pointers (public
-  member function)
-- **owner_hash (C++26)** — provides owner-based hashing of weak pointers (public
-  member function)
-- **owner_equal (C++26)** — provides owner-based equal comparison of weak
-  pointers (public member function)
-
-### Non-member functions
-
-- **std::swap(std::weak_ptr) (C++11)** — specializes the `std::swap` algorithm
-  (function template)
-
-### Helper classes
-
-- **std::atomic<std::weak_ptr> (C++20)** — atomic weak pointer (class template
-  specialization)
-
-### Deduction guides (since C++17)
-
-### Notes
-
-Like `std::shared_ptr`, a typical implementation of `weak_ptr` stores two
-pointers:
-
-- a pointer to the control block; and
-- the stored pointer of the `shared_ptr` it was constructed from.
-
-A separate stored pointer is necessary to ensure that converting a `shared_ptr`
-to `weak_ptr` and then back works correctly, even for aliased `shared_ptr`s. It
-is not possible to access the stored pointer in a `weak_ptr` without locking it
-into a `shared_ptr`.
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_smart_ptr_owner_equality` | 202306L | (C++26) | Enabling the use of
-      `std::weak_ptr` as keys in unordered associative containers
+- `weak_ptr` has no `operator*`/`operator->` — you cannot dereference
+  it directly; call `lock()` first and check the result.
+- `expired()` is only a snapshot: in threaded code, the last owning
+  `shared_ptr` can be dropped right after the check returns. `lock()`
+  is the safe alternative because the check and the acquire happen
+  atomically together.
+- A cycle of `shared_ptr`s that reference each other never lets any of
+  their strong counts reach zero, leaking the whole cycle; the fix is
+  to make one direction of the cycle a `weak_ptr` instead.
 
 ### Example
-
-Demonstrates how lock is used to ensure validity of the pointer.
 
 ```cpp
 #include <iostream>
 #include <memory>
 
-std::weak_ptr<int> gw;
-
-void observe()
-{
-    std::cout << "gw.use_count() == " << gw.use_count() << "; ";
-    // we have to make a copy of shared pointer before usage:
-    if (std::shared_ptr<int> spt = gw.lock())
-        std::cout << "*spt == " << *spt << '\n';
-    else
-        std::cout << "gw is expired\n";
-}
-
 int main()
 {
-    {
-        auto sp = std::make_shared<int>(42);
-        gw = sp;
+    auto sp = std::make_shared<int>(42);
+    std::weak_ptr<int> wp = sp;
 
-        observe();
-    }
+    std::cout << "use_count (shared only) = " << sp.use_count() << '\n';
 
-    observe();
+    sp.reset();   // last shared_ptr owner gone
+
+    if (auto locked = wp.lock())
+        std::cout << "still alive: " << *locked << '\n';
+    else
+        std::cout << "expired\n";
 }
 ```
 
-Output:
-
 ```text
-gw.use_count() == 1; *spt == 42
-gw.use_count() == 0; gw is expired
+use_count (shared only) = 1
+expired
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+Full declaration:
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 3001 | C++17 | `element_type` was not updated for array support | updated
+```cpp skip
+template< class T > class weak_ptr;  // (since C++11)
+```
+
+`weak_ptr` models *temporary* ownership: an object needing conditional
+access converts a `weak_ptr` to `shared_ptr` to extend the object's
+lifetime for as long as that temporary `shared_ptr` is held, even if
+the original `shared_ptr` is destroyed meanwhile.
+
+Defect report LWG 3001 (applied to C++17): `element_type` had not been
+updated for array support; corrected.
 
 ### See also
 
-- **unique_ptr (C++11)** — smart pointer with unique object ownership semantics
-  (class template)
-- **shared_ptr (C++11)** — smart pointer with shared object ownership semantics
-  (class template)
+- **shared_ptr (C++11)** — the owning counterpart `weak_ptr` observes
+- **unique_ptr (C++11)** — unique, non-shared ownership
 
 ---
 *Source: https://en.cppreference.com/w/cpp/memory/weak_ptr*

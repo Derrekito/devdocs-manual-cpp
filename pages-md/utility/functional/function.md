@@ -1,92 +1,82 @@
 # std::function
 
-```cpp
-template< class >
-class function; /* undefined */  // (since C++11)
-template< class R, class... Args >
-class function<R(Args...)>;  // (since C++11)
+`std::function<R(Args...)>` (C++11) is a general-purpose, type-erased
+wrapper that can store and invoke any callable matching a given
+signature — a free function, a lambda (with or without captures), a
+`std::bind` expression, a function object, or a pointer to a member
+function or data member. Use it when you need to hold callables of
+*different* underlying types uniformly (a callback table, a stored
+handler); when the callable's type is known at each call site, a plain
+template parameter or `auto` lambda is cheaper — see Gotchas.
+
+```cpp skip
+std::function<R(Args...)> f = free_function;
+std::function<R(Args...)> f = [captures](Args...) { ... };
+std::function<R(Args...)> f = SomeFunctor{};
+std::function<R(Args...)> f = std::bind(fn, args...);
+std::function<R(const Obj&, Args...)> f = &Obj::member_fn;   // via bound object
+f(args...);                          // invoke; throws if empty
+if (f) ...                           // false iff empty
 ```
 
-Class template `std::function` is a general-purpose polymorphic function
-wrapper. Instances of `std::function` can store, copy, and invoke any
-CopyConstructible Callable *target* -- functions (via pointers thereto), lambda
-expressions, bind expressions, or other function objects, as well as pointers to
-member functions and pointers to data members.
+### What you provide
 
-The stored callable object is called the *target* of `std::function`. If a
-`std::function` contains no target, it is called *empty*. Invoking the *target*
-of an *empty* `std::function` results in `std::bad_function_call` exception
-being thrown.
-
-`std::function` satisfies the requirements of CopyConstructible and
-CopyAssignable.
-
-### Member types
-
-- **`result_type`** — `R`
-- **`argument_type`(deprecated in C++17)(removed in C++20)** — `T` if
-  `sizeof...(Args)==1` and `T` is the first and only type in `Args...`
-- **`first_argument_type`(deprecated in C++17)(removed in C++20)** — `T1` if
-  `sizeof...(Args)==2` and `T1` is the first of the two types in `Args...`
-- **`second_argument_type`(deprecated in C++17)(removed in C++20)** — `T2` if
-  `sizeof...(Args)==2` and `T2` is the second of the two types in `Args...`
+- **R** — the return type the wrapper reports; anything convertible
+  from what the stored callable actually returns.
+- **Args...** — the parameter types the wrapper accepts; the stored
+  callable must be invocable with them.
+- The callable itself must be CopyConstructible — `std::function` is
+  copyable, so its target must be too (this rules out storing a
+  move-only lambda directly).
 
 ### Member functions
 
-- **(constructor)** — constructs a new `std::function` instance (public member
-  function)
-- **(destructor)** — destroys a `std::function` instance (public member
-  function)
-- **operator=** — assigns a new target (public member function)
-- **swap** — swaps the contents (public member function)
-- **assign (removed in C++17)** — assigns a new target (public member function)
-- **operator bool** — checks if a target is contained (public member function)
-- **operator()** — invokes the target (public member function)
+| Member | What it does |
+| --- | --- |
+| `operator()(args...)` | invokes the target; throws if empty |
+| `operator bool` | true iff a target is stored |
+| `operator=` | assigns a new target (or clears, from `nullptr`) |
+| `swap(other)` | exchanges targets |
+| `target<T>()` | pointer to the stored target if its type is `T`, else null |
+| `target_type()` | `typeid` of the stored target |
 
-**Target access**
+Non-members: `std::swap(std::function&, std::function&)`.
 
-- **target_type** — obtains the typeid of the stored target (public member
-  function)
-- **target** — obtains a pointer to the stored target (public member function)
+### Guarantees and costs
 
-### Non-member functions
+- Type erasure typically costs a virtual call per invocation, plus a
+  heap allocation for targets too large for the implementation's small-
+  object buffer (most captures beyond a pointer or two overflow it).
+  This makes `std::function` measurably slower than calling a lambda
+  or function pointer directly.
+- Calling an empty `std::function` throws `std::bad_function_call`
+  rather than being undefined behavior.
+- `std::function` is CopyConstructible and CopyAssignable as long as
+  its current target is (or it's empty).
 
-- **std::swap(std::function) (C++11)** — specializes the `std::swap` algorithm
-  (function template)
-- **operator==operator!= (removed in C++20)** — compares a `std::function` with
-  `nullptr` (function template)
+### Gotchas
 
-### Helper classes
-
-- **std::uses_allocator<std::function> (C++11) (until C++17)** — specializes the
-  `std::uses_allocator` type trait (class template specialization)
-
-### Deduction guides(since C++17)
-
-### Notes
-
-Care should be taken when a `std::function`, whose result type is a reference,
-is initialized from a lambda expression without a trailing-return-type. Due to
-the way auto deduction works, such lambda expression will always return a
-prvalue. Hence, the resulting reference will usually bind to a temporary whose
-lifetime ends when `std::function::operator()` returns.
-*(until C++23)*
-
-If a `std::function` returning a reference is initialized from a function or
-function object returning a prvalue (including a lambda expression without a
-trailing-return-type), the program is ill-formed because binding the returned
-reference to a temporary object is forbidden.
-*(since C++23)*
-
-```cpp
-std::function<const int&()> F([] { return 42; }); // Error since C++23: can't bind
-                                                  // the returned reference to a temporary
-int x = F(); // Undefined behavior until C++23: the result of F() is a dangling reference
-
-std::function<int&()> G([]() -> int& { static int i{0x2A}; return i; }); // OK
-
-std::function<const int&()> H([i{052}] -> const int& { return i; }); // OK
-```
+- Guard calls with `if (f) f(...);` when the callable may be unset —
+  an empty `std::function` throws on invocation, it doesn't silently
+  no-op.
+- In hot paths, prefer a template parameter (`template <class F> void
+  run(F&& f)`) or `auto` for a lambda — `std::function` pays for
+  runtime polymorphism you don't need when the type is known at
+  compile time. From C++23, `std::move_only_function` is the
+  alternative when you need type erasure but not copyability (and
+  therefore no CopyConstructible requirement on the target).
+- A captured reference or pointer inside the stored callable is not
+  kept alive by `std::function` — the wrapper keeps the *callable*
+  alive, not whatever it captured by reference; a dangling capture
+  still dangles.
+- A `std::function` whose result type `R` is a reference can bind a
+  dangling temporary: a lambda without a trailing return type always
+  returns by value (a prvalue), so `std::function<const int&()>`
+  wrapping `[]{ return 42; }` binds the returned reference to a
+  temporary that's gone once `operator()` returns. Until C++23 this
+  compiled and was undefined behavior on use; since C++23 it's
+  ill-formed to construct at all. Returning an actual reference (a
+  `static` or a captured object) is fine either way.
 
 ### Example
 
@@ -101,18 +91,7 @@ struct Foo
     int num_;
 };
 
-void print_num(int i)
-{
-    std::cout << i << '\n';
-}
-
-struct PrintNum
-{
-    void operator()(int i) const
-    {
-        std::cout << i << '\n';
-    }
-};
+void print_num(int i) { std::cout << i << '\n'; }
 
 int main()
 {
@@ -121,74 +100,54 @@ int main()
     f_display(-9);
 
     // store a lambda
-    std::function<void()> f_display_42 = []() { print_num(42); };
+    std::function<void()> f_display_42 = [] { print_num(42); };
     f_display_42();
 
-    // store the result of a call to std::bind
-    std::function<void()> f_display_31337 = std::bind(print_num, 31337);
-    f_display_31337();
-
-    // store a call to a member function
-    std::function<void(const Foo&, int)> f_add_display = &Foo::print_add;
+    // store a call to a member function, bound to an object
+    using std::placeholders::_1;
     const Foo foo(314159);
-    f_add_display(foo, 1);
-    f_add_display(314159, 1);
+    std::function<void(int)> f_add =
+        std::bind(&Foo::print_add, foo, _1);
+    f_add(1);
 
     // store a call to a data member accessor
-    std::function<int(Foo const&)> f_num = &Foo::num_;
+    std::function<int(const Foo&)> f_num = &Foo::num_;
     std::cout << "num_: " << f_num(foo) << '\n';
-
-    // store a call to a member function and object
-    using std::placeholders::_1;
-    std::function<void(int)> f_add_display2 = std::bind(&Foo::print_add, foo, _1);
-    f_add_display2(2);
-
-    // store a call to a member function and object ptr
-    std::function<void(int)> f_add_display3 = std::bind(&Foo::print_add, &foo, _1);
-    f_add_display3(3);
-
-    // store a call to a function object
-    std::function<void(int)> f_display_obj = PrintNum();
-    f_display_obj(18);
-
-    auto factorial = [](int n)
-    {
-        // store a lambda object to emulate "recursive lambda"; aware of extra overhead
-        std::function<int(int)> fac = [&](int n) { return (n < 2) ? 1 : n * fac(n - 1); };
-        // note that "auto fac = [&](int n) {...};" does not work in recursive calls
-        return fac(n);
-    };
-    for (int i{5}; i != 8; ++i)
-        std::cout << i << "! = " << factorial(i) << ";  ";
-    std::cout << '\n';
 }
 ```
-
-Possible output:
 
 ```text
 -9
 42
-31337
-314160
 314160
 num_: 314159
-314161
-314162
-18
-5! = 120;  6! = 720;  7! = 5040;
 ```
+
+### Reference
+
+```cpp skip
+template< class >
+class function; /* undefined */  // (since C++11)
+template< class R, class... Args >
+class function<R(Args...)>;  // (since C++11)
+```
+
+Formally: if a `std::function` contains no target it is called
+*empty*; `operator bool` reports this. `result_type` names `R`.
+`argument_type`/`first_argument_type`/`second_argument_type` (present
+when `Args...` has exactly one or two types) were deprecated in C++17
+and removed in C++20. The `assign` member function was removed in
+C++17. `operator==`/`operator!=` against `nullptr` (to test emptiness)
+were removed in C++20 in favor of `operator bool`. CTAD deduction
+guides were added in C++17. The `std::uses_allocator` specialization
+existed C++11 through C++17 and was then removed.
 
 ### See also
 
-- **move_only_function (C++23)** — wraps callable object of any type with
-  specified function call signature (class template)
-- **bad_function_call (C++11)** — the exception thrown when invoking an empty
-  `std::function` (class)
-- **mem_fn (C++11)** — creates a function object out of a pointer to a member
-  (function template)
-- ****`typeid`**** — queries information of a type, returning a `std::type_info`
-  object representing the type
+- **move_only_function (C++23)** — like `function`, but move-only
+- **bad_function_call (C++11)** — thrown when invoking an empty `std::function`
+- **bind_front (C++20)** — binds args to a callable, no placeholder syntax
+- **mem_fn (C++11)** — turns a pointer to member into a callable object
 
 ---
 *Source: https://en.cppreference.com/w/cpp/utility/functional/function*

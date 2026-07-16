@@ -1,56 +1,109 @@
 # std::filesystem::directory_iterator
 
+`directory_iterator` (`std::filesystem`, C++17) walks the entries of
+one directory — not its subdirectories — yielding a `directory_entry`
+per file or folder. `.` and `..` are skipped automatically, and it's a
+single-pass input iterator: iteration order is unspecified, so sort
+the results yourself if order matters.
+
+```cpp skip
+for (const auto& entry : std::filesystem::directory_iterator{dir})   // throws
+    use(entry);
+std::error_code ec;
+std::filesystem::directory_iterator it{dir, ec};   // non-throwing form
+std::filesystem::directory_iterator{};             // the end iterator
+```
+
+### Member table
+
+- **Member types** — `value_type` (`directory_entry`); `difference_type`
+  (`std::ptrdiff_t`); `pointer` (`const directory_entry*`); `reference`
+  (`const directory_entry&`); `iterator_category` (`input_iterator_tag`).
+- **(constructor) / (destructor) / operator=**.
+- **operator\* / operator->** — access the current `directory_entry`.
+- **operator++ / increment()** — advance to the next entry;
+  `increment(ec)` is the non-throwing form.
+- **Non-member** — `begin`/`end` (C++17), enabling range-`for`.
+  `operator==` (and, until C++20, `operator!=`) as required by
+  LegacyInputIterator; whether `operator!=` is separately provided or
+  synthesized, and whether equality is a member or non-member, is
+  unspecified.
+
+### Guarantees and costs
+
+- LegacyInputIterator: single pass. Copies share iteration state, so a
+  copied iterator doesn't give you an independent second pass.
+- The default-constructed iterator is the end iterator; two end
+  iterators always compare equal. Dereferencing or incrementing the
+  end iterator is undefined behavior.
+- Whether a file added or removed from the directory after the
+  iterator was created shows up during iteration is unspecified.
+- The constructor and the non-const advance operations cache whatever
+  file attributes the underlying OS call already returned alongside
+  each entry, without calling `directory_entry::refresh()` — so
+  reading cached attributes off the entries as you iterate costs no
+  extra system calls.
+- Since C++20, `directory_iterator` additionally models
+  `std::ranges::borrowed_range` and `std::ranges::view` (see
+  Reference).
+
+### Gotchas
+
+- Never dereference or increment an end iterator — comparing against
+  it is fine, using it further is UB.
+- The default constructors/operations **throw** `filesystem_error` on
+  a missing or unreadable directory; pass a trailing `std::error_code&`
+  to the constructor and to `increment()` for the non-throwing forms
+  when the path isn't trusted.
+- It's single-pass: don't rely on iterating the same
+  `directory_iterator` object twice — construct a fresh one (or
+  collect entries into a container first).
+
+### Example
+
 ```cpp
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <vector>
+
+namespace fs = std::filesystem;
+
+int main()
+{
+    fs::path dir = fs::temp_directory_path() / "devdocs_diriter_demo";
+    fs::remove_all(dir);
+    fs::create_directory(dir);
+    std::ofstream(dir / "b.txt") << "b";
+    std::ofstream(dir / "a.txt") << "a";
+
+    std::vector<std::string> names;
+    for (const auto& entry : fs::directory_iterator{dir})
+        names.push_back(entry.path().filename().string());
+
+    std::sort(names.begin(), names.end());   // order is unspecified otherwise
+    for (const auto& name : names)
+        std::cout << name << '\n';
+
+    fs::remove_all(dir);   // clean up
+}
+```
+
+```text
+a.txt
+b.txt
+```
+
+### Reference
+
+Full declaration:
+
+```cpp skip
 class directory_iterator;  // (since C++17)
 ```
 
-`directory_iterator` is a LegacyInputIterator that iterates over the
-`directory_entry` elements of a directory (but does not visit the
-subdirectories). The iteration order is unspecified, except that each directory
-entry is visited only once. The special pathnames dot and dot-dot are skipped.
-
-If the `directory_iterator` reports an error or is advanced past the last
-directory entry, it becomes equal to the default-constructed iterator, also
-known as the end iterator. Two end iterators are always equal, dereferencing or
-incrementing the end iterator is undefined behavior.
-
-If a file or a directory is deleted or added to the directory tree after the
-directory iterator has been created, it is unspecified whether the change would
-be observed through the iterator.
-
-### Member types
-
-- **`value_type`** — `std::filesystem::directory_entry`
-- **`difference_type`** — `std::ptrdiff_t`
-- **`pointer`** — `const std::filesystem::directory_entry*`
-- **`reference`** — `const std::filesystem::directory_entry&`
-- **`iterator_category`** — `std::input_iterator_tag`
-
-### Member functions
-
-- **(constructor)** — constructs a directory iterator (public member function)
-- **(destructor)** — default destructor (public member function)
-- **operator=** — assigns contents (public member function)
-- **operator*operator->** — accesses the pointed-to entry (public member
-  function)
-- **incrementoperator++** — advances to the next entry (public member function)
-
-### Non-member functions
-
--
-  **begin(std::filesystem::directory_iterator)end(std::filesystem::directory_iterator)
-  (C++17)** — range-based for loop support (function)
-
-Additionally, `operator==` and `operator!=` are(until C++20)`operator==`
-is(since C++20) provided as required by LegacyInputIterator.
-
-It is unspecified whether `operator!=` is provided because it can be synthesized
-from `operator==`, and(since C++20) whether an equality operator is a member or
-non-member.
-
-### Helper templates
-
-```cpp
+```cpp skip
 namespace std::ranges {
 template<>
 inline constexpr bool
@@ -62,90 +115,17 @@ inline constexpr bool enable_view<std::filesystem::directory_iterator> = true;
 }  // (since C++20)
 ```
 
-These specializations for `directory_iterator` make it a `borrowed_range` and a
-`view`.
-
-### Notes
-
-Many low-level OS APIs for directory traversal retrieve file attributes along
-with the next directory entry. The constructors and the non-const member
-functions of `std::filesystem::directory_iterator` store these attributes, if
-any, in the pointed-to `std::filesystem::directory_entry` without calling
-`directory_entry::refresh`, which makes it possible to examine the attributes of
-the directory entries as they are being iterated over, without making additional
-system calls.
-
-### Example
-
-```cpp
-#include <algorithm>
-#include <filesystem>
-#include <fstream>
-#include <iostream>
-
-int main()
-{
-    const std::filesystem::path sandbox{"sandbox"};
-    std::filesystem::create_directories(sandbox/"dir1"/"dir2");
-    std::ofstream{sandbox/"file1.txt"};
-    std::ofstream{sandbox/"file2.txt"};
-
-    std::cout << "directory_iterator:\n";
-    // directory_iterator can be iterated using a range-for loop
-    for (auto const& dir_entry : std::filesystem::directory_iterator{sandbox})
-        std::cout << dir_entry.path() << '\n';
-
-    std::cout << "\ndirectory_iterator as a range:\n";
-    // directory_iterator behaves as a range in other ways, too
-    std::ranges::for_each(
-        std::filesystem::directory_iterator{sandbox},
-        [](const auto& dir_entry) { std::cout << dir_entry << '\n'; });
-
-    std::cout << "\nrecursive_directory_iterator:\n";
-    for (auto const& dir_entry : std::filesystem::recursive_directory_iterator{sandbox})
-        std::cout << dir_entry << '\n';
-
-    // delete the sandbox dir and all contents within it, including subdirs
-    std::filesystem::remove_all(sandbox);
-}
-```
-
-Possible output:
-
-```text
-directory_iterator:
-"sandbox/file2.txt"
-"sandbox/file1.txt"
-"sandbox/dir1"
-
-directory_iterator as a range:
-"sandbox/file2.txt"
-"sandbox/file1.txt"
-"sandbox/dir1"
-
-recursive_directory_iterator:
-"sandbox/file2.txt"
-"sandbox/file1.txt"
-"sandbox/dir1"
-"sandbox/dir1/dir2"
-```
-
-### Defect reports
-
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
-
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 3480 | C++20 | `directory_iterator` was neither a `borrowed_range` nor a
-      `view` | it is both
+Defect report LWG 3480 (applied to C++20): `directory_iterator` was
+previously neither a `borrowed_range` nor a `view`; both
+specializations above correct that.
 
 ### See also
 
-- **recursive_directory_iterator (C++17)** — an iterator to the contents of a
-  directory and its subdirectories (class)
-- **directory_options (C++17)** — options for iterating directory contents
-  (enum)
-- **directory_entry (C++17)** — a directory entry (class)
+- **recursive_directory_iterator (C++17)** — same, but also descends
+  into subdirectories
+- **directory_entry (C++17)** — the element type yielded by iteration
+- **directory_options (C++17)** — flags controlling iteration (e.g.
+  skipping permission-denied entries)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/filesystem/directory_iterator*

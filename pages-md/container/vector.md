@@ -1,6 +1,107 @@
 # std::vector
 
+A dynamically-sized array. Elements live in one contiguous block, so
+`v[i]` is a single pointer offset and `v.data()` can be passed anywhere
+a C array is expected. This is the default sequence container — reach
+for something else only when you have a specific reason (frequent
+front insertion → `std::deque`; frequent middle insertion → `std::list`;
+fixed size known at compile time → `std::array`).
+
+Growth is automatic: capacity roughly doubles when it runs out, so
+`push_back` is amortized O(1), but any individual call that triggers a
+reallocation copies (or moves) every existing element. `reserve()` up
+front avoids that when the final size is known.
+
+```cpp skip
+std::vector<int> v;              // empty
+std::vector<int> v(10);          // 10 value-initialized elements
+std::vector<int> v{1, 2, 3};     // list of elements
+std::vector<int> v(n, x);        // n copies of x
+
+v.push_back(x);                  // append, amortized O(1)
+v.emplace_back(args...);         // construct in place at the end (C++11)
+v[i];                            // unchecked access
+v.at(i);                         // bounds-checked access, throws
+v.reserve(n);                    // grow capacity without adding elements
+v.size(); v.empty();
+```
+
+`std::vector<bool>` is a bit-packed specialization with different
+guarantees — see below.
+
+### Guarantees and costs
+
+- Random access (`v[i]`, `v.at(i)`): O(1).
+- `push_back` / `emplace_back`: amortized O(1); a single call can be
+  O(n) when it triggers reallocation.
+- Insertion or erasure anywhere but the end: O(n) — every element after
+  the point of insertion/erasure is shifted.
+- `reserve(n)` / `shrink_to_fit()`: reallocate only if the requested
+  capacity differs from the current one; otherwise no-ops.
+- Iterator/reference/pointer invalidation:
+  - Read-only operations, `operator[]`, `at`, `front`, `back`, `data`:
+    never invalidate anything.
+  - `push_back`, `emplace_back`, `insert`, `emplace`, `resize`,
+    `reserve`, `shrink_to_fit`: invalidate **everything** if the call
+    changes capacity; if it doesn't, only `end()` (and, for
+    insert/emplace, iterators at or after the insertion point) are
+    invalidated.
+  - `erase`: invalidates the erased element(s) and everything after
+    them, including `end()`.
+  - `pop_back`: invalidates the erased element and `end()`.
+  - `clear`, `operator=`, `assign`: invalidate everything, always.
+  - `swap`, `std::swap`: invalidate only `end()` on both containers;
+    other iterators keep pointing into their (now swapped) container.
+- Since C++20, `vector`'s member functions are usable in `constexpr`
+  evaluation, though a `vector` object itself generally can't survive
+  as a `constexpr` value (its heap storage must be released within the
+  same constant evaluation).
+
+### Gotchas
+
+- Any reallocating call invalidates *all* iterators, pointers, and
+  references into the vector — holding one across a `push_back` in a
+  loop is a classic use-after-free.
+- `std::vector<bool>` does not store real `bool`s: `operator[]` returns
+  a proxy object, not `bool&`. Code that needs `T&` semantics (e.g.
+  taking the address of an element, or generic code expecting
+  `container<bool>` to behave like other containers) breaks. Use
+  `std::vector<char>` or `std::deque<bool>` instead.
+- `size()` returns an unsigned `size_type`; mixing it with a signed
+  loop counter in a comparison triggers `-Wsign-compare` and can
+  underflow if the counter goes negative.
+- Erasing by value inside a loop with plain `erase` is O(n^2) and
+  invalidates iterators after the erase point — use the erase-remove
+  idiom or `std::erase`/`std::erase_if` (C++20) instead; see the
+  container's notes for the pattern.
+
+### Example
+
 ```cpp
+#include <iostream>
+#include <vector>
+
+int main()
+{
+    std::vector<int> v = {8, 4, 5, 9};
+
+    v.push_back(6);
+    v.push_back(9);
+    v[2] = -1;
+
+    for (int n : v)
+        std::cout << n << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+8 4 -1 9 6 9
+```
+
+### Reference
+
+```cpp skip
 template<
     class T,
     class Allocator = std::allocator<T>
@@ -11,264 +112,64 @@ namespace pmr {
 }  // (2) (since C++17)
 ```
 
-1) `std::vector` is a sequence container that encapsulates dynamic size arrays.
+`T` must be Erasable from the vector (roughly: destructible), and many
+member functions impose the stricter CopyInsertable, MoveInsertable, or
+CopyAssignable/MoveAssignable requirements depending on what they do
+(until C++11, `T` had to be CopyAssignable and CopyConstructible
+outright). Since C++17, the container itself (not its members) can be
+instantiated with an incomplete element type if the allocator satisfies
+the allocator completeness requirements. `Allocator` must meet the
+Allocator requirements; since C++20 it is ill-formed (previously UB)
+for `Allocator::value_type` to differ from `T`.
 
-2) `std::pmr::vector` is an alias template that uses a polymorphic allocator.
+`vector` (for `T` other than `bool`) meets the requirements of
+Container, AllocatorAwareContainer (C++11), SequenceContainer,
+ContiguousContainer (C++17), and ReversibleContainer.
 
-The elements are stored contiguously, which means that elements can be accessed
-not only through iterators, but also using offsets to regular pointers to
-elements. This means that a pointer to an element of a vector may be passed to
-any function that expects a pointer to an element of an array.
+**Member functions**, grouped as upstream groups them:
 
-The storage of the vector is handled automatically, being expanded as needed.
-Vectors usually occupy more space than static arrays, because more memory is
-allocated to handle future growth. This way a vector does not need to reallocate
-each time an element is inserted, but only when the additional memory is
-exhausted. The total amount of allocated memory can be queried using
-`capacity()` function. Extra memory can be returned to the system via a call to
-`shrink_to_fit()`[1].
+- (constructor), (destructor), `operator=`, `assign`,
+  `assign_range` (C++23), `get_allocator`
 
-Reallocations are usually costly operations in terms of performance. The
-`reserve()` function can be used to eliminate reallocations if the number of
-elements is known beforehand.
+  Element access
+  - `at` — bounds-checked access, throws `std::out_of_range`
+  - `operator[]` — unchecked access
+  - `front`, `back` — first / last element
+  - `data` — pointer to the contiguous underlying storage
 
-The complexity (efficiency) of common operations on vectors is as follows:
+  Iterators
+  - `begin`/`cbegin`, `end`/`cend` (C++11)
+  - `rbegin`/`crbegin`, `rend`/`crend` (C++11)
 
-- Random access - constant 𝓞(1).
-- Insertion or removal of elements at the end - amortized constant 𝓞(1).
-- Insertion or removal of elements - linear in the distance to the end of the
-  vector 𝓞(n).
+  Capacity
+  - `empty`, `size`, `max_size`
+  - `reserve` — grow capacity without adding elements
+  - `capacity` — current allocated capacity
+  - `shrink_to_fit` — request capacity be reduced to fit size
 
-`std::vector` (for `T` other than bool) meets the requirements of Container,
-AllocatorAwareContainer(since C++11), SequenceContainer,
-ContiguousContainer(since C++17) and ReversibleContainer.
+  Modifiers
+  - `clear`
+  - `insert`, `insert_range` (C++23)
+  - `emplace` (C++11)
+  - `erase`
+  - `push_back`, `emplace_back` (C++11), `append_range` (C++23)
+  - `pop_back`
+  - `resize`
+  - `swap`
 
-Member functions of `std::vector` are constexpr: it is possible to create and
-use `std::vector` objects in the evaluation of a constant expression.
-However, `std::vector` objects generally cannot be constexpr, because any
-dynamically allocated storage must be released in the same evaluation of
-constant expression.
-*(since C++20)*
+Non-member: lexicographic `operator==`/`<=>` (C++20 replaces the
+individual comparison operators with `<=>`), `std::swap`,
+`std::erase`/`std::erase_if` (C++20). A `pmr::vector` alias and
+deduction guides (C++17) are also provided. There is a `vector<bool>`
+specialization optimized for space (bit-packed storage).
 
-1. In libstdc++, `shrink_to_fit()` is not available in C++98 mode.
+### See also
 
-### Template parameters
-
-- **T** — The type of the elements. `T` must meet the requirements of
-  CopyAssignable and CopyConstructible. (until C++11) The requirements that are
-  imposed on the elements depend on the actual operations performed on the
-  container. Generally, it is required that element type is a complete type and
-  meets the requirements of Erasable, but many member functions impose stricter
-  requirements. (since C++11) (until C++17) The requirements that are imposed on
-  the elements depend on the actual operations performed on the container.
-  Generally, it is required that element type meets the requirements of
-  Erasable, but many member functions impose stricter requirements. This
-  container (but not its members) can be instantiated with an incomplete element
-  type if the allocator satisfies the allocator completeness requirements.
-  Feature-test macro Value Std Feature `__cpp_lib_incomplete_container_elements`
-  201505L (C++17) Minimal incomplete type support (since C++17)
-- **`T` must meet the requirements of CopyAssignable and CopyConstructible.** —
-  (until C++11)
-- **The requirements that are imposed on the elements depend on the actual
-  operations performed on the container. Generally, it is required that element
-  type is a complete type and meets the requirements of Erasable, but many
-  member functions impose stricter requirements.** — (since C++11) (until C++17)
-- **The requirements that are imposed on the elements depend on the actual
-  operations performed on the container. Generally, it is required that element
-  type meets the requirements of Erasable, but many member functions impose
-  stricter requirements. This container (but not its members) can be
-  instantiated with an incomplete element type if the allocator satisfies the
-  allocator completeness requirements. Feature-test macro Value Std Feature
-  `__cpp_lib_incomplete_container_elements` 201505L (C++17) Minimal incomplete
-  type support** — (since C++17)
-- **`__cpp_lib_incomplete_container_elements`** — Minimal incomplete type
-  support
-- **Allocator** — An allocator that is used to acquire/release memory and to
-  construct/destroy the elements in that memory. The type must meet the
-  requirements of Allocator. The behavior is undefined(until C++20)The program
-  is ill-formed(since C++20) if `Allocator::value_type` is not the same as `T`.
-
-### Specializations
-
-The standard library provides a specialization of `std::vector` for the type
-bool, which may be optimized for space efficiency.
-
-- **vector<bool>** — space-efficient dynamic bitset (class template
-  specialization)
-
-### Iterator invalidation
-
-  Operations | Invalidated
-  All read only operations | Never.
-  `swap`, `std::swap` | `end()`
-  `clear`, `operator=`, `assign` | Always.
-  `reserve`, `shrink_to_fit` | If the vector changed capacity, all of them. If
-      not, none.
-  `erase` | Erased elements and all elements after them (including `end()`).
-  `push_back`, `emplace_back` | If the vector changed capacity, all of them. If
-      not, only `end()`.
-  `insert`, `emplace` | If the vector changed capacity, all of them. If not,
-      only those at or after the insertion point (including `end()`).
-  `resize` | If the vector changed capacity, all of them. If not, only `end()`
-      and any elements erased.
-  `pop_back` | The element erased and `end()`.
-
-### Member types
-
-- **`value_type`** — `T`
-- **`allocator_type`** — `Allocator`
-- **`size_type`** — Unsigned integer type (usually `std::size_t`)
-- **`difference_type`** — Signed integer type (usually `std::ptrdiff_t`)
-- **`reference`** — `value_type&`
-- **`const_reference`** — const value_type&
-- **`pointer`** — `Allocator::pointer` (until C++11)
-  std::allocator_traits<Allocator>::pointer (since C++11)
-- **`Allocator::pointer`** — (until C++11)
-- **std::allocator_traits<Allocator>::pointer** — (since C++11)
-- **`const_pointer`** — `Allocator::const_pointer` (until C++11)
-  std::allocator_traits<Allocator>::const_pointer (since C++11)
-- **`Allocator::const_pointer`** — (until C++11)
-- **std::allocator_traits<Allocator>::const_pointer** — (since C++11)
-- **`iterator`** — LegacyRandomAccessIterator and LegacyContiguousIterator to
-  `value_type` (until C++20) LegacyRandomAccessIterator, `contiguous_iterator`,
-  and ConstexprIterator to `value_type` (since C++20)
-- **LegacyRandomAccessIterator and LegacyContiguousIterator to `value_type`** —
-  (until C++20)
-- **LegacyRandomAccessIterator, `contiguous_iterator`, and ConstexprIterator to
-  `value_type`** — (since C++20)
-- **`const_iterator`** — LegacyRandomAccessIterator and LegacyContiguousIterator
-  to const value_type (until C++20) LegacyRandomAccessIterator,
-  `contiguous_iterator`, and ConstexprIterator to const value_type (since C++20)
-- **LegacyRandomAccessIterator and LegacyContiguousIterator to const
-  value_type** — (until C++20)
-- **LegacyRandomAccessIterator, `contiguous_iterator`, and ConstexprIterator to
-  const value_type** — (since C++20)
-- **`reverse_iterator`** — std::reverse_iterator<iterator>
-- **`const_reverse_iterator`** — std::reverse_iterator<const_iterator>
-
-### Member functions
-
-- **(constructor)** — constructs the `vector` (public member function)
-- **(destructor)** — destructs the `vector` (public member function)
-- **operator=** — assigns values to the container (public member function)
-- **assign** — assigns values to the container (public member function)
-- **assign_range (C++23)** — assigns a range of values to the container (public
-  member function)
-- **get_allocator** — returns the associated allocator (public member function)
-
-**Element access**
-
-- **at** — access specified element with bounds checking (public member
-  function)
-- **operator[]** — access specified element (public member function)
-- **front** — access the first element (public member function)
-- **back** — access the last element (public member function)
-- **data** — direct access to the underlying contiguous storage (public member
-  function)
-
-**Iterators**
-
-- **begincbegin (C++11)** — returns an iterator to the beginning (public member
-  function)
-- **endcend (C++11)** — returns an iterator to the end (public member function)
-- **rbegincrbegin (C++11)** — returns a reverse iterator to the beginning
-  (public member function)
-- **rendcrend (C++11)** — returns a reverse iterator to the end (public member
-  function)
-
-**Capacity**
-
-- **empty** — checks whether the container is empty (public member function)
-- **size** — returns the number of elements (public member function)
-- **max_size** — returns the maximum possible number of elements (public member
-  function)
-- **reserve** — reserves storage (public member function)
-- **capacity** — returns the number of elements that can be held in currently
-  allocated storage (public member function)
-- **shrink_to_fit (DR*)** — reduces memory usage by freeing unused memory
-  (public member function)
-
-**Modifiers**
-
-- **clear** — clears the contents (public member function)
-- **insert** — inserts elements (public member function)
-- **insert_range (C++23)** — inserts a range of elements (public member
-  function)
-- **emplace (C++11)** — constructs element in-place (public member function)
-- **erase** — erases elements (public member function)
-- **push_back** — adds an element to the end (public member function)
-- **emplace_back (C++11)** — constructs an element in-place at the end (public
-  member function)
-- **append_range (C++23)** — adds a range of elements to the end (public member
-  function)
-- **pop_back** — removes the last element (public member function)
-- **resize** — changes the number of elements stored (public member function)
-- **swap** — swaps the contents (public member function)
-
-### Non-member functions
-
-- **operator==operator!=operator<operator<=operator>operator>=operator<=>
-  (removed in C++20)(removed in C++20)(removed in C++20)(removed in
-  C++20)(removed in C++20)(C++20)** — lexicographically compares the values of
-  two `vectors` (function template)
-- **std::swap(std::vector)** — specializes the `std::swap` algorithm (function
-  template)
-- **erase(std::vector)erase_if(std::vector) (C++20)** — erases all elements
-  satisfying specific criteria (function template)
-
-### Deduction guides
-*(since C++17)*
-
-### Notes
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_containers_ranges` | 202202L | (C++23) | Ranges construction and
-      insertion for containers
-
-### Example
-
-```cpp
-#include <iostream>
-#include <vector>
-
-int main()
-{
-    // Create a vector containing integers
-    std::vector<int> v = {8, 4, 5, 9};
-
-    // Add two more integers to vector
-    v.push_back(6);
-    v.push_back(9);
-
-    // Overwrite element at position 2
-    v[2] = -1;
-
-    // Print out the vector
-    for (int n : v)
-        std::cout << n << ' ';
-    std::cout << '\n';
-}
-```
-
-Output:
-
-```text
-8 4 -1 9 6 9
-```
-
-### Defect reports
-
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
-
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 69 | C++98 | contiguity of the storage for elements of `vector` was not
-      required | required
-  LWG 230 | C++98 | `T` was not required to be CopyConstructible (an element of
-      type `T` might not be able to be constructed) | `T` is also required to be
-      CopyConstructible
-  LWG 464 | C++98 | access to the underlying storage of an empty `vector`
-      resulted in UB | `data` function provided
+- **array** — fixed-size array, no dynamic allocation
+- **deque** — double-ended queue, O(1) insert/erase at both ends
+- **list** — doubly-linked list, O(1) insert/erase anywhere given an
+  iterator, no random access
+- **vector_bool** — the `bool` specialization's actual interface
 
 ---
 *Source: https://en.cppreference.com/w/cpp/container/vector*

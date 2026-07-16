@@ -1,106 +1,81 @@
 # std::variant
 
-```cpp
-template< class... Types >
-class variant;  // (since C++17)
+`std::variant<Types...>` (C++17) is a type-safe union: an instance
+holds a value of exactly one of its alternative types at a time, and
+remembers which one — unlike a raw `union`, which knows nothing about
+its own contents. Use it when a value can genuinely be one of several
+unrelated types (a parsed token, a JSON value, an event) and you want
+the compiler to check that every case is handled.
+
+```cpp skip
+std::variant<A, B, C> v;             // holds a default-constructed A
+std::variant<A, B, C> v = b_value;    // holds a B
+v.index()                             // which alternative (0-based)
+std::holds_alternative<B>(v)          // true iff currently holds B
+std::get<B>(v)                        // access; throws if not holding B
+std::get_if<B>(&v)                    // access; null if not holding B
+std::visit(callable, v)               // dispatch to the active alternative
+v.valueless_by_exception()            // true only after a rare failure
 ```
 
-The class template `std::variant` represents a type-safe union. An instance of
-`std::variant` at any given time either holds a value of one of its alternative
-types, or in the case of error - no value (this state is hard to achieve, see
-`valueless_by_exception`).
+Like a `union`, a `variant` never allocates: the active alternative's
+representation lives directly inside the `variant` object. Reference,
+array, and `void` alternatives are not allowed, and an empty
+`variant<>` is ill-formed — use `variant<std::monostate>` when you
+need a default-constructible placeholder alternative.
 
-As with unions, if a variant holds a value of some object type `T`, the object
-representation of `T` is allocated directly within the object representation of
-the variant itself. Variant is not allowed to allocate additional (dynamic)
-memory.
+### What you provide
 
-A variant is not permitted to hold references, arrays, or the type void. Empty
-variants are also ill-formed (std::variant<std::monostate> can be used instead).
-
-A variant is permitted to hold the same type more than once, and to hold
-differently cv-qualified versions of the same type.
-
-Consistent with the behavior of unions during aggregate initialization, a
-default-constructed variant holds a value of its first alternative, unless that
-alternative is not default-constructible (in which case the variant is not
-default-constructible either). The helper class `std::monostate` can be used to
-make such variants default-constructible.
-
-### Template parameters
-
-- **Types** — the types that may be stored in this variant. All types must meet
-  the Destructible requirements (in particular, array types and non-object types
-  are not allowed).
+- **Types...** — the alternative types; each must be Destructible.
+  The same type may appear more than once (disambiguate with
+  `get<index>` instead of `get<T>` in that case).
 
 ### Member functions
 
-- **(constructor)** — constructs the variant object (public member function)
-- **(destructor)** — destroys the variant, along with its contained value
-  (public member function)
-- **operator=** — assigns a variant (public member function)
+| Member | What it does |
+| --- | --- |
+| `index()` | zero-based index of the currently held alternative |
+| `valueless_by_exception()` | true if in the rare "no value" state |
+| `emplace<T>(...)` / `emplace<I>(...)` | construct a new value in place |
+| `swap(other)` | exchange contents |
 
-**Observers**
+Non-members: `std::visit` (applies a callable to whichever alternative
+is active), `std::holds_alternative<T>`, `std::get<T>`/`std::get<I>`
+(throwing access), `std::get_if<T>`/`std::get_if<I>` (non-throwing,
+pointer-returning access), comparison operators, `std::swap`,
+`std::hash<variant<Types...>>`.
 
-- **index** — returns the zero-based index of the alternative held by the
-  variant (public member function)
-- **valueless_by_exception** — checks if the variant is in the invalid state
-  (public member function)
+Helper types: `std::monostate` (a default-constructible placeholder
+alternative), `std::bad_variant_access` (thrown by `get` on the wrong
+alternative), `std::variant_size`/`std::variant_size_v`,
+`std::variant_alternative`/`std::variant_alternative_t`,
+`std::variant_npos`.
 
-**Modifiers**
+### Guarantees and costs
 
-- **emplace** — constructs a value in the variant, in place (public member
-  function)
-- **swap** — swaps with another variant (public member function)
+- No dynamic allocation: the active alternative's storage lives inside
+  the `variant` object, sized for the largest alternative.
+- A default-constructed `variant` holds its **first** alternative,
+  unless that alternative isn't default-constructible, in which case
+  the whole `variant` isn't default-constructible either — put
+  `std::monostate` first to opt back in.
+- `valueless_by_exception()` is normally `false`; it becomes `true`
+  only if an assignment's in-place construction of the new alternative
+  throws partway through, leaving no valid alternative. This is rare
+  in practice but must be handled by a generic `visit`.
 
-**Visitation**
+### Gotchas
 
-- **visit (C++26)** — calls the provided functor with the argument held by the
-  `variant` (public member function)
-
-### Non-member functions
-
-- **visit (C++17)** — calls the provided functor with the arguments held by one
-  or more variants (function template)
-- **holds_alternative (C++17)** — checks if a variant currently holds a given
-  type (function template)
-- **get(std::variant) (C++17)** — reads the value of the variant given the index
-  or the type (if the type is unique), throws on error (function template)
-- **get_if (C++17)** — obtains a pointer to the value of a pointed-to variant
-  given the index or the type (if unique), returns null on error (function
-  template)
-- **operator==operator!=operator<operator<=operator>operator>=operator<=>
-  (C++17)(C++17)(C++17)(C++17)(C++17)(C++17)(C++20)** — compares `variant`
-  objects as their contained values (function template)
-- **std::swap(std::variant) (C++17)** — specializes the `std::swap` algorithm
-  (function template)
-
-### Helper classes
-
-- **monostate (C++17)** — placeholder type for use as the first alternative in a
-  variant of non-default-constructible types (class)
-- **bad_variant_access (C++17)** — exception thrown on invalid accesses to the
-  value of a variant (class)
-- **variant_sizevariant_size_v (C++17)** — obtains the size of the variant's
-  list of alternatives at compile time (class template) (variable template)
-- **variant_alternativevariant_alternative_t (C++17)** — obtains the type of the
-  alternative specified by its index, at compile time (class template) (alias
-  template)
-- **std::hash<std::variant> (C++17)** — hash support for **`std::variant`**
-  (class template specialization)
-
-### Helper objects
-
-- **variant_npos (C++17)** — index of the variant in the invalid state
-  (constant)
-
-### Notes
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_variant` | 201606L | (C++17) | `std::variant`: a type-safe union
-  202102L | (C++17) (DR) | `std::visit` for classes derived from `std::variant`
-  202106L | (C++20) (DR) | Fully `constexpr` `std::variant`
-  202306L | (C++26) | Member `visit`
+- `std::get<T>(v)` / `std::get<I>(v)` throws `std::bad_variant_access`
+  when that alternative isn't the active one — use `get_if` when
+  you're not sure and want a null pointer instead of a throw.
+- A `visit` visitor must supply a callable for **every** alternative
+  and all branches must return a common type — a missing case is a
+  compile error, not a runtime one, which is the main safety benefit
+  over a raw `union`. (The `overloaded{}` idiom for building that
+  visitor from several lambdas is in this page's notes.)
+- `index()` is 0-based and matches the order `Types...` were listed
+  in, not any runtime-assigned identity.
 
 ### Example
 
@@ -113,62 +88,62 @@ make such variants default-constructible.
 int main()
 {
     std::variant<int, float> v, w;
-    v = 42; // v contains int
+    v = 42;                          // v contains int
     int i = std::get<int>(v);
-    assert(42 == i); // succeeds
-    w = std::get<int>(v);
-    w = std::get<0>(v); // same effect as the previous line
-    w = v; // same effect as the previous line
-
-//  std::get<double>(v); // error: no double in [int, float]
-//  std::get<3>(v);      // error: valid index values are 0 and 1
+    assert(42 == i);
+    w = std::get<0>(v);              // index access, same effect as get<int>
 
     try
     {
-        std::get<float>(w); // w contains int, not float: will throw
+        std::get<float>(w);          // w contains int, not float: throws
     }
     catch (const std::bad_variant_access& ex)
     {
         std::cout << ex.what() << '\n';
     }
 
-    using namespace std::literals;
-
-    std::variant<std::string> x("abc");
-    // converting constructors work when unambiguous
-    x = "def"; // converting assignment also works when unambiguous
-
-    std::variant<std::string, void const*> y("abc");
-    // casts to void const * when passed a char const *
-    assert(std::holds_alternative<void const*>(y)); // succeeds
-    y = "xyz"s;
-    assert(std::holds_alternative<std::string>(y)); // succeeds
+    std::variant<std::string, const void*> y("abc");
+    // implicit conversion to const void* when passed a char const*
+    assert(std::holds_alternative<const void*>(y));
+    y = std::string("xyz");
+    assert(std::holds_alternative<std::string>(y));
+    std::cout << "ok\n";
 }
 ```
 
-Possible output:
-
 ```text
 std::get: wrong index for variant
+ok
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+```cpp skip
+template< class... Types >
+class variant;  // (since C++17)
+```
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 2901 | C++17 | specialization of `std::uses_allocator` provided, but
-      `std::variant` cannot properly support allocators | specialization removed
+Formally: a variant is permitted to hold the same type more than once
+and differently cv-qualified versions of the same type. Empty
+`variant<>` and any alternative that is a reference, array, or `void`
+are ill-formed. `valueless_by_exception()` is the state reachable only
+via a throw during a type-changing assignment/emplace — it is
+deliberately hard to reach.
+
+Feature-test macro `__cpp_lib_variant`: `201606L` (C++17, the type
+itself), `202102L` (DR applied to C++17, `visit` for classes derived
+from `variant`), `202106L` (C++20 DR, fully `constexpr`), `202306L`
+(C++26, member `visit`).
+
+A defect report (LWG 2901) removed the `std::uses_allocator`
+specialization for `variant`, which had been incorrectly provided —
+`variant` does not support allocators.
 
 ### See also
 
-- **in_placein_place_typein_place_indexin_place_tin_place_type_tin_place_index_t
-  (C++17)** — in-place construction tag (tag)
-- **optional (C++17)** — a wrapper that may or may not hold an object (class
-  template)
-- **any (C++17)** — objects that hold instances of any CopyConstructible type
-  (class)
+- **optional (C++17)** — a wrapper that may or may not hold an object
+- **monostate (C++17)** — placeholder for non-default-constructible alternatives
+- **any (C++17)** — holds an instance of any CopyConstructible type
 
 ---
 *Source: https://en.cppreference.com/w/cpp/utility/variant*

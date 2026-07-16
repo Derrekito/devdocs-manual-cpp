@@ -1,198 +1,72 @@
 # std::deque
 
-```cpp
-template<
-    class T,
-    class Allocator = std::allocator<T>
-> class deque;  // (1)
-namespace pmr {
-    template< class T >
-    using deque = std::deque<T, std::pmr::polymorphic_allocator<T>>;
-}  // (2) (since C++17)
+`std::deque` (double-ended queue) is a sequence container with cheap
+O(1) push and pop at **both** ends, plus O(1) random access — the
+usual choice when you need a growable buffer that's pushed or popped
+from the front as often as the back (a `vector` only does that cheaply
+at the back). Unlike `vector`, its elements are not stored
+contiguously: a typical implementation is a sequence of fixed-size
+chunks, so indexed access costs two pointer dereferences instead of
+one, and there's no `data()`.
+
+```cpp skip
+std::deque<int> d;
+d.push_back(x); d.push_front(x);            // O(1) at either end
+d.emplace_back(a...); d.emplace_front(a...); // in-place        (since C++11)
+d.pop_back(); d.pop_front();                 // O(1) at either end
+d[i]; d.at(i);                               // O(1) random access
+d.front(); d.back();
+d.insert(pos, x); d.erase(pos);              // O(n) away from the ends
 ```
-
-`std::deque` (double-ended queue) is an indexed sequence container that allows
-fast insertion and deletion at both its beginning and its end. In addition,
-insertion and deletion at either end of a deque never invalidates pointers or
-references to the rest of the elements.
-
-As opposed to `std::vector`, the elements of a deque are not stored
-contiguously: typical implementations use a sequence of individually allocated
-fixed-size arrays, with additional bookkeeping, which means indexed access to
-deque must perform two pointer dereferences, compared to vector's indexed access
-which performs only one.
-
-The storage of a deque is automatically expanded and contracted as needed.
-Expansion of a deque is cheaper than the expansion of a `std::vector` because it
-does not involve copying of the existing elements to a new memory location. On
-the other hand, deques typically have large minimal memory cost; a deque holding
-just one element has to allocate its full internal array (e.g. 8 times the
-object size on 64-bit libstdc++; 16 times the object size or 4096 bytes,
-whichever is larger, on 64-bit libc++).
-
-The complexity (efficiency) of common operations on deques is as follows:
-
-- Random access - constant O(1).
-- Insertion or removal of elements at the end or beginning - constant O(1).
-- Insertion or removal of elements - linear O(n).
-
-`std::deque` meets the requirements of Container, AllocatorAwareContainer,
-SequenceContainer and ReversibleContainer.
 
 ### Template parameters
 
-- **T** — The type of the elements. `T` must meet the requirements of
-  CopyAssignable and CopyConstructible. (until C++11) The requirements that are
-  imposed on the elements depend on the actual operations performed on the
-  container. Generally, it is required that element type is a complete type and
-  meets the requirements of Erasable, but many member functions impose stricter
-  requirements. (since C++11)
-- **`T` must meet the requirements of CopyAssignable and CopyConstructible.** —
-  (until C++11)
-- **The requirements that are imposed on the elements depend on the actual
-  operations performed on the container. Generally, it is required that element
-  type is a complete type and meets the requirements of Erasable, but many
-  member functions impose stricter requirements.** — (since C++11)
-- **Allocator** — An allocator that is used to acquire/release memory and to
-  construct/destroy the elements in that memory. The type must meet the
-  requirements of Allocator. The behavior is undefined(until C++20)The program
-  is ill-formed(since C++20) if `Allocator::value_type` is not the same as `T`.
+- **T** — element type. Until C++11, must be CopyAssignable and
+  CopyConstructible; since C++11, must be a complete type meeting
+  Erasable (individual operations require more).
+- **Allocator** — defaults to `std::allocator<T>`; must meet the
+  Allocator requirements. A mismatched `Allocator::value_type` is UB
+  until C++20 and ill-formed from C++20 on.
 
-### Iterator invalidation
+### Guarantees and costs
 
-  Operations | Invalidated
-  All read only operations. | Never.
-  `swap`, `std::swap` | The past-the-end iterator may be invalidated
-      (implementation defined).
-  `shrink_to_fit`, `clear`, `insert`, `emplace`, `push_front`, `push_back`,
-      `emplace_front`, `emplace_back` | Always.
-  `erase` | If erasing at begin - only erased elements. If erasing at end - only
-      erased elements and the past-the-end iterator. Otherwise - all iterators
-      are invalidated. It is unspecified when the past-the-end iterator is
-      invalidated.(until C++11) The past-the-end iterator is also invalidated
-      unless the erased elements are at the beginning of the container and the
-      last element is not erased.(since C++11)
-  `resize` | If the new size is smaller than the old one - only erased elements
-      and the past-the-end iterator. If the new size is bigger than the old one
-      - all iterators are invalidated. Otherwise - none iterators are
-      invalidated.
-  `pop_front`, `pop_back` | To the element erased. The past-the-end iterator may
-      be invalidated (implementation defined)(until C++11) is also
-      invalidated.(since C++11)
+- Random access (`operator[]`, `at`): O(1), but costs two pointer
+  dereferences versus one for `vector`, because storage is chunked
+  rather than contiguous.
+- `push_front`/`push_back`/`pop_front`/`pop_back`: O(1). Insertion or
+  removal anywhere else: O(n).
+- Growing a deque never copies existing elements (unlike `vector`'s
+  reallocation), but the minimum footprint is large: even a
+  one-element deque allocates a full internal chunk (around 8x the
+  object size on 64-bit libstdc++; 16x, or 4096 bytes, whichever is
+  larger, on libc++).
+- Iterators: any read-only operation leaves them alone; `clear`,
+  `insert`, `emplace`, `push_front`, `push_back`, `emplace_front`,
+  `emplace_back`, and `shrink_to_fit` invalidate all of them; `swap`
+  may invalidate the past-the-end iterator (implementation-defined).
+  `erase` invalidates iterators to the erased elements, plus the
+  past-the-end iterator unless the erased range is at the front and
+  the back is untouched (since C++11). `resize` to a smaller size
+  invalidates only iterators to the removed elements and the
+  past-the-end iterator; to a larger size, it invalidates everything.
+- References and pointers are sturdier than iterators: `insert`,
+  `emplace`, `push_front`/`push_back`, `erase`, and `pop_front`/
+  `pop_back` at either end never invalidate references to elements
+  that aren't erased — only the iterators move.
+- Meets Container, AllocatorAwareContainer, SequenceContainer, and
+  ReversibleContainer.
 
-#### Invalidation notes
+### Gotchas
 
-- When inserting at either end of the deque, references are not invalidated by
-  `insert` and `emplace`.
-- `push_front`, `push_back`, `emplace_front` and `emplace_back` do not
-  invalidate any references to elements of the deque.
-- When erasing at either end of the deque, references to non-erased elements are
-  not invalidated by `erase`, `pop_front` and `pop_back`.
-- A call to `resize` with a smaller size does not invalidate any references to
-  non-erased elements.
-- A call to `resize` with a bigger size does not invalidate any references to
-  elements of the deque.
-
-### Member types
-
-- **`value_type`** — `T`
-- **`allocator_type`** — `Allocator`
-- **`size_type`** — Unsigned integer type (usually `std::size_t`)
-- **`difference_type`** — Signed integer type (usually `std::ptrdiff_t`)
-- **`reference`** — `value_type&`
-- **`const_reference`** — const value_type&
-- **`pointer`** — `Allocator::pointer` (until C++11)
-  std::allocator_traits<Allocator>::pointer (since C++11)
-- **`Allocator::pointer`** — (until C++11)
-- **std::allocator_traits<Allocator>::pointer** — (since C++11)
-- **`const_pointer`** — `Allocator::const_pointer` (until C++11)
-  std::allocator_traits<Allocator>::const_pointer (since C++11)
-- **`Allocator::const_pointer`** — (until C++11)
-- **std::allocator_traits<Allocator>::const_pointer** — (since C++11)
-- **`iterator`** — LegacyRandomAccessIterator to `value_type`
-- **`const_iterator`** — LegacyRandomAccessIterator to const value_type
-- **`reverse_iterator`** — std::reverse_iterator<iterator>
-- **`const_reverse_iterator`** — std::reverse_iterator<const_iterator>
-
-### Member functions
-
-- **(constructor)** — constructs the `deque` (public member function)
-- **(destructor)** — destructs the `deque` (public member function)
-- **operator=** — assigns values to the container (public member function)
-- **assign** — assigns values to the container (public member function)
-- **assign_range (C++23)** — assigns a range of values to the container (public
-  member function)
-- **get_allocator** — returns the associated allocator (public member function)
-
-**Element access**
-
-- **at** — access specified element with bounds checking (public member
-  function)
-- **operator[]** — access specified element (public member function)
-- **front** — access the first element (public member function)
-- **back** — access the last element (public member function)
-
-**Iterators**
-
-- **begincbegin (C++11)** — returns an iterator to the beginning (public member
-  function)
-- **endcend (C++11)** — returns an iterator to the end (public member function)
-- **rbegincrbegin (C++11)** — returns a reverse iterator to the beginning
-  (public member function)
-- **rendcrend (C++11)** — returns a reverse iterator to the end (public member
-  function)
-
-**Capacity**
-
-- **empty** — checks whether the container is empty (public member function)
-- **size** — returns the number of elements (public member function)
-- **max_size** — returns the maximum possible number of elements (public member
-  function)
-- **shrink_to_fit (DR*)** — reduces memory usage by freeing unused memory
-  (public member function)
-
-**Modifiers**
-
-- **clear** — clears the contents (public member function)
-- **insert** — inserts elements (public member function)
-- **insert_range (C++23)** — inserts a range of elements (public member
-  function)
-- **emplace (C++11)** — constructs element in-place (public member function)
-- **erase** — erases elements (public member function)
-- **push_back** — adds an element to the end (public member function)
-- **emplace_back (C++11)** — constructs an element in-place at the end (public
-  member function)
-- **append_range (C++23)** — adds a range of elements to the end (public member
-  function)
-- **pop_back** — removes the last element (public member function)
-- **push_front** — inserts an element to the beginning (public member function)
-- **emplace_front (C++11)** — constructs an element in-place at the beginning
-  (public member function)
-- **prepend_range (C++23)** — adds a range of elements to the beginning (public
-  member function)
-- **pop_front** — removes the first element (public member function)
-- **resize** — changes the number of elements stored (public member function)
-- **swap** — swaps the contents (public member function)
-
-### Non-member functions
-
-- **operator==operator!=operator<operator<=operator>operator>=operator<=>
-  (removed in C++20)(removed in C++20)(removed in C++20)(removed in
-  C++20)(removed in C++20)(C++20)** — lexicographically compares the values of
-  two `deques` (function template)
-- **std::swap(std::deque)** — specializes the `std::swap` algorithm (function
-  template)
-- **erase(std::deque)erase_if(std::deque) (C++20)** — erases all elements
-  satisfying specific criteria (function template)
-
-### Deduction guides
-*(since C++17)*
-
-### Notes
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_containers_ranges` | 202202L | (C++23) | Ranges construction and
-      insertion for containers
+- No `data()` — storage isn't contiguous, so a deque can't be handed
+  to an API expecting a flat `T*` buffer; use `vector` for that.
+- `push_front`/`push_back` invalidate **all iterators**, even though
+  references and pointers to existing elements survive — an iterator
+  taken before the push is not safe to reuse, even if the object it
+  pointed to is still alive.
+- Want a restricted FIFO or LIFO interface instead of full deque
+  access? `std::queue`/`std::stack` wrap a deque by default and hide
+  the operations you shouldn't be using directly.
 
 ### Example
 
@@ -202,40 +76,76 @@ SequenceContainer and ReversibleContainer.
 
 int main()
 {
-    // Create a deque containing integers
-    std::deque<int> d = {7, 5, 16, 8};
+    std::deque<int> d{7, 5, 16, 8};
 
-    // Add an integer to the beginning and end of the deque
     d.push_front(13);
     d.push_back(25);
 
-    // Iterate and print values of deque
     for (int n : d)
         std::cout << n << ' ';
     std::cout << '\n';
 }
 ```
 
-Output:
-
 ```text
 13 7 5 16 8 25
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+```cpp skip
+template<
+    class T,
+    class Allocator = std::allocator<T>
+> class deque;
+namespace pmr {
+    template< class T >
+    using deque = std::deque<T, std::pmr::polymorphic_allocator<T>>;
+}  // (since C++17)
+```
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 230 | C++98 | `T` was not required to be CopyConstructible (an element of
-      type `T` might not be able to be constructed) | `T` is also required to be
-      CopyConstructible
+Member functions, condensed:
+
+- **(constructor)**, **(destructor)**, **operator=** — lifetime and
+  assignment.
+- **assign** — replaces the contents; **assign_range** (C++23) does it
+  from a range.
+- **get_allocator** — returns the associated allocator.
+- **at / operator[]** — bounds-checked / unchecked access.
+- **front / back** — access the first / last element.
+- **begin/cbegin, end/cend, rbegin/crbegin, rend/crend** — iterators
+  (`c`-prefixed forms since C++11).
+- **empty / size / max_size** — capacity queries.
+- **shrink_to_fit** — releases unused capacity (added by a defect
+  report).
+- **clear** — removes all elements.
+- **insert** / **insert_range** (C++23) / **emplace** (C++11) — add
+  elements at a position.
+- **erase** — removes elements at a position.
+- **push_back** / **emplace_back** (C++11) / **append_range** (C++23)
+  — add to the end.
+- **pop_back** — removes the last element.
+- **push_front** / **emplace_front** (C++11) / **prepend_range**
+  (C++23) — add to the beginning.
+- **pop_front** — removes the first element.
+- **resize** — changes the number of elements.
+- **swap** — swaps contents with another deque.
+
+Non-member: lexicographic comparison operators (`==`/`!=`/`<`/`<=`/
+`>`/`>=` removed in C++20 in favor of `<=>`); `std::swap`;
+`std::erase`/`std::erase_if` (C++20).
+
+Feature-test macro `__cpp_lib_containers_ranges` (`202202L`, C++23)
+marks ranges-based construction and insertion.
+
+Defect report: LWG 230 retroactively required `T` to be
+CopyConstructible for C++98 (previously an element type that couldn't
+be constructed was technically allowed).
 
 ### See also
 
-- **queue** — adapts a container to provide queue (FIFO data structure) (class
-  template)
+- **queue** — FIFO adaptor; uses `deque` as its default underlying
+  container
 
 ---
 *Source: https://en.cppreference.com/w/cpp/container/deque*

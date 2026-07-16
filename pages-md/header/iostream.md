@@ -1,35 +1,43 @@
 # Standard library header <iostream>
 
-This header is part of the Input/output library.
+`<iostream>` is part of the I/O library. Include it whenever you want
+to read from `std::cin` or write to `std::cout`, `std::cerr`, or
+`std::clog` — it's the header that actually declares those global
+stream objects (the stream *types* themselves live in `<istream>` /
+`<ostream>` / `<ios>`, which `<iostream>` pulls in for you).
 
-Including `<iostream>` behaves as if it defines a static storage duration object
-of type `std::ios_base::Init`, whose constructor initializes the standard stream
-objects if it is the first `std::ios_base::Init` object to be constructed, and
-whose destructor flushes those objects (except for `cin` and `wcin`) if it is
-the last `std::ios_base::Init` object to be destroyed.
+Including `<iostream>` behaves as if it defines a static-duration
+`std::ios_base::Init` object, whose constructor initializes the
+standard stream objects the first time it runs, and whose destructor
+flushes them (except `cin`/`wcin`) when the last such object is
+destroyed. This construction is guaranteed to happen — a defect report
+(LWG 1123) fixed earlier wording that left it unclear, and another
+(LWG 155) corrected the object's stated type from
+`std::basic_ios::Init` to `std::ios_base::Init`.
 
-**Includes**
+### Includes
 
-- **<ios> (C++11)** — `std::ios_base` class, `std::basic_ios` class template and
-  several typedefs
-- **<streambuf> (C++11)** — `std::basic_streambuf` class template
-- **<istream> (C++11)** — `std::basic_istream` class template and several
-  typedefs
-- **<ostream> (C++11)** — `std::basic_ostream`, `std::basic_iostream` class
-  templates and several typedefs
+`<iostream>` pulls in and re-exports:
 
-**Objects**
+- **`<ios>`** (C++11 as a standalone header) — `std::ios_base`,
+  `std::basic_ios`, and related typedefs
+- **`<streambuf>`** (C++11) — `std::basic_streambuf`
+- **`<istream>`** (C++11) — `std::basic_istream` and its typedefs
+- **`<ostream>`** (C++11) — `std::basic_ostream`, `std::basic_iostream`,
+  and their typedefs
 
-- **cinwcin** — reads from the standard C input stream `stdin` (global object)
-- **coutwcout** — writes to the standard C output stream `stdout` (global
-  object)
-- **cerrwcerr** — writes to the standard C error stream `stderr`, unbuffered
-  (global object)
-- **clogwclog** — writes to the standard C error stream `stderr` (global object)
+### Objects
 
-### Synopsis
+- **`cin` / `wcin`** — reads from the standard C stream `stdin`
+- **`cout` / `wcout`** — writes to the standard C stream `stdout`
+- **`cerr` / `wcerr`** — writes to the standard C stream `stderr`,
+  unbuffered
+- **`clog` / `wclog`** — writes to the standard C stream `stderr`,
+  buffered
 
-```cpp
+### Reference
+
+```cpp skip
 #include <ios>
 #include <streambuf>
 #include <istream>
@@ -47,18 +55,6 @@ namespace std {
   extern wostream wclog;
 }
 ```
-
-### Defect reports
-
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
-
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 155 | C++98 | the type of the static object was `std::basic_ios::Init`
-      (not strictly wrong, but the wording was misleading) | corrected to
-      `std::ios_base::Init`
-  LWG 1123 | C++98 | including `<iostream>` did not guarantee the construction
-      of `std::ios_base::Init` objects | guarantees
 
 ---
 *Source: https://en.cppreference.com/w/cpp/header/iostream*

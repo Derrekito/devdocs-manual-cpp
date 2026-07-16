@@ -1,111 +1,113 @@
 # std::stack
 
+`std::stack` is a container **adaptor**: a thin wrapper that restricts
+another container (a `std::deque` by default) to a LIFO interface —
+push and pop only from one end, called the top. Reach for it when you
+want "this is a stack" enforced by the type instead of using a
+`vector` and promising yourself to only touch `back()`.
+
+```cpp skip
+std::stack<int> s;                       // wraps a std::deque<int>
+std::stack<int, std::vector<int>> s2;    // or another SequenceContainer
+s.push(x);                                // push onto the top
+s.emplace(args...);                       // in place on top    (since C++11)
+s.top();                                  // peek at the top element
+s.pop();                                  // remove the top, returns void
+s.empty(); s.size();
+```
+
+### Template parameters
+
+- **T** — stored element type. Undefined behavior if it differs from
+  `Container::value_type`.
+- **Container** — the underlying container. Must be a SequenceContainer
+  providing `back()`, `push_back()`, and `pop_back()` — `std::vector`
+  (including `std::vector<bool>`), `std::deque`, and `std::list` all
+  qualify. Defaults to `std::deque`.
+
+### Guarantees and costs
+
+- Every `stack` operation forwards directly to the underlying
+  container: `push` calls `push_back`, `pop` calls `pop_back`, `top`
+  calls `back`. Its cost is exactly whatever the chosen container
+  charges for those calls.
+- `stack` adds no iterators of its own — there's nothing to invalidate
+  beyond what the underlying container's rules already say about
+  `push_back`/`pop_back`.
+
+### Gotchas
+
+- No iteration or indexing by design — a stack hides the underlying
+  container on purpose. Need to scan the contents? Use the underlying
+  container (`vector`/`deque`) directly instead.
+- `pop()` returns `void` — it only removes. Read `top()` before
+  calling `pop()` if you need the value (the split keeps `pop`
+  exception-safe).
+- Swapping the default `deque` for a `vector` is common when you don't
+  need the double-ended growth a deque offers and want tighter memory
+  locality.
+
+### Example
+
 ```cpp
+#include <cassert>
+#include <iostream>
+#include <stack>
+
+int main()
+{
+    std::stack<int> s;
+
+    s.push(1);
+    s.push(2);
+    s.push(3);
+
+    assert(s.top() == 3);
+
+    for (; !s.empty(); s.pop())
+        std::cout << s.top() << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+3 2 1
+```
+
+### Reference
+
+```cpp skip
 template<
     class T,
     class Container = std::deque<T>
 > class stack;
 ```
 
-The `std::stack` class is a container adaptor that gives the programmer the
-functionality of a stack - specifically, a LIFO (last-in, first-out) data
-structure.
+Member functions, condensed:
 
-The class template acts as a wrapper to the underlying container - only a
-specific set of functions is provided. The stack pushes and pops the element
-from the back of the underlying container, known as the top of the stack.
+- **(constructor)**, **(destructor)**, **operator=** — lifetime and
+  assignment.
+- **top** — accesses the top element.
+- **empty / size** — capacity queries.
+- **push** — inserts at the top; **push_range** (C++23) inserts a
+  range; **emplace** (C++11) constructs in place at the top.
+- **pop** — removes the top element.
+- **swap** (C++11) — swaps contents with another stack.
 
-### Template parameters
+Non-member: lexicographic comparison operators (C++20); `std::swap`
+(C++11); `std::uses_allocator<std::stack>` (C++11) specializes the
+allocator trait.
 
-- **T** — The type of the stored elements. The behavior is undefined if `T` is
-  not the same type as `Container::value_type`.
-- **Container** — The type of the underlying container to use to store the
-  elements. The container must satisfy the requirements of SequenceContainer.
-  Additionally, it must provide the following functions with the usual
-  semantics: `back()` `push_back()` `pop_back()` The standard containers
-  `std::vector` (including `std::vector<bool>`), `std::deque` and `std::list`
-  satisfy these requirements. By default, if no container class is specified for
-  a particular stack class instantiation, the standard container `std::deque` is
-  used.
+Feature-test macro `__cpp_lib_containers_ranges` (`202202L`, C++23)
+marks ranges-based construction and insertion.
 
-### Member types
-
-- **`container_type`** — `Container`
-- **`value_type`** — `Container::value_type`
-- **`size_type`** — Container::size_type
-- **`reference`** — `Container::reference`
-- **`const_reference`** — `Container::const_reference`
-
-### Member objects
-
-- **Container c** — the underlying container (protected member object)
-
-### Member functions
-
-- **(constructor)** — constructs the `stack` (public member function)
-- **(destructor)** — destructs the `stack` (public member function)
-- **operator=** — assigns values to the container adaptor (public member
-  function)
-
-**Element access**
-
-- **top** — accesses the top element (public member function)
-
-**Capacity**
-
-- **empty** — checks whether the container adaptor is empty (public member
-  function)
-- **size** — returns the number of elements (public member function)
-
-**Modifiers**
-
-- **push** — inserts element at the top (public member function)
-- **push_range (C++23)** — inserts a range of elements at the top (public member
-  function)
-- **emplace (C++11)** — constructs element in-place at the top (public member
-  function)
-- **pop** — removes the top element (public member function)
-- **swap (C++11)** — swaps the contents (public member function)
-
-### Non-member functions
-
-- **operator==operator!=operator<operator<=operator>operator>=operator<=>
-  (C++20)** — lexicographically compares the values of two `stacks` (function
-  template)
-- **std::swap(std::stack) (C++11)** — specializes the `std::swap` algorithm
-  (function template)
-
-### Helper classes
-
-- **std::uses_allocator<std::stack> (C++11)** — specializes the
-  `std::uses_allocator` type trait (class template specialization)
-
-### Deduction guides
-*(since C++17)*
-
-### Notes
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_containers_ranges` | 202202L | (C++23) | Ranges construction and
-      insertion for containers
-
-### Example
-
-### Defect reports
-
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
-
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 307 | C++98 | `Container` could not be `std::vector<bool>` | allowed
+Defect report: LWG 307 (C++98) — `Container` could not be
+`std::vector<bool>`; now allowed.
 
 ### See also
 
-- **vector** — dynamic contiguous array (class template)
-- **vector<bool>** — space-efficient dynamic bitset (class template
-  specialization)
-- **deque** — double-ended queue (class template)
-- **list** — doubly-linked list (class template)
+- **vector** — common alternative underlying container
+- **deque** — the default underlying container
 
 ---
 *Source: https://en.cppreference.com/w/cpp/container/stack*

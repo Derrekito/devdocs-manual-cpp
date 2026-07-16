@@ -1,87 +1,62 @@
 # std::move
 
-```cpp
-template< class T >
-typename std::remove_reference<T>::type&& move( T&& t ) noexcept;  // (since C++11) (until C++14)
-template< class T >
-constexpr std::remove_reference_t<T>&& move( T&& t ) noexcept;  // (since C++14)
+`std::move` doesn't move anything — the name is a promise, not an
+action. It's a **cast**: it produces an xvalue that makes its argument
+eligible to be *moved from*, so the next constructor or assignment
+that binds it prefers the move overload (steal internals) over the
+copy overload (duplicate them). Nothing happens unless something
+downstream actually reads that xvalue as an rvalue reference. C++11.
+
+```cpp skip
+std::move(t)                          // cast t to an rvalue reference
+v.push_back(std::move(s));            // moves s into v instead of copying it
+Buffer{std::move(tmp)};               // moves tmp into a member on construction
 ```
 
-`std::move` is used to *indicate* that an object `t` may be "moved from", i.e.
-allowing the efficient transfer of resources from `t` to another object.
+### What you provide
 
-In particular, `std::move` produces an xvalue expression that identifies its
-argument `t`. It is exactly equivalent to a `static_cast` to an rvalue reference
-type.
+- **t** — the object you're done with and are handing off. Any object
+  works; moving from a `const` object silently falls back to copying
+  (you can't steal from `const`), which compiles but gains nothing.
 
-### Parameters
+### Guarantees and costs
 
-- **t** — the object to be moved
+- Equivalent to `static_cast<std::remove_reference_t<T>&&>(t)` —
+  compiles to nothing by itself; the cost or benefit comes entirely
+  from whichever overload picks up the resulting xvalue.
+- `constexpr` since C++14 (plain `noexcept` before that, same
+  behavior).
+- Whether the receiving move constructor/assignment actually moves
+  anything is up to that type — it's an option the overload has, not
+  a requirement. A type with no move constructor just falls back to
+  copying, silently.
 
-### Return value
+### Gotchas
 
-`static_cast<typename std::remove_reference<T>::type&&>(t)`
-
-### Notes
-
-The functions that accept rvalue reference parameters (including move
-constructors, move assignment operators, and regular member functions such as
-`std::vector::push_back`) are selected, by overload resolution, when called with
-rvalue arguments (either prvalues such as a temporary object or xvalues such as
-the one produced by `std::move`). If the argument identifies a resource-owning
-object, these overloads have the option, but aren't required, to *move* any
-resources held by the argument. For example, a move constructor of a linked list
-might copy the pointer to the head of the list and store `nullptr` in the
-argument instead of allocating and copying individual nodes.
-
-Names of rvalue reference variables are lvalues and have to be converted to
-xvalues to be bound to the function overloads that accept rvalue reference
-parameters, which is why move constructors and move assignment operators
-typically use `std::move`:
-
-```cpp
-// Simple move constructor
-A(A&& arg) : member(std::move(arg.member)) // the expression "arg.member" is lvalue
-{}
-
-// Simple move assignment operator
-A& operator=(A&& other)
-{
-    member = std::move(other.member);
-    return *this;
-}
-```
-
-One exception is when the type of the function parameter is rvalue reference to
-type template parameter ("forwarding reference" or "universal reference"), in
-which case `std::forward` is used instead.
-
-Unless otherwise specified, all standard library objects that have been moved
-from are placed in a "valid but unspecified state", meaning the object's class
-invariants hold (so functions without preconditions, such as the assignment
-operator, can be safely used on the object after it was moved from):
-
-```cpp
-std::vector<std::string> v;
-std::string str = "example";
-v.push_back(std::move(str)); // str is now valid but unspecified
-str.back(); // undefined behavior if size() == 0: back() has a precondition !empty()
-if (!str.empty())
-    str.back(); // OK, empty() has no precondition and back() precondition is met
-
-str.clear(); // OK, clear() has no preconditions
-```
-
-Also, the standard library functions called with xvalue arguments may assume the
-argument is the only reference to the object; if it was constructed from an
-lvalue with `std::move`, no aliasing checks are made. However,
-self-move-assignment of standard library types is guaranteed to place the object
-in a valid (but usually unspecified) state:
-
-```cpp
-std::vector<int> v = {2, 3, 3};
-v = std::move(v); // the value of v is unspecified
-```
+- After `std::move(x)`, `x` is left in a **valid but unspecified**
+  state: still a live, destructible object whose invariants hold, but
+  whose contents you must not rely on. Standard library types
+  guarantee methods with no preconditions (`clear()`, assignment,
+  `empty()`) remain safe to call; a precondition-bearing method like
+  `back()` on an emptied container is still undefined behavior.
+- Standard library functions that receive an xvalue argument may
+  assume it's the *only* reference to that object — if you constructed
+  the xvalue from an lvalue via `std::move`, no aliasing checks are
+  performed. Self-move-assignment (`v = std::move(v);`) is the one
+  exception the standard carves out: it's guaranteed to leave `v` in a
+  valid, if unspecified, state.
+- `return std::move(local);` on a local variable is almost always
+  wrong: returning a local already triggers NRVO (compiler-elided, not
+  guaranteed but done everywhere in practice) or an automatic move as
+  of C++11 when elision doesn't apply. Wrapping it in `std::move`
+  blocks the elision path and can force a move where the compiler
+  could have skipped copying *and* moving. Just `return local;`.
+- Move constructors/assignment operators must use `std::move`
+  explicitly on their members — a named rvalue-reference parameter
+  (like `arg` in `A(A&& arg)`) is itself an lvalue inside the function
+  body. The one case that uses `std::forward` instead of `std::move`
+  is a forwarding-reference parameter (`T&&` on a deduced template
+  parameter).
 
 ### Example
 
@@ -97,38 +72,46 @@ int main()
     std::string str = "Salut";
     std::vector<std::string> v;
 
-    // uses the push_back(const T&) overload, which means
-    // we'll incur the cost of copying str
-    v.push_back(str);
+    v.push_back(str);                 // copies str
     std::cout << "After copy, str is " << std::quoted(str) << '\n';
 
-    // uses the rvalue reference push_back(T&&) overload,
-    // which means no strings will be copied; instead, the contents
-    // of str will be moved into the vector. This is less
-    // expensive, but also means str might now be empty.
-    v.push_back(std::move(str));
+    v.push_back(std::move(str));      // moves str; str is now unspecified
     std::cout << "After move, str is " << std::quoted(str) << '\n';
 
-    std::cout << "The contents of the vector are { " << std::quoted(v[0])
-              << ", " << std::quoted(v[1]) << " }\n";
+    std::cout << "vector[0] = " << std::quoted(v[0]) << '\n';
 }
 ```
-
-Possible output:
 
 ```text
 After copy, str is "Salut"
 After move, str is ""
-The contents of the vector are { "Salut", "Salut" }
+vector[0] = "Salut"
 ```
+
+### Reference
+
+```cpp skip
+template< class T >
+typename std::remove_reference<T>::type&& move( T&& t ) noexcept;  // (since C++11) (until C++14)
+template< class T >
+constexpr std::remove_reference_t<T>&& move( T&& t ) noexcept;  // (since C++14)
+```
+
+Return value: `static_cast<typename std::remove_reference<T>::type&&>(t)`.
+
+Formally: names of rvalue-reference variables are themselves lvalues,
+which is exactly why move constructors and move-assignment operators
+must call `std::move` on each member they hand off — passing `arg`
+(an `A&&` parameter) without `std::move` would bind to the copy
+overload, not the move one.
 
 ### See also
 
-- **forward (C++11)** — forwards a function argument (function template)
-- **move_if_noexcept (C++11)** — obtains an rvalue reference if the move
-  constructor does not throw (function template)
-- **move (C++11)** — moves a range of elements to a new location (function
-  template)
+- **forward (C++11)** — forwards a function argument, preserving value category
+- **move_if_noexcept (C++11)** — rvalue reference only if the move
+  constructor is `noexcept`, else a copy-preserving lvalue
+- **move (C++11)** (`<algorithm>`) — moves a range of elements to a
+  new location
 
 ---
 *Source: https://en.cppreference.com/w/cpp/utility/move*
