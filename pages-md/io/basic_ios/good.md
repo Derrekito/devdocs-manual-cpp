@@ -1,87 +1,84 @@
 # std::basic_ios<CharT,Traits>::good
 
-```cpp
-bool good() const;
+`good()` is **not** the opposite of `fail()`. It requires every flag
+clear — `eofbit`, `failbit`, and `badbit` all false — so it also
+returns false once `eof()` is true, even when nothing actually went
+wrong: a read that successfully consumes the last byte of input can
+leave `eofbit` set (see `basic_ios::eof`), and `good()` reports that
+as failure. That's why the idiomatic check after a read is `if (in)`
+or `while (in >> x)`, which use `operator bool` — defined as
+`!fail()`, not `good()`. Reserve `good()` for a true zero-flags check,
+such as right after opening a stream, not as a loop condition.
+
+```cpp skip
+if (in)                // idiomatic: operator bool is !fail()
+if (in.good())           // stricter: false once eofbit is set too
 ```
 
-Returns `true` if the most recent I/O operation on the stream completed
-successfully. Specifically, returns result of `rdstate() == 0`.
+### What you provide
 
-See `ios_base::iostate` for the list of conditions that set the stream status
-bits.
+No parameters. Call it when you specifically need "no flags at all
+are set", not as a stand-in for "did the last read work".
 
-### Parameters
+### Guarantees and costs
 
-(none)
+- O(1); equivalent to `rdstate() == 0`.
 
-### Return value
+### Gotchas
 
-`true` if the stream error flags are all false, `false` otherwise.
+- `good()` false does not mean the last read failed to produce a
+  value — it can just mean you're now at end-of-file after a
+  perfectly good read.
+- Never use `good()` as a loop condition (`while (in.good())`): it has
+  the same off-by-one trap as `while (!in.eof())`, because `eofbit`
+  can be set on the very read that still succeeded.
+- The right tool for "did that operation work" is `operator bool` /
+  `!fail()`, i.e. plain `if (in)` — see `basic_ios::fail`.
 
 ### Example
 
 ```cpp
-#include <cstdlib>
-#include <fstream>
 #include <iostream>
+#include <sstream>
 
 int main()
 {
-    const char* fname = "/tmp/test.txt";
-    std::ofstream ofile{fname};
-    ofile << "10 " << "11 " << "12 " << "non-int";
-    ofile.close();
+    std::istringstream in("42");
+    std::cout << std::boolalpha
+               << "before read: good=" << in.good() << '\n';
 
-    std::ifstream file{fname};
-    if (!file.good())
-    {
-        std::cout << "#1. Opening file test.txt failed - "
-                     "one of the error flags is true\n";
-        return EXIT_FAILURE;
-    }
+    int n;
+    in >> n;   // reads "42"; parsing must peek past it and finds nothing
 
-    // typical C++ I/O loop uses the return value of the I/O function
-    // as the loop controlling condition, operator bool() is used here
-    for (int n; file >> n;)
-        std::cout << n << ' ';
-    std::cout << '\n';
-
-    if (file.bad())
-    {
-        std::cout << "#2. I/O error while reading - badbit is true\n";
-        return EXIT_FAILURE;
-    }
-    else if (file.eof())
-        std::cout << "#3. End of file reached successfully - eofbit is true\n"
-            "This is fine even though file.good() is false\n";
-    else if (file.fail())
-        std::cout << "#4. Non-integer data encountered - failbit is true\n";
+    std::cout << "after read:  good=" << in.good()
+               << " fail=" << in.fail() << " n=" << n << '\n';
 }
 ```
 
-Possible output:
-
 ```text
-10 11 12
-#4. Non-integer data encountered - failbit is true
+before read: good=true
+after read:  good=false fail=false n=42
 ```
+
+### Reference
+
+```cpp skip
+bool good() const;
+```
+
+Equivalent to `rdstate() == 0`. See `ios_base::iostate` for the flags;
+`basic_ios::fail` carries the full accessor-combination table for
+this cluster.
 
 ### See also
 
-The following table shows the value of `basic_ios` accessors (**`good()`**,
-`fail()`, etc.) for all possible combinations of `ios_base::iostate` flags:
-
-  `ios_base::iostate` flags | `basic_ios` accessors
-  `eofbit` | `failbit` | `badbit` | **`good()`** | `fail()` | `bad()` | `eof()`
-      | `operator bool` | `operator!`
-  false | false | false | true | false | false | false | true | false
-  false | false | true | false | true | true | false | false | true
-  false | true | false | false | true | false | false | false | true
-  false | true | true | false | true | true | false | false | true
-  true | false | false | false | false | false | true | true | false
-  true | false | true | false | true | true | true | false | true
-  true | true | false | false | true | false | true | false | true
-  true | true | true | false | true | true | true | false | true
+- `basic_ios::fail` — the check to use after a read; not `!good()`
+- `basic_ios::eof` — the flag that most often makes `good()` false
+  even on success
+- `basic_ios::clear` — resets the state so the stream works again
+- `basic_istream::ignore` — skip past bad input before retrying
+- `basic_istream::getline` — a char-array read subject to the same
+  `good()` trap
 
 ---
 *Source: https://en.cppreference.com/w/cpp/io/basic_ios/good*

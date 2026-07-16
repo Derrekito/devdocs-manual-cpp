@@ -1,36 +1,38 @@
 # std::set<Key,Compare,Allocator>::count
 
-```cpp
-size_type count( const Key& key ) const;  // (1)
-template< class K >
-size_type count( const K& x ) const;  // (2) (since C++14)
+Returns how many elements compare equivalent to the given key — on a
+`set` that's always **0 or 1**, since keys are unique (unlike
+`multiset`, where it can be any count). If all you need is a yes/no
+answer, `contains` (C++20) says the same thing more readably and
+doesn't tempt you into treating the result as a real count.
+
+```cpp skip
+s.count(key);      // 0 or 1
+s.count(x);         // heterogeneous lookup, needs transparent Compare (C++14)
 ```
 
-Returns the number of elements with key that compares *equivalent* to the
-specified argument.
+### What you provide
 
-1) Returns the number of elements with key `key`. This is either 1 or 0 since
-   this container does not allow duplicates.
+- **key** — the key to count.
+- **x** — a value of any type comparable to `Key` without converting
+  it first. Requires `Compare::is_transparent` (C++14), same rule as
+  `find`'s transparent overload.
 
-2) Returns the number of elements with key that compares equivalent to the value
-   `x`. This overload participates in overload resolution only if the
-   qualified-id `Compare::is_transparent` is valid and denotes a type. It allows
-   calling this function without constructing an instance of `Key`.
+### Guarantees and costs
 
-### Parameters
+- Logarithmic in the size of the container, plus linear in the number
+  of elements found — on `set` that extra term is at most 1, so this
+  is effectively O(log n).
+- Returns `size_type`: 1 if an equivalent key is present, 0 otherwise.
 
-- **key** — key value of the elements to count
-- **x** — alternative value to compare to the keys
+### Gotchas
 
-### Return value
-
-Number of elements with key that compares *equivalent* to `key` or `x`, which,
-for overload (1), is either 1 or 0.
-
-### Complexity
-
-Logarithmic in the size of the container plus linear in the number of elements
-found.
+- `count` never returns anything but 0 or 1 on `set` — reaching for it
+  as an existence check works, but reads oddly next to `contains`
+  (C++20), which says exactly that and nothing more.
+- On `multiset`, the same call can return any count and costs
+  O(log n + count(key)) — don't port assumptions about `count`'s cost
+  from `set` to `multiset` without accounting for that.
 
 ### Example
 
@@ -38,54 +40,34 @@ found.
 #include <iostream>
 #include <set>
 
-struct S
-{
-    int x;
-    S(int i) : x{i} { std::cout << "S{" << i << "} "; }
-    bool operator<(S const& s) const { return x < s.x; }
-};
-
-struct R
-{
-    int x;
-    R(int i) : x{i} { std::cout << "R{" << i << "} "; }
-    bool operator<(R const& r) const { return x < r.x; }
-};
-
-bool operator<(R const& r, int i) { return r.x < i; }
-bool operator<(int i, R const& r) { return i < r.x; }
-
 int main()
 {
-    std::set<int> t{3, 1, 4, 1, 5};
-    std::cout << t.count(1) << ", " << t.count(2) << ".\n";
+    std::set<int> s{3, 1, 4, 1, 5};   // duplicates collapse: {1, 3, 4, 5}
 
-    std::set<S> s{3, 1, 4, 1, 5};
-    std::cout << ": " << s.count(1) << ", " << s.count(2) << ".\n";
-        // Two temporary objects S{1} and S{2} were created.
-        // Comparison function object is defaulted std::less<S>,
-        // which is not transparent (has no is_transparent member type).
-
-    std::set<R, std::less<>> r{3, 1, 4, 1, 5};
-    std::cout << ": " << r.count(1) << ", " << r.count(2) << ".\n";
-        // C++14 heterogeneous lookup; temporary objects were not created.
-        // Comparator std::less<void> has predefined is_transparent.
+    std::cout << s.count(1) << ", " << s.count(2) << '\n';
 }
 ```
 
-Output:
-
 ```text
-1, 0.
-S{3} S{1} S{4} S{1} S{5} : S{1} 1, S{2} 0.
-R{3} R{1} R{4} R{1} R{5} : 1, 0.
+1, 0
 ```
+
+### Reference
+
+```cpp skip
+size_type count( const Key& key ) const;  // (1)
+template< class K >
+size_type count( const K& x ) const;  // (2) (since C++14)
+```
+
+Overload (2) participates in overload resolution only if
+`Compare::is_transparent` is a valid type.
 
 ### See also
 
-- **find** — finds element with specific key (public member function)
-- **equal_range** — returns range of elements matching a specific key (public
-  member function)
+- **find** — returns an iterator instead of a count
+- **contains** — plain existence check (C++20)
+- **equal_range** — range of elements matching a key
 
 ---
 *Source: https://en.cppreference.com/w/cpp/container/set/count*

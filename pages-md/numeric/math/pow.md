@@ -1,130 +1,54 @@
 # std::pow, std::powf, std::powl
 
-```cpp
-float       pow ( float base, float exp );
-double      pow ( double base, double exp );
-long double pow ( long double base, long double exp );  // (until C++23)
-/* floating-point-type */
-            pow ( /* floating-point-type */ base,
-                  /* floating-point-type */ exp )  // (since C++23) (constexpr since C++26)
-float       pow ( float base, int exp );
-double      pow ( double base, int exp );
-long double pow ( long double base, int exp );  // (2) (until C++11)
-float       powf( float base, float exp );  // (3) (since C++11) (constexpr since C++26)
-long double powl( long double base, long double exp );  // (4) (since C++11) (constexpr since C++26)
-Additional overloads (since C++11)
-template< class Arithmetic1, class Arithmetic2 >
-/* common-floating-point-type */
-            pow ( Arithmetic1 base, Arithmetic2 exp );  // (A) (constexpr since C++26)
+Raises `base` to the power `exp`. It is **not** a compile-time or
+guaranteed-exact operation: `std::pow(x, 2)` is a general floating-point
+routine, not a special-cased square — for an exact square just write
+`x * x`. Negative `base` with a non-integer `exp` is a domain error
+(there's no real result), and `base == 0` with negative `exp` is a pole
+error (the true result is infinite).
+
+```cpp skip
+std::pow(base, exp);    // base and exp both floating-point or integer
+std::powf(base, exp);   // float overload                  (since C++11)
+std::powl(base, exp);   // long double overload             (since C++11)
 ```
 
-1-4) Computes the value of `base` raised to the power `exp`. The library
-   provides overloads of `std::pow` for all cv-unqualified floating-point types
-   as the type of the parameters `base` and `exp`.(since C++23)
+### What you provide
 
-A) Additional overloads are provided for all other combinations of arithmetic
-types.
-*(since C++11)*
+- **base, exp** — floating-point or integer values.
 
-### Parameters
+### Guarantees and costs
 
-- **base** — base as a floating-point or integer value
-- **exp** — exponent as a floating-point or integer value
-
-### Return value
-
-If no errors occur, `base` raised to the power of `exp` (baseexp), is returned.
-
-If a domain error occurs, an implementation-defined value is returned (NaN where
-supported).
-
-If a pole error or a range error due to overflow occurs, `±HUGE_VAL`,
-`±HUGE_VALF`, or `±HUGE_VALL` is returned.
-
-If a range error occurs due to underflow, the correct result (after rounding) is
-returned.
-
-### Error handling
-
-Errors are reported as specified in `math_errhandling`.
-
-If `base` is finite and negative and `exp` is finite and non-integer, a domain
-error occurs and a range error may occur.
-
-If `base` is zero and `exp` is zero, a domain error may occur.
-
-If `base` is zero and `exp` is negative, a domain error or a pole error may
-occur.
-
-If the implementation supports IEEE floating-point arithmetic (IEC 60559),
-
-- `pow(+0, exp)`, where `exp` is a negative odd integer, returns +∞ and raises
+- Domain error if `base` is finite and negative and `exp` is finite and
+  non-integer: returns an implementation-defined value (NaN where
+  supported) and raises `FE_INVALID`.
+- Pole error if `base` is zero and `exp` is negative: returns `±HUGE_VAL`
+  (matching `±∞` when the sign can be determined) and raises
   `FE_DIVBYZERO`.
-- `pow(-0, exp)`, where `exp` is a negative odd integer, returns -∞ and raises
-  `FE_DIVBYZERO`.
-- `pow(±0, exp)`, where `exp` is negative, finite, and is an even integer or a
-  non-integer, returns +∞ and raises `FE_DIVBYZERO`.
-- `pow(±0, -∞)` returns +∞ and may raise `FE_DIVBYZERO`.
-- `pow(+0, exp)`, where `exp` is a positive odd integer, returns +0.
-- `pow(-0, exp)`, where `exp` is a positive odd integer, returns -0.
-- `pow(±0, exp)`, where `exp` is positive non-integer or a positive even
-  integer, returns +0.
-- `pow(-1, ±∞)` returns 1.
-- `pow(+1, exp)` returns 1 for any `exp`, even when `exp` is NaN.
-- `pow(base, ±0)` returns 1 for any `base`, even when `base` is NaN.
-- `pow(base, exp)` returns NaN and raises `FE_INVALID` if `base` is finite and
-  negative and `exp` is finite and non-integer.
-- `pow(base, -∞)` returns +∞ for any `|base| < 1`.
-- `pow(base, -∞)` returns +0 for any `|base| > 1`.
-- `pow(base, +∞)` returns +0 for any `|base| < 1`.
-- `pow(base, +∞)` returns +∞ for any `|base| > 1`.
-- `pow(-∞, exp)` returns -0 if `exp` is a negative odd integer.
-- `pow(-∞, exp)` returns +0 if `exp` is a negative non-integer or negative even
-  integer.
-- `pow(-∞, exp)` returns -∞ if `exp` is a positive odd integer.
-- `pow(-∞, exp)` returns +∞ if `exp` is a positive non-integer or positive even
-  integer.
-- `pow(+∞, exp)` returns +0 for any negative `exp`.
-- `pow(+∞, exp)` returns +∞ for any positive `exp`.
-- except where specified above, if any argument is NaN, NaN is returned.
+- `pow(+1, exp)` is always `1`, even if `exp` is NaN; `pow(base, ±0)` is
+  always `1`, even if `base` is NaN.
+- Overflow on a finite result returns `±HUGE_VAL` (range error);
+  underflow returns the correctly rounded result.
+- Errors are reported as specified by `math_errhandling` — check `errno`
+  (`EDOM`, `ERANGE`) and/or the floating-point exception flags
+  (`FE_INVALID`, `FE_DIVBYZERO`), whichever the implementation defines.
+- C++98 had a separate `pow(base, int)` overload returning the base's
+  own type; C++11's generic overload set instead promotes an `int`
+  exponent to `double`, so `pow(float, int)` now returns `double`, not
+  `float` (LWG 550 removed the old overload to resolve the conflict).
 
-### Notes
+### Gotchas
 
-C++98 added overloads where `exp` has type int on top of C `pow()`, and the
-return type of std::pow(float, int) was float. However, the additional overloads
-introduced in C++11 specify that std::pow(float, int) should return double. LWG
-issue 550 was raised to target this conflict, and the resolution is to removed
-the extra int `exp` overloads.
-
-Although `std::pow` cannot be used to obtain a root of a negative number,
-`std::cbrt` is provided for the common case where `exp` is 1/3.
-
-The additional overloads are not required to be provided exactly as (A). They
-only need to be sufficient to ensure that for their first argument `num1` and
-second argument `num2`:
-
-- If `num1` or `num2` has type long double, then `std::pow(num1, num2)` has the
-  same effect as `std::pow(static_cast<long double>(num1), static_cast<long
-  double>(num2))`.
-- Otherwise, if `num1` and/or `num2` has type double or an integer type, then
-  `std::pow(num1, num2)` has the same effect as
-  `std::pow(static_cast<double>(num1), static_cast<double>(num2))`.
-- Otherwise, if `num1` or `num2` has type float, then `std::pow(num1, num2)` has
-  the same effect as `std::pow(static_cast<float>(num1),
-  static_cast<float>(num2))`.
-*(until C++23)*
-
-If `num1` and `num2` have arithmetic types, then `std::pow(num1, num2)` has the
-same effect as `std::pow(static_cast</* common-floating-point-type */>(num1),
-static_cast</* common-floating-point-type */>(num2))`, where /*
-common-floating-point-type */ is the floating-point type with the greatest
-floating-point conversion rank and greatest floating-point conversion subrank
-between the types of `num1` and `num2`, arguments of integer type are considered
-to have the same floating-point conversion rank as double.
-If no such floating-point type with the greatest rank and subrank exists, then
-overload resolution does not result in a usable candidate from the overloads
-provided.
-*(since C++23)*
+- `pow(x, 2)` is not evaluated at compile time and is not guaranteed
+  exact — it's a general (and comparatively slow) routine. Prefer
+  `x * x` for a literal square.
+- A negative base with a fractional exponent (e.g. `pow(-1, 1.0/3)`)
+  looks like it should give a real cube root but is a domain error
+  instead — `std::pow` doesn't take branch cuts for you. Use
+  `std::cbrt` for a real cube root of a negative number.
+- Passing two integers still returns a floating-point value (the
+  additional overloads for arithmetic types resolve to a floating-point
+  common type), so large integer powers can silently lose precision.
 
 ### Example
 
@@ -134,72 +58,64 @@ provided.
 #include <cmath>
 #include <cstring>
 #include <iostream>
-// #pragma STDC FENV_ACCESS ON
 
 int main()
 {
-    // typical usage
     std::cout << "pow(2, 10) = " << std::pow(2, 10) << '\n'
               << "pow(2, 0.5) = " << std::pow(2, 0.5) << '\n'
               << "pow(-2, -3) = " << std::pow(-2, -3) << '\n';
 
-    // special values
-    std::cout << "pow(-1, NAN) = " << std::pow(-1, NAN) << '\n'
-              << "pow(+1, NAN) = " << std::pow(+1, NAN) << '\n'
-              << "pow(INFINITY, 2) = " << std::pow(INFINITY, 2) << '\n'
-              << "pow(INFINITY, -1) = " << std::pow(INFINITY, -1) << '\n';
-
-    // error handling
     errno = 0;
     std::feclearexcept(FE_ALL_EXCEPT);
 
-    std::cout << "pow(-1, 1/3) = " << std::pow(-1, 1.0 / 3) << '\n';
+    double r = std::pow(-1, 1.0 / 3);
+    std::cout << "pow(-1, 1/3) is nan: " << std::isnan(r) << '\n';
     if (errno == EDOM)
         std::cout << "    errno == EDOM " << std::strerror(errno) << '\n';
     if (std::fetestexcept(FE_INVALID))
         std::cout << "    FE_INVALID raised\n";
-
-    std::feclearexcept(FE_ALL_EXCEPT);
-
-    std::cout << "pow(-0, -3) = " << std::pow(-0.0, -3) << '\n';
-    if (std::fetestexcept(FE_DIVBYZERO))
-        std::cout << "    FE_DIVBYZERO raised\n";
 }
 ```
-
-Possible output:
 
 ```text
 pow(2, 10) = 1024
 pow(2, 0.5) = 1.41421
 pow(-2, -3) = -0.125
-pow(-1, NAN) = nan
-pow(+1, NAN) = 1
-pow(INFINITY, 2) = inf
-pow(INFINITY, -1) = 0
-pow(-1, 1/3) = -nan
+pow(-1, 1/3) is nan: 1
     errno == EDOM Numerical argument out of domain
     FE_INVALID raised
-pow(-0, -3) = -inf
-    FE_DIVBYZERO raised
 ```
+
+### Reference
+
+```cpp skip
+float       pow ( float base, float exp );
+double      pow ( double base, double exp );
+long double pow ( long double base, long double exp );  // (until C++23)
+/* floating-point-type */
+            pow ( /* floating-point-type */ base,
+                  /* floating-point-type */ exp );  // (since C++23) (constexpr since C++26)
+float       powf( float base, float exp );  // (since C++11) (constexpr since C++26)
+long double powl( long double base, long double exp );  // (since C++11) (constexpr since C++26)
+template< class Arithmetic1, class Arithmetic2 >
+/* common-floating-point-type */
+            pow ( Arithmetic1 base, Arithmetic2 exp );  // (since C++11) (constexpr since C++26)
+```
+
+Full IEEE special-value table (signs of zero, ±∞ combinations) is kept
+verbatim upstream; the cases most likely to surprise: `pow(-0, exp)`
+with negative odd integer `exp` returns `-∞` and raises `FE_DIVBYZERO`;
+`pow(-∞, exp)` returns `-0`/`+0`/`-∞`/`+∞` depending on the sign and
+parity of `exp`. `std::cbrt` covers the exp = 1/3 case that `pow` can't
+handle for negative bases. The additional (arithmetic-type) overloads
+need only behave *as if* both arguments were cast to their common
+floating-point type, with integers ranked as `double`.
 
 ### See also
 
-- **sqrtsqrtfsqrtl (C++11)(C++11)** — computes square root
-  (\(\small{\sqrt{x}}\)√x) (function)
-- **cbrtcbrtfcbrtl (C++11)(C++11)(C++11)** — computes cube root
-  (\(\small{\sqrt[3]{x}}\)3√x) (function)
-- **hypothypotfhypotl (C++11)(C++11)(C++11)** — computes square root of the sum
-  of the squares of two or three(since C++17) given numbers
-  (\(\scriptsize{\sqrt{x^2+y^2}}\)√x2+y2),
-  (\(\scriptsize{\sqrt{x^2+y^2+z^2}}\)√x2+y2+z2)(since C++17) (function)
-- **pow(std::complex)** — complex power, one or both arguments may be a complex
-  number (function template)
-- **pow(std::valarray)** — applies the function `std::pow` to two valarrays or a
-  valarray and a value (function template)
-
-**C documentation for `pow`**
+- **sqrt** — computes the square root
+- **cbrt** — computes the cube root, including of negative numbers
+- **hypot** — square root of the sum of squares (C++11)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/numeric/math/pow*

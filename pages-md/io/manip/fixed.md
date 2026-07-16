@@ -1,122 +1,90 @@
 # std::fixed, std::scientific, std::hexfloat, std::defaultfloat
 
-```cpp
-std::ios_base& fixed( std::ios_base& str );  // (1)
-std::ios_base& scientific( std::ios_base& str );  // (2)
-std::ios_base& hexfloat( std::ios_base& str );  // (3) (since C++11)
-std::ios_base& defaultfloat( std::ios_base& str );  // (4) (since C++11)
+These four manipulators set the stream's `floatfield` — the group
+that controls *how* floating-point values are formatted. Exactly one
+is active at a time; setting one clears the others.
+
+```cpp skip
+out << std::fixed;         // NNN.NNN, precision = digits after point
+out << std::scientific;    // N.NNNe±NN, precision = digits after point
+out << std::hexfloat;      // 0xH.HHHp±N, exact, ignores precision (C++11)
+out << std::defaultfloat;  // shortest form, precision = sig digits (C++11)
 ```
 
-Modifies the default formatting for floating-point output.
+### What you provide
 
-1) Sets the `floatfield` of the stream `str` to `fixed` as if by calling
-   `str.setf(std::ios_base::fixed, std::ios_base::floatfield)`.
+- **str** — the stream (via `out << std::fixed`, etc.); works for any
+  `std::basic_ostream` or `std::basic_istream`.
 
-2) Sets the `floatfield` of the stream `str` to `scientific` as if by calling
-   `str.setf(std::ios_base::scientific, std::ios_base::floatfield)`.
+### Guarantees and costs
 
-3) Sets the `floatfield` of the stream `str` to `fixed` and `scientific`
-   simultaneously as if by calling `str.setf(std::ios_base::fixed |
-   std::ios_base::scientific, std::ios_base::floatfield)`. This enables
-   hexadecimal floating-point formatting.
+- `fixed` sets `floatfield` to `fixed`
+  (`str.setf(ios_base::fixed, ios_base::floatfield)`).
+- `scientific` sets it to `scientific`
+  (`str.setf(ios_base::scientific, ios_base::floatfield)`).
+- `hexfloat` sets both bits at once
+  (`fixed | scientific`), producing hexadecimal floating-point.
+- `defaultfloat` clears `floatfield`
+  (`str.unsetf(ios_base::floatfield)`), restoring the default
+  shortest-representation formatting.
+- `setprecision` means different things under each: digits after the
+  decimal point for `fixed`/`scientific`; **ignored entirely** for
+  `hexfloat`; maximum significant digits for `defaultfloat`.
+- None of the four affect floating-point *parsing* (`operator>>`) —
+  only output formatting.
 
-4) Sets the `floatfield` of the stream `str` to zero, as if by calling
-   `str.unsetf(std::ios_base::floatfield)`. This enables the default
-   floating-point formatting, which is different from fixed and scientific.
+### Gotchas
 
-This is an I/O manipulator, it may be called with an expression such as `out <<
-std::fixed` for any `out` of type `std::basic_ostream` (or with an expression
-such as `in >> std::scientific` for any `in` of type `std::basic_istream`).
-
-### Parameters
-
-- **str** — reference to I/O stream
-
-### Return value
-
-`str` (reference to the stream after manipulation).
-
-### Notes
-
-Hexadecimal floating-point formatting ignores the stream precision
-specification, as required by the specification of `std::num_put::do_put`.
-
-These manipulators do not affect floating-point parsing.
+- Switching floatfield without resetting precision can produce
+  surprising digit counts — precision means something different in
+  each mode.
+- `hexfloat` output is exact but not portable to read by eye; use it
+  for round-tripping bit-exact values, not for display.
+- Only one floatfield is active at a time: setting `fixed` after
+  `scientific` fully replaces it, it doesn't combine.
 
 ### Example
 
 ```cpp
 #include <iomanip>
 #include <iostream>
-#include <sstream>
-
-enum class cap { title, middle, end };
-
-void print(const char* text, double num, cap c)
-{
-    if (c == cap::title)
-        std::cout <<
-            "┌──────────┬────────────┬──────────────────────────┐\n"
-            "│  number  │   iomanip  │      representation      │\n"
-            "├──────────┼────────────┼──────────────────────────┤\n";
-    std::cout << std::left
-         << "│ " << std::setw(8) << text <<      " │ fixed      │ "
-         << std::setw(24) << std::fixed  << num <<            " │\n"
-         << "│ " << std::setw(8) << text <<      " │ scientific │ "
-         << std::setw(24) << std::scientific << num <<        " │\n"
-         << "│ " << std::setw(8) << text <<      " │ hexfloat   │ "
-         << std::setw(24) << std::hexfloat << num <<          " │\n"
-         << "│ " << std::setw(8) << text <<      " │ default    │ "
-         << std::setw(24) << std::defaultfloat << num <<      " │\n";
-    std::cout << (c != cap::end ?
-            "├──────────┼────────────┼──────────────────────────┤\n" :
-            "└──────────┴────────────┴──────────────────────────┘\n");
-}
 
 int main()
 {
-    print("0.0", 0.0, cap::title);
-    print("0.01", 0.01, cap::middle);
-    print("0.00001", 0.00001, cap::end);
+    double x{1.5};
 
-    // Note; choose clang for correct output
-    double f;
-    std::istringstream("0x1.8p+0") >> f;
-    std::cout << "Parsing 0x1.8p+0 gives " << f << '\n';
-
-    std::istringstream("0x1P-1022") >> f;
-    std::cout << "Parsing 0x1P-1022 gives " << f << '\n';
+    std::cout << std::defaultfloat << x << '\n'
+              << std::fixed       << x << '\n'
+              << std::scientific  << x << '\n'
+              << std::hexfloat    << x << '\n';
 }
 ```
 
-Output:
-
 ```text
-┌──────────┬────────────┬──────────────────────────┐
-│  number  │   iomanip  │      representation      │
-├──────────┼────────────┼──────────────────────────┤
-│ 0.0      │ fixed      │ 0.000000                 │
-│ 0.0      │ scientific │ 0.000000e+00             │
-│ 0.0      │ hexfloat   │ 0x0p+0                   │
-│ 0.0      │ default    │ 0                        │
-├──────────┼────────────┼──────────────────────────┤
-│ 0.01     │ fixed      │ 0.010000                 │
-│ 0.01     │ scientific │ 1.000000e-02             │
-│ 0.01     │ hexfloat   │ 0x1.47ae147ae147bp-7     │
-│ 0.01     │ default    │ 0.01                     │
-├──────────┼────────────┼──────────────────────────┤
-│ 0.00001  │ fixed      │ 0.000010                 │
-│ 0.00001  │ scientific │ 1.000000e-05             │
-│ 0.00001  │ hexfloat   │ 0x1.4f8b588e368f1p-17    │
-│ 0.00001  │ default    │ 1e-05                    │
-└──────────┴────────────┴──────────────────────────┘
-Parsing 0x1.8p+0 gives 1.5
-Parsing 0x1P-1022 gives 2.22507e-308
+1.5
+1.500000
+1.500000e+00
+0x1.8p+0
 ```
+
+### Reference
+
+```cpp skip
+std::ios_base& fixed( std::ios_base& str );                     // (1)
+std::ios_base& scientific( std::ios_base& str );                // (2)
+std::ios_base& hexfloat( std::ios_base& str );      // (3) (since C++11)
+std::ios_base& defaultfloat( std::ios_base& str );  // (4) (since C++11)
+```
+
+Each returns `str`. Hexadecimal floating-point formatting ignores the
+stream's precision setting, per the specification of
+`std::num_put::do_put`.
 
 ### See also
 
-- **setprecision** — changes floating-point precision (function)
+- **setprecision** — what precision means depends on which of these
+  is active
+- **setw** — field width for the next insertion only
 
 ---
 *Source: https://en.cppreference.com/w/cpp/io/manip/fixed*

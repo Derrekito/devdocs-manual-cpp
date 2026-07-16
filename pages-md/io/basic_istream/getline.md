@@ -1,106 +1,113 @@
 # std::basic_istream<CharT,Traits>::getline
 
-```cpp
-basic_istream& getline( char_type* s, std::streamsize count );  // (1)
-basic_istream& getline( char_type* s, std::streamsize count, char_type delim );  // (2)
+This is the char-array member: it reads a line into a raw buffer you
+already own, given its size. For a `std::string` that grows to fit,
+use the free function **getline** instead (`std::getline(in, str)`) —
+that's almost always the right choice in ordinary code; reach for this
+member when you specifically need a fixed buffer. Two facts define
+its behavior: it stops storing after `count - 1` characters, always
+leaving room for the trailing `'\0'`, and if it has to stop for that
+reason — the line didn't fit — it sets `failbit`, unlike hitting the
+delimiter or end-of-file, which are treated as ordinary termination.
+
+```cpp skip
+in.getline(buf, count);            // read up to '\n', discard it, stop
+in.getline(buf, count, delim);     // ...or stop at a custom delimiter
 ```
 
-Extracts characters from stream until end of line or the specified delimiter
-`delim`.
+### What you provide
 
-The first overload is equivalent to `getline(s, count, widen('\n'))`.
+- **s** — pointer to the character array to fill.
+- **count** — the array's size. At most `count - 1` characters are
+  stored, leaving room for the null terminator that's always written.
+- **delim** — the character that ends the line; consumed from the
+  stream but not stored. Defaults to `'\n'` (via `widen('\n')`).
 
-Behaves as UnformattedInputFunction. After constructing and checking the sentry
-object, extracts characters from `*this` and stores them in successive locations
-of the array whose first element is pointed to by `s`, until any of the
-following occurs (tested in the order shown):
+### Guarantees and costs
 
-1. end of file condition occurs in the input sequence.
-1. the next available character `c` is the delimiter, as determined by
-   `Traits::eq(c, delim)`. The delimiter is extracted (unlike
-   `basic_istream::get()`) and counted towards `gcount()`, but is not stored.
-1. `count` is non-positive, or `count - 1` characters have been extracted
-   (`setstate(failbit)` is called in this case).
+- O(count) in the worst case; stops as soon as `delim` or end-of-file
+  is reached.
+- Always null-terminates the buffer (writes `CharT()`) when
+  `count > 0`, even if zero characters were read.
+- Stops, in this order: end-of-file; the delimiter (extracted and
+  counted in `gcount()`, but not stored); or `count - 1` characters
+  extracted with no delimiter found — this last case alone sets
+  `failbit`.
+- Because the delimiter check happens before the length check, a line
+  that fits exactly does *not* trigger `failbit`. Because the
+  delimiter itself counts as extracted, an empty line doesn't either.
+- If it extracts no characters at all, `failbit` is set regardless of
+  why.
 
-If the function extracts no characters, ​`failbit` is set in the local error
-state before `setstate()` is called.
+### Gotchas
 
-In any case, if `count > 0`, it then stores a null character `CharT()` into the
-next successive location of the array and updates `gcount()`.
-
-### Notes
-
-Because condition #2 is tested before condition #3, the input line that exactly
-fits the buffer does not trigger `failbit`.
-
-Because the terminating character is counted as an extracted character, an empty
-input line does not trigger `failbit`.
-
-### Parameters
-
-- **s** — pointer to the character string to store the characters to
-- **count** — size of character string pointed to by `s`
-- **delim** — delimiting character to stop the extraction at. It is extracted
-  but not stored.
-
-### Return value
-
-`*this`
-
-### Exceptions
-
-`failure` if an error occurred (the error state flag is not `goodbit`) and
-`exceptions()` is set to throw for that state.
-
-If an internal operation throws an exception, it is caught and `badbit` is set.
-If `exceptions()` is set for `badbit`, the exception is rethrown.
+- A too-long line still leaves a truncated, valid, null-terminated
+  string in `s` — `failbit` is set, but the buffer isn't left empty or
+  garbage. Check `fail()` (after `basic_ios::clear`) if you need to
+  know whether truncation happened before reading on.
+- After truncation, the rest of that line is still sitting unread in
+  the stream — the next `getline` call reads its leftover tail, not
+  the next line, unless you discard it first (see
+  `basic_istream::ignore`).
+- Confusing this with the free function **getline** is the single
+  most common mixup: this one takes `(char*, size)` and never touches
+  a `std::string`; that one takes `(istream&, string&)` and resizes
+  automatically.
 
 ### Example
 
 ```cpp
-#include <array>
 #include <iostream>
 #include <sstream>
-#include <vector>
 
 int main()
 {
-    std::istringstream input("abc|def|gh");
-    std::vector<std::array<char, 4>> v;
+    std::istringstream in("hi\ntoolongforthebuffer\n");
+    char buf[8];
 
-    // note: the following loop terminates when std::ios_base::operator bool()
-    // on the stream returned from getline() returns false
-    for (std::array<char, 4> a; input.getline(&a[0], 4, '|');)
-        v.push_back(a);
+    in.getline(buf, sizeof buf);
+    std::cout << "line1='" << buf << "' fail=" << std::boolalpha
+               << in.fail() << '\n';
 
-    for (auto& a : v)
-        std::cout << &a[0] << '\n';
+    in.getline(buf, sizeof buf);
+    std::cout << "line2='" << buf << "' fail=" << in.fail() << '\n';
 }
 ```
 
-Output:
-
 ```text
-abc
-def
-gh
+line1='hi' fail=false
+line2='toolong' fail=true
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+```cpp skip
+basic_istream& getline( char_type* s, std::streamsize count );  // (1)
+basic_istream& getline( char_type* s, std::streamsize count,
+                         char_type delim );  // (2)
+```
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 531 | C++98 | `std::getline` could not handle the case where `count` is
-      non-positive | no character is extracted in this case
+(1) is equivalent to `getline(s, count, widen('\n'))`. Behaves as an
+UnformattedInputFunction. LWG 531 (applied retroactively to C++98):
+originally unspecified what happened when `count` was non-positive;
+corrected so that no character is extracted in that case.
 
 ### See also
 
-- **getline** — read data from an I/O stream into a string (function template)
-- **operator>>** — extracts formatted data (public member function)
-- **get** — extracts characters (public member function)
-- **read** — extracts blocks of characters (public member function)
+- **getline** — the free function that reads into a `std::string`
+  instead of a raw buffer
+- `basic_istream::ignore` — discard a truncated line's leftover tail
+  before the next read
+- `basic_ios::fail` — the check for whether truncation (or anything
+  else) happened
+- `basic_ios::eof` — set if end-of-file, rather than the delimiter,
+  ended the line
+- `basic_ios::clear` — required before reading again after a
+  `failbit` from truncation
+- `basic_istream::get` — extracts characters without needing a
+  delimiter to stop (public member function)
+- `basic_istream::read` — extracts a fixed block of characters
+  (public member function)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/io/basic_istream/getline*

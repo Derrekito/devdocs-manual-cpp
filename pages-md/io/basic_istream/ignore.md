@@ -1,98 +1,116 @@
 # std::basic_istream<CharT,Traits>::ignore
 
-```cpp
-basic_istream& ignore( std::streamsize count = 1, int_type delim = Traits::eof() );
+`ignore()` reads and throws characters away — it extracts up to
+`count` of them, or fewer if it hits `delim` first (which is also
+consumed), or fewer still if it hits end-of-file. It's the standard
+fix for the classic `std::cin >> n` followed by `std::getline` bug:
+`>>` stops right after the number and leaves the trailing `'\n'` sitting
+in the stream, so the very next `getline` reads an empty line instead
+of the one you wanted. Call
+`in.ignore(std::numeric_limits<std::streamsize>::max(), '\n')`
+between them to discard everything up to and including that leftover
+newline first.
+
+```cpp skip
+in.ignore();                    // discard 1 character
+in.ignore(n);                   // discard up to n characters
+in.ignore(n, '\n');              // ...or stop at '\n', whichever first
+in.ignore(std::numeric_limits<std::streamsize>::max(), '\n');  // a whole line
 ```
 
-Extracts and discards characters from the input stream until and including
-`delim`.
+### What you provide
 
-`ignore` behaves as an UnformattedInputFunction. After constructing and checking
-the sentry object, it extracts characters from the stream and discards them
-until any of the following conditions occurs:
+- **count** — how many characters to extract at most (default `1`).
+  Pass `std::numeric_limits<std::streamsize>::max()` to disable this
+  limit and rely on `delim` (or end-of-file) alone to stop.
+- **delim** — a character that also stops extraction, once reached; it
+  is consumed along with everything before it. Defaults to
+  `Traits::eof()`, which can never match a real character, so by
+  default only `count` (or end-of-file) stops the call.
 
-- `count` characters were extracted. This test is disabled in the special case
-  when `count` equals `std::numeric_limits<std::streamsize>::max()`.
-- end of file conditions occurs in the input sequence, in which case the
-  function calls `setstate(eofbit)`.
-- the next available character `c` in the input sequence is `delim`, as
-  determined by `Traits::eq_int_type(Traits::to_int_type(c), delim)`. The
-  delimiter character is extracted and discarded. This test is disabled if
-  `delim` is `Traits::eof()`.
+### Guarantees and costs
 
-### Parameters
+- O(count) — it must extract and discard each character one at a
+  time; it does not seek.
+- If end-of-file is reached while extracting, `eofbit` is set — this
+  is normal for `ignore(max(), '\n')` on the last line and is not an
+  error to react to.
+- Returns `*this`, so it chains like any other stream operation.
+- Behaves as an UnformattedInputFunction: constructs a sentry first,
+  and an internal exception is caught and turned into `badbit`
+  (rethrown if `badbit` is in the `exceptions()` mask).
 
-- **count** — number of characters to extract
-- **delim** — delimiting character to stop the extraction at. It is also
-  extracted
+### Gotchas
 
-### Return value
-
-`*this`
-
-### Exceptions
-
-`failure` if an error occurred (the error state flag is not `goodbit`) and
-`exceptions()` is set to throw for that state.
-
-If an internal operation throws an exception, it is caught and `badbit` is set.
-If `exceptions()` is set for `badbit`, the exception is rethrown.
+- `ignore()` only discards what's already failed to parse — it does
+  nothing about a stream stuck in `failbit`. If the previous
+  extraction failed, call `basic_ios::clear` *before* `ignore()`, or
+  `ignore()` itself is a no-op on the still-broken stream.
+- The default `delim` (`Traits::eof()`) never matches a real
+  character, so a bare `in.ignore()` with no arguments discards
+  exactly one character, not "until the next separator" — pass an
+  explicit `delim` for that.
+- Passing a small `count` with no matching `delim` truncates
+  silently: it stops after `count` characters even mid-token, with no
+  error flag set (unlike `basic_istream::getline`, which sets
+  `failbit` on truncation).
 
 ### Example
-
-The following example uses `ignore` to skip over non-numeric input:
 
 ```cpp
 #include <iostream>
 #include <limits>
 #include <sstream>
-
-constexpr auto max_size = std::numeric_limits<std::streamsize>::max();
+#include <string>
 
 int main()
 {
-    std::istringstream input("1\n"
-                             "some non-numeric input\n"
-                             "2\n");
-    for (;;)
-    {
-        int n;
-        input >> n;
+    std::istringstream in("3\nhello world\n");
 
-        if (input.eof() || input.bad())
-            break;
-        else if (input.fail())
-        {
-            input.clear(); // unset failbit
-            input.ignore(max_size, '\n'); // skip bad input
-        }
-        else
-            std::cout << n << '\n';
-    }
+    int n;
+    in >> n;                     // leaves "\nhello world\n" unread
+    in.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+    std::string line;
+    std::getline(in, line);
+
+    std::cout << "n=" << n << " line='" << line << "'\n";
 }
 ```
 
-Output:
-
 ```text
-1
-2
+n=3 line='hello world'
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+```cpp skip
+basic_istream& ignore( std::streamsize count = 1,
+                        int_type delim = Traits::eof() );
+```
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 172 | C++98 | the type of `count` was misspecified as `int` | corrected to
-      `std::streamsize`
+Stops, in order tested, at whichever comes first: `count` characters
+extracted (disabled when `count` is
+`std::numeric_limits<std::streamsize>::max()`); end-of-file
+(`setstate(eofbit)`); or the next character equal to `delim` per
+`Traits::eq_int_type` (extracted and discarded; disabled when `delim`
+is `Traits::eof()`). LWG 172 (applied retroactively to C++98):
+`count`'s type was misspecified as `int`; corrected to `streamsize`.
 
 ### See also
 
-- **get** — extracts characters (public member function)
-- **getline** — extracts characters until the given character is found (public
-  member function)
+- `basic_ios::fail` — check before `ignore()`: a failed stream needs
+  `clear()` first
+- `basic_ios::eof` — commonly set by an `ignore()` that reaches the
+  end while discarding
+- `basic_ios::clear` — required before `ignore()` can do anything on
+  a failed stream
+- `basic_istream::getline` — reads and *keeps* a line instead of
+  discarding it
+- **getline** — the free function that reads a line into a
+  `std::string`
+- `basic_istream::get` — extracts characters without discarding them
+  (public member function)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/io/basic_istream/ignore*

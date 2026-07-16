@@ -1,42 +1,40 @@
 # std::isinf
 
-```cpp
-bool isinf( float num );
-bool isinf( double num );
-bool isinf( long double num );  // (since C++11) (until C++23)
-constexpr bool isinf( /* floating-point-type */ num );  // (since C++23)
-Additional overloads
-template< class Integer >
-bool isinf( Integer num );  // (A) (since C++11) (constexpr since C++23)
+Tests whether `num` is positive or negative infinity. Unlike NaN,
+infinity compares normally (`INFINITY == INFINITY` is `true`), so `x
+!= x` doesn't help here — `std::isinf` is the direct way to ask the
+question, and it's a proper overloaded function (built on the C
+`isinf` macro), so it works correctly with overload resolution and
+ADL the way ordinary C++ functions do.
+
+```cpp skip
+std::isinf(num);     // true if num is +Inf or -Inf
 ```
 
-1) Determines if the given floating-point number `num` is a positive or negative
-   infinity. The library provides overloads for all cv-unqualified
-   floating-point types as the type of the parameter `num`.(since C++23)
+### What you provide
 
-A) Additional overloads are provided for all integer types, which are treated as
-   `double`.
+- **num** — a floating-point or integer value (integers are always
+  `false` — there's no integer infinity).
 
-### Parameters
+### Guarantees and costs
 
-- **num** — floating-point or integer value
+- Returns `true` if `num` is infinite (either sign), `false` otherwise.
+- `constexpr` since C++23.
 
-### Return value
+### Gotchas
 
-`true` if `num` is infinite, `false` otherwise.
-
-### Notes
-
-GCC and Clang support a `-ffinite-math` option (additionally implied by
-`-ffast-math`), which allows the respective compiler to assume the nonexistence
-of special IEEE-754 floating point values such as NaN, infinity, or negative
-zero. In other words, `std::isinf` is assumed to always return `false` under
-this option.
-
-The additional overloads are not required to be provided exactly as (A). They
-only need to be sufficient to ensure that for their argument `num` of integer
-type, `std::isinf(num)` has the same effect as
-`std::isinf(static_cast<double>(num))`.
+- GCC and Clang's `-ffast-math` (via the implied `-ffinite-math`)
+  license the compiler to assume infinities can't occur, and under
+  that flag `std::isinf` is assumed to always return `false` — code
+  that relies on infinity detection must not be built with
+  `-ffast-math`.
+- A value that overflows during computation (e.g. `std::exp` of a
+  large argument) becomes `+∞` silently; `std::isinf` is how you catch
+  that after the fact, but checking `errno`/`FE_OVERFLOW` at the call
+  site catches it earlier.
+- `isinf(x)` and `!isfinite(x)` are not quite the same question:
+  `!isfinite(x)` is also `true` for NaN, while `isinf(x)` is `false`
+  for NaN.
 
 ### Example
 
@@ -57,12 +55,9 @@ int main()
               << "isinf(max) = " << std::isinf(max) << '\n'
               << "isinf(inf) = " << std::isinf(inf) << '\n'
               << "isinf(0.0) = " << std::isinf(0.0) << '\n'
-              << "isinf(exp(800)) = " << std::isinf(std::exp(800)) << '\n'
-              << "isinf(DBL_MIN/2.0) = " << std::isinf(DBL_MIN / 2.0) << '\n';
+              << "isinf(exp(800)) = " << std::isinf(std::exp(800)) << '\n';
 }
 ```
-
-Output:
 
 ```text
 isinf(NaN) = false
@@ -71,17 +66,28 @@ isinf(max) = false
 isinf(inf) = true
 isinf(0.0) = false
 isinf(exp(800)) = true
-isinf(DBL_MIN/2.0) = false
 ```
+
+### Reference
+
+```cpp skip
+bool isinf( float num );
+bool isinf( double num );
+bool isinf( long double num );  // (since C++11) (until C++23)
+constexpr bool isinf( /* floating-point-type */ num );  // (since C++23)
+template< class Integer >
+bool isinf( Integer num );  // (since C++11) (constexpr since C++23)
+```
+
+The integer overload need only behave *as if* `num` were cast to
+`double` first, not be implemented exactly as the template above.
 
 ### See also
 
-- **fpclassify (C++11)** — categorizes the given floating-point value (function)
-- **isfinite (C++11)** — checks if the given number has finite value (function)
-- **isnan (C++11)** — checks if the given number is NaN (function)
-- **isnormal (C++11)** — checks if the given number is normal (function)
-
-**C documentation for `isinf`**
+- **isnan** — checks if the given number is NaN (C++11)
+- **isfinite** — checks if the given number has a finite value (C++11)
+- **isnormal** — checks if the given number is normal (C++11)
+- **fpclassify** — categorizes the given floating-point value (C++11)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/numeric/math/isinf*

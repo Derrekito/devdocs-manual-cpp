@@ -1,65 +1,77 @@
 # std::basic_string<CharT,Traits,Allocator>::empty
 
-```cpp
-bool empty() const;  // (until C++11)
-bool empty() const noexcept;  // (since C++11) (until C++20)
-[[nodiscard]] constexpr bool empty() const noexcept;  // (since C++20)
+Checks whether the string has zero characters (`begin() == end()`).
+Prefer `s.empty()` over `s.size() == 0`: same answer, but it reads as
+intent rather than arithmetic, and doesn't invite the classic
+mix-up with **clear** — `empty()` only *asks* whether there are
+characters; it never removes any. To remove all characters, call
+`clear()`.
+
+```cpp skip
+s.empty();  // true if size() == 0, false otherwise
 ```
 
-Checks if the string has no characters, i.e. whether `begin() == end()`.
+### What you provide
 
-### Parameters
+Nothing — takes no arguments.
 
-(none)
+### Guarantees and costs
 
-### Return value
+- Constant complexity.
+- `noexcept`; `constexpr` and `[[nodiscard]]` since C++20 — since
+  C++20, discarding the return value is a compiler warning, because
+  calling `empty()` and ignoring the result is almost always a bug.
 
-`true` if the string is empty, `false` otherwise
+### Gotchas
 
-### Complexity
-
-Constant.
+- `empty()` is a query; it never modifies the string. `clear()` is
+  the mutation that removes all characters. Confusing the two either
+  wipes data by accident or leaves a check silently doing nothing.
+- `s.empty()` and `s.size() == 0` are equivalent in result but
+  `empty()` is the idiomatic spelling — some containers (like
+  `std::forward_list`) don't support O(1) `size()` at all, so the
+  `empty()` habit generalizes better even though `basic_string::size`
+  is always O(1).
 
 ### Example
 
-```cpp
+```cpp c++20
 #include <iostream>
 #include <string>
 
 int main()
 {
     std::string s;
-    std::boolalpha(std::cout);
-    std::cout << "s.empty():" << s.empty() << "\t s:'" << s << "'\n";
+    std::cout << std::boolalpha << s.empty() << '\n';
 
     s = "Exemplar";
-    std::cout << "s.empty():" << s.empty() << "\t s:'" << s << "'\n";
+    std::cout << s.empty() << '\n';
 
-    s = "";
-    std::cout << "s.empty():" << s.empty() << "\t s:'" << s << "'\n";
+    s.clear();
+    std::cout << s.empty() << '\n';
 }
 ```
 
-Output:
-
 ```text
-s.empty():true         s:''
-s.empty():false         s:'Exemplar'
-s.empty():true         s:''
+true
+false
+true
+```
+
+### Reference
+
+```cpp skip
+bool empty() const;  // (until C++11)
+bool empty() const noexcept;  // (since C++11) (until C++20)
+[[nodiscard]] constexpr bool empty() const noexcept;  // (since C++20)
 ```
 
 ### See also
 
-- **sizelength** — returns the number of characters (public member function)
-- **max_size** — returns the maximum number of characters (public member
-  function)
-- **capacity** — returns the number of characters that can be held in currently
-  allocated storage (public member function)
-- **sizessize (C++17)(C++20)** — returns the size of a container or array
-  (function template)
-- **empty (C++17)** — checks whether the container is empty (function template)
-- **empty** — checks whether the view is empty (public member function of
-  `std::basic_string_view<CharT,Traits>`)
+- **size** — returns the number of characters
+- **clear** — removes all characters (the mutation `empty()` is not)
+- **max_size** — returns the largest size the string could reach
+- **capacity** — returns the current storage capacity
 
 ---
 *Source: https://en.cppreference.com/w/cpp/string/basic_string/empty*

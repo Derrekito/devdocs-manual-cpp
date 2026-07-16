@@ -1,60 +1,43 @@
 # std::exp, std::expf, std::expl
 
-```cpp
-float       exp ( float num );
-double      exp ( double num );
-long double exp ( long double num );  // (until C++23)
-/* floating-point-type */
-            exp ( /* floating-point-type */ num );  // (since C++23) (constexpr since C++26)
-float       expf( float num );  // (2) (since C++11) (constexpr since C++26)
-long double expl( long double num );  // (3) (since C++11) (constexpr since C++26)
-Additional overloads (since C++11)
-template< class Integer >
-double      exp ( Integer num );  // (A) (constexpr since C++26)
+Computes e (`2.71828...`) raised to the power `num`. There's no domain
+restriction — every real `num` has a finite or infinite result — but
+large positive `num` overflows to `+HUGE_VAL` (`+∞` on IEEE builds) and
+very negative `num` underflows toward `+0`. For `double`, overflow is
+guaranteed once `num > 709.8`, and underflow is guaranteed once
+`num < -708.4`.
+
+```cpp skip
+std::exp(num);      // e raised to num, as float/double/long double
+std::expf(num);     // float overload                    (since C++11)
+std::expl(num);     // long double overload               (since C++11)
 ```
 
-1-3) Computes e (Euler's number, `2.7182818...`) raised to the given power
-   `num`. The library provides overloads of `std::exp` for all cv-unqualified
-   floating-point types as the type of the parameter.(since C++23)
+### What you provide
 
-A) Additional overloads are provided for all integer types, which are treated as
-double.
-*(since C++11)*
+- **num** — a floating-point or integer value.
 
-### Parameters
+### Guarantees and costs
 
-- **num** — floating-point or integer value
+- Range error on overflow: returns `+HUGE_VAL` (matching `+∞`) and
+  raises `FE_OVERFLOW`. On underflow, the correctly rounded (near-zero)
+  result is returned instead of an error.
+- `exp(±0)` is `1`; `exp(-∞)` is `+0`; `exp(+∞)` is `+∞`; `exp(NaN)` is
+  `NaN`.
+- Errors follow `math_errhandling` — check `errno == ERANGE` and/or
+  `std::fetestexcept(FE_OVERFLOW)`, whichever the implementation
+  defines.
 
-### Return value
+### Gotchas
 
-If no errors occur, the base-e exponential of `num` (enum) is returned.
-
-If a range error occurs due to overflow, `+HUGE_VAL`, `+HUGE_VALF`, or
-`+HUGE_VALL` is returned.
-
-If a range error occurs due to underflow, the correct result (after rounding) is
-returned.
-
-### Error handling
-
-Errors are reported as specified in `math_errhandling`.
-
-If the implementation supports IEEE floating-point arithmetic (IEC 60559),
-
-- If the argument is ±0, 1 is returned.
-- If the argument is -∞, +0 is returned.
-- If the argument is +∞, +∞ is returned.
-- If the argument is NaN, NaN is returned.
-
-### Notes
-
-For IEEE-compatible type double, overflow is guaranteed if 709.8 < num, and
-underflow is guaranteed if num < -708.4.
-
-The additional overloads are not required to be provided exactly as (A). They
-only need to be sufficient to ensure that for their argument `num` of integer
-type, `std::exp(num)` has the same effect as
-`std::exp(static_cast<double>(num))`.
+- Overflow doesn't throw — it silently returns `+∞` unless you check
+  `errno`/`FE_OVERFLOW` yourself, and `+∞` can then propagate through
+  later arithmetic without an obvious symptom.
+- The overflow/underflow thresholds (roughly ±709 for `double`) are
+  easy to hit when exponentiating anything derived from real-world
+  units (rates, energies) without first checking the input's range.
+- `std::exp(1)` is the standard way to get e as a runtime value; for a
+  compile-time constant, prefer `std::numbers::e` (C++20).
 
 ### Example
 
@@ -65,37 +48,21 @@ type, `std::exp(num)` has the same effect as
 #include <cstring>
 #include <iomanip>
 #include <iostream>
-#include <numbers>
-
-// #pragma STDC FENV_ACCESS ON
-
-consteval double approx_e()
-{
-    long double e{1.0};
-    for (auto fac{1ull}, n{1llu}; n != 18; ++n, fac *= n)
-        e += 1.0 / fac;
-    return e;
-}
 
 int main()
 {
-    std::cout << std::setprecision(16)
-              << "exp(1) = e¹ = " << std::exp(1) << '\n'
-              << "numbers::e  = " << std::numbers::e << '\n'
-              << "approx_e    = " << approx_e() << '\n'
-              << "FV of $100, continuously compounded at 3% for 1 year = "
-              << std::setprecision(6) << 100 * std::exp(0.03) << '\n';
+    std::cout << std::fixed << std::setprecision(3)
+              << "exp(1) = e = " << std::exp(1) << '\n'
+              << "FV of $100 at 3% continuous compounding for 1 year = "
+              << 100 * std::exp(0.03) << '\n';
 
-    // special values
     std::cout << "exp(-0) = " << std::exp(-0.0) << '\n'
               << "exp(-Inf) = " << std::exp(-INFINITY) << '\n';
 
-    // error handling
     errno = 0;
     std::feclearexcept(FE_ALL_EXCEPT);
 
-    std::cout << "exp(710) = " << std::exp(710) << '\n';
-
+    std::cout << "exp(710) is inf: " << std::isinf(std::exp(710)) << '\n';
     if (errno == ERANGE)
         std::cout << "    errno == ERANGE: " << std::strerror(errno) << '\n';
     if (std::fetestexcept(FE_OVERFLOW))
@@ -103,33 +70,38 @@ int main()
 }
 ```
 
-Possible output:
-
 ```text
-exp(1) = e¹ = 2.718281828459045
-numbers::e  = 2.718281828459045
-approx_e    = 2.718281828459045
-FV of $100, continuously compounded at 3% for 1 year = 103.045
-exp(-0) = 1
-exp(-Inf) = 0
-exp(710) = inf
+exp(1) = e = 2.718
+FV of $100 at 3% continuous compounding for 1 year = 103.045
+exp(-0) = 1.000
+exp(-Inf) = 0.000
+exp(710) is inf: 1
     errno == ERANGE: Numerical result out of range
     FE_OVERFLOW raised
 ```
 
+### Reference
+
+```cpp skip
+float       exp ( float num );
+double      exp ( double num );
+long double exp ( long double num );  // (until C++23)
+/* floating-point-type */
+            exp ( /* floating-point-type */ num );  // (since C++23) (constexpr since C++26)
+float       expf( float num );  // (since C++11) (constexpr since C++26)
+long double expl( long double num );  // (since C++11) (constexpr since C++26)
+template< class Integer >
+double      exp ( Integer num );  // (since C++11) (constexpr since C++26)
+```
+
+The integer overload need only behave *as if* `num` were cast to
+`double` first, not be implemented exactly as the template above.
+
 ### See also
 
-- **exp2exp2fexp2l (C++11)(C++11)(C++11)** — returns *2* raised to the given
-  power (\({\small 2^x}\)2x) (function)
-- **expm1expm1fexpm1l (C++11)(C++11)(C++11)** — returns *e* raised to the given
-  power, minus one (\({\small e^x-1}\)ex-1) (function)
-- **loglogflogl (C++11)(C++11)** — computes natural (base *e*) logarithm
-  (\({\small\ln{x}}\)ln(x)) (function)
-- **exp(std::complex)** — complex base *e* exponential (function template)
-- **exp(std::valarray)** — applies the function `std::exp` to each element of
-  valarray (function template)
-
-**C documentation for `exp`**
+- **exp2** — 2 raised to the given power (C++11)
+- **expm1** — e raised to the given power, minus one (C++11)
+- **log** — computes natural (base e) logarithm
 
 ---
 *Source: https://en.cppreference.com/w/cpp/numeric/math/exp*

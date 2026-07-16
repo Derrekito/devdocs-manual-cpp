@@ -1,35 +1,35 @@
 # std::basic_string<CharT,Traits,Allocator>::clear
 
-```cpp
-void clear();  // (until C++11)
-void clear() noexcept;  // (since C++11) (until C++20)
-constexpr void clear() noexcept;  // (since C++20)
+Empties the string: `size()` becomes 0, as if by `erase(begin(), end())`.
+Capacity is a different story — the standard does not require it to be
+kept, but every existing implementation keeps it, so a `clear()`ed
+string still owns its old buffer and can refill without reallocating.
+
+```cpp skip
+s.clear();  // size() -> 0; capacity() unspecified, in practice unchanged
 ```
 
-Removes all characters from the string as if by executing `erase(begin(),
-end())`.
+### What you provide
 
-All pointers, references, and iterators are invalidated.
+(no parameters)
 
-### Parameters
+### Guarantees and costs
 
-(none)
+- Linear in the size of the string per the standard, though existing
+  implementations run in constant time.
+- `noexcept` since C++11; `constexpr` since C++20.
+- All pointers, references, and iterators into the string are
+  invalidated.
+- Capacity is unspecified by the standard but kept in practice — no
+  implementation frees the buffer here. To actually release memory,
+  follow up with `shrink_to_fit`.
 
-### Return value
+### Gotchas
 
-(none)
-
-### Notes
-
-Unlike for `std::vector::clear`, the C++ standard does not explicitly require
-that `capacity` is unchanged by this function, but existing implementations do
-not change capacity. This means that they do not release the allocated memory
-(see also `shrink_to_fit`).
-
-### Complexity
-
-Linear in the size of the string, although existing implementations operate in
-constant time.
+- Don't rely on `clear()` to shrink memory usage; it doesn't, even
+  though nothing guarantees it won't someday.
+- Every iterator/pointer/reference obtained before the call is dead
+  afterward, same as `erase`.
 
 ### Example
 
@@ -43,15 +43,30 @@ int main()
     std::string::size_type const capacity = s.capacity();
 
     s.clear();
-    assert(s.capacity() == capacity); // <- not guaranteed
+    assert(s.capacity() == capacity);  // not guaranteed, but holds today
     assert(s.empty());
     assert(s.size() == 0);
 }
 ```
 
+```text
+
+```
+
+### Reference
+
+```cpp skip
+void clear();  // (until C++11)
+void clear() noexcept;  // (since C++11) (until C++20)
+constexpr void clear() noexcept;  // (since C++20)
+```
+
+Equivalent to `erase(begin(), end())`.
+
 ### See also
 
-- **erase** — removes characters (public member function)
+- **erase** — removes characters from the string
+- **shrink_to_fit** — frees unused capacity
 
 ---
 *Source: https://en.cppreference.com/w/cpp/string/basic_string/clear*

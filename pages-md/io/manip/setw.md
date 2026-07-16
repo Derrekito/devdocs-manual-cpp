@@ -1,51 +1,44 @@
 # std::setw
 
-```cpp
-/* unspecified */ setw( int n );
+Sets the minimum field width for the **next** formatted insertion or
+extraction only. Read that twice: it is not sticky. After one `<<` or
+`>>` uses it, the width silently resets to 0 — call `setw` again
+before every field that needs it.
+
+```cpp skip
+out << std::setw(n) << value;   // pads value to at least n chars
+in  >> std::setw(n) >> arr;     // limits extraction to n-1 chars + '\0'
 ```
 
-When used in an expression `out << std::setw(n)` or `in >> std::setw(n)`, sets
-the `width` parameter of the stream `out` or `in` to exactly `n`.
+### What you provide
 
-Some operations reset the width to zero (see below), so `std::setw` may need to
-be repeatedly called to set the width for multiple operations.
+- **n** — the minimum field width, as an `int`.
 
-### Parameters
+### Guarantees and costs
 
-- **n** — new value for width
+- Equivalent to calling `str.width(n)` on the stream's `ios_base`.
+- Applies to exactly one insertion or extraction, then the width
+  resets to 0 ("unspecified"), which formatting code treats as "no
+  padding". Which operations consume it is defined per `operator<<`
+  and `operator>>` overload, not by `setw` itself.
+- Padding uses the current fill character (see `std::setfill`,
+  default space) and the current adjustment (`std::left`/`right`,
+  default right for most types).
+- On extraction into a `char` array, `n` bounds the total characters
+  written including the terminating `'\0'` — a critical overflow
+  guard for `>>` into fixed buffers.
+- Usable with any character stream (narrow or wide), not just
+  `std::ostream`/`std::istream` (LWG 183).
 
-### Return value
+### Gotchas
 
-An object of unspecified type such that
-
-- if `out` is an object of type `std::basic_ostream<CharT, Traits>`, the
-  expression `out << setw(n)` has type `std::basic_ostream<CharT, Traits>&` has
-  value `out` behaves as if it called `f(out, n)`
-- if `in` is an object of type `std::basic_istream<CharT, Traits>`, the
-  expression `in >> setw(n)` has type `std::basic_istream<CharT, Traits>&` has
-  value `in` behaves as if it called `f(in, n)`
-
-where the function `f` is defined as:
-
-```cpp
-void f(std::ios_base& str, int n)
-{
-    // set width
-    str.width(n);
-}
-```
-
-### Notes
-
-The width property of the stream will be reset to zero (meaning "unspecified")
-if any of the following functions are called:
-
-- Input
-- Output
-
-The exact effects this modifier has on the input and output vary between the
-individual I/O functions and are described at each operator<< and operator>>
-overload page individually.
+- Forgetting it resets: `out << setw(6) << a << b;` pads only `a`;
+  `b` prints at its natural width.
+- Multi-field alignment (tables, columns) means calling `setw` before
+  *each* field, every time.
+- `setw` alone doesn't affect strings differently from numbers, but
+  the *direction* of padding does — set `std::left` explicitly if you
+  want left-justified text; the default is right-justified.
 
 ### Example
 
@@ -56,46 +49,40 @@ overload page individually.
 
 int main()
 {
-    std::cout << "no setw: [" << 42 << "]\n"
-              << "setw(6): [" << std::setw(6) << 42 << "]\n"
-              << "no setw, several elements: [" << 89 << 12 << 34 << "]\n"
-              << "setw(6), several elements: [" << 89 << std::setw(6) << 12 << 34 << "]\n";
+    std::cout << "no setw:   [" << 42 << "]\n"
+              << "setw(6):   [" << std::setw(6) << 42 << "]\n"
+              << "resets:    [" << 89 << "][" << std::setw(6) << 12
+              << "][" << 34 << "]\n";
 
-    std::istringstream is("hello, world");
-    char arr[10];
-
-    is >> std::setw(6) >> arr;
-    std::cout << "Input from \"" << is.str() << "\" with setw(6) gave \""
-              << arr << "\"\n";
+    std::istringstream is("hello world");
+    char arr[6];
+    is >> std::setw(6) >> arr;   // at most 5 chars + '\0'
+    std::cout << "bounded read: \"" << arr << "\"\n";
 }
 ```
 
-Output:
-
 ```text
-no setw: [42]
-setw(6): [    42]
-no setw, several elements: [891234]
-setw(6), several elements: [89    1234]
-Input from "hello, world" with setw(6) gave "hello"
+no setw:   [42]
+setw(6):   [    42]
+resets:    [89][    12][34]
+bounded read: "hello"
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+```cpp skip
+/* unspecified */ setw( int n );
+```
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 183 | C++98 | `setw` could only be used with streams of type
-      `std::ostream` or `std::istream` | usable with any character stream
+Returns an object of unspecified type such that, when written to an
+output stream or read from an input stream, it calls `str.width(n)`
+on the stream and otherwise behaves like the stream itself.
 
 ### See also
 
-- **width** — manages field width (public member function of `std::ios_base`)
-- **setfill** — changes the fill character (function template)
-- **internalleftright** — sets the placement of fill characters (function)
-- **showbasenoshowbase** — controls whether prefix is used to indicate numeric
-  base (function)
+- **width** — the underlying `ios_base` member `setw` calls
+- **setfill** — changes the fill character used for padding
+- **left**, **right** — set the padding side
 
 ---
 *Source: https://en.cppreference.com/w/cpp/io/manip/setw*

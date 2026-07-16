@@ -1,6 +1,83 @@
 # std::basic_string<CharT,Traits,Allocator>::find_first_of
 
+The #1 confusion with `find`: `find_first_of` does **not** search for
+a substring. It searches for the first character that matches *any
+one* character in the given set, treating the argument as a bag of
+candidate characters, not a pattern to match in sequence. Searches
+forward from `pos`; returns `npos` if none of the set's characters
+appear.
+
+```cpp skip
+s.find_first_of(str);               // first char that's in str, from pos 0
+s.find_first_of(str, pos);          // ...starting the search at pos
+s.find_first_of(cstr);              // first char that's in cstr
+s.find_first_of(cstr, pos, count);  // ...only cstr[0..count) is the set
+s.find_first_of(ch);                // same as find(ch): one character
+s.find_first_of(ch, pos);
+s.find_first_of(string_view_like);  // (since C++17) convertible to string_view
+```
+
+### What you provide
+
+- **str / cstr / ch / t** — the *set* of characters to match against:
+  another `basic_string`, a null-terminated `const CharT*`, a single
+  `CharT`, or (since C++17) anything implicitly convertible to
+  `std::basic_string_view`. Order within the set doesn't matter.
+- **pos** — index to start searching at (default `0`).
+- **count** — (C-string overload only) treat only the first `count`
+  characters of `s` as the set; may contain embedded nulls.
+
+### Guarantees and costs
+
+- Returns `npos` if no character in `[pos, size())` matches any
+  character of the set.
+- Overloads taking `str`, `ch`, or a `string_view`-like are `noexcept`
+  (since C++11); the C-string overloads can throw only from
+  `Traits::length`. `constexpr` since C++20.
+- Strong exception safety: if it throws, the string is unchanged.
+- `Traits::eq` performs each character comparison.
+
+### Gotchas
+
+- `s.find_first_of("abc")` finds the first character that is `'a'`,
+  `'b'`, *or* `'c'` — not the substring `"abc"`. Use `find` for that.
+- With a single `ch` argument, `find_first_of` and `find` behave
+  identically (a one-character set is the same as one character), so
+  the distinction only bites with multi-character arguments.
+- The C-string `(s, pos, count)` overload reads exactly `count`
+  characters from `s`; a mismatched `count` is undefined behavior.
+
+### Example
+
 ```cpp
+#include <cassert>
+#include <string>
+
+int main()
+{
+    using namespace std::literals;
+
+    // "alignas" contains 'l' at index 1 -- matches the set {k,l,m,n}
+    assert("alignas"s.find_first_of("klmn"s) == 1);
+
+    // no character of "alignof" is in {w,x,y,z}
+    assert("alignof"s.find_first_of("wxyz"s) == std::string::npos);
+
+    // find_first_of("abc") looks for 'a', 'b', or 'c' -- NOT the
+    // substring "abc" -- contrast with find, which looks for "abc" as
+    // a whole
+    assert("decltype"s.find("abc") == std::string::npos);  // no such substring
+    assert("decltype"s.find_first_of("abc") == 2);          // 'c' at index 2
+}
+```
+
+```text
+
+```
+
+### Reference
+
+```cpp skip
 size_type find_first_of( const basic_string& str, size_type pos = 0 ) const;  // (until C++11)
 size_type find_first_of( const basic_string& str,
                          size_type pos = 0 ) const noexcept;  // (since C++11) (until C++20)
@@ -26,148 +103,19 @@ constexpr size_type
                    size_type pos = 0 ) const noexcept(/* see below */);  // (since C++20)
 ```
 
-Finds the first character equal to one of the characters in the given character
-sequence. The search considers only the range `[``pos``,``size()``)`. If none of
-the characters in the given character sequence is present in the range, `npos`
-will be returned.
-
-1) Finds the first character equal to one of the characters in `str`.
-
-2) Finds the first character equal to one of the characters in the range
-   `[``s``,``s + count``)`. This range can include null characters.
-
-If `[``s``,``s + count``)` is not a valid range, the behavior is undefined.
-
-3) Finds the first character equal to one of the characters in character string
-   pointed to by `s`. The length of the string is determined by the first null
-   character using `Traits::length(s)`.
-
-If `[``s``,``s + Traits::length(s)``)` is not a valid range, the behavior is
-   undefined.
-
-4) Finds the first character equal to `ch`.
-
-5) Implicitly converts `t` to a string view `sv` as if by
-   `std::basic_string_view<CharT, Traits> sv = t;`, then finds the first
-   character equal to one of the characters in `sv`.
-
-This overload participates in overload resolution only if
-   `std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT,
-   Traits>>` is `true` and `std::is_convertible_v<const StringViewLike&, const
-   CharT*>` is `false`.
-
-### Parameters
-
-- **str** — string identifying characters to search for
-- **pos** — position at which to begin searching
-- **count** — length of character string identifying characters to search for
-- **s** — pointer to a character string identifying characters to search for
-- **ch** — character to search for
-- **t** — object (convertible to `std::basic_string_view`) identifying
-  characters to search for
-
-### Return value
-
-Position of the found character or `npos` if no such character is found.
-
-### Exceptions
-
-1,4) Throws nothing.
-
-5) `noexcept` specification: `noexcept(std::is_nothrow_convertible_v<const T&,
-   std::basic_string_view<CharT, Traits>>)`
-
-If an exception is thrown for any reason, this function has no effect (strong
-exception safety guarantee).
-
-### Notes
-
-`Traits::eq()` is used to perform the comparison.
-
-### Example
-
-```cpp
-#include <cassert>
-#include <iostream>
-#include <string>
-#include <string_view>
-
-int main()
-{
-    using namespace std::literals;
-    std::string::size_type sz;
-
-    // (1)
-    sz = "alignas"s.find_first_of("klmn"s);
-    //     └────────────────────────┘
-    assert(sz == 1);
-
-    sz = "alignof"s.find_first_of("wxyz"s);
-    // no match
-    assert(sz == std::string::npos);
-
-    // (2)
-    sz = "consteval"s.find_first_of("xyzabc", 0, 3);
-    // no match (× are not targets)     ×××
-    assert(sz == std::string::npos);
-
-    sz = "consteval"s.find_first_of("xyzabc", 0, 6);
-    //    └───────────────────────────────┘
-    assert(sz == 0);
-
-    // (3)
-    sz = "decltype"s.find_first_of("xyzabc");
-    //      └────────────────────────────┘
-    assert(sz == 2);
-
-    // (4)
-    sz = "co_await"s.find_first_of('a');
-    //       └──────────────────────┘
-    assert(sz == 3);
-
-    // (5)
-    sz = "constinit"s.find_first_of("int"sv);
-    //      └─────────────────────────┘
-    assert(sz == 2);
-
-    std::cout << "All tests passed.\n";
-}
-```
-
-Output:
-
-```text
-All tests passed.
-```
-
-### Defect reports
-
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
-
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 847 | C++98 | there was no exception safety guarantee | added strong
-      exception safety guarantee
-  LWG 2064 | C++11 | overloads (3,4) were noexcept | removed
-  LWG 2946 | C++17 | overload (5) caused ambiguity in some cases | avoided by
-      making it a template
-  P1148R0 | C++11 C++17 | noexcept for overloads (4,5) were accidently dropped
-      by LWG2064/LWG2946 | restored
+The `StringViewLike` overload participates in overload resolution
+only if `t` converts to `std::basic_string_view<CharT, Traits>` but
+not to `const CharT*`. LWG 847 (C++98) added the strong exception
+safety guarantee retroactively; LWG 2064 removed erroneous `noexcept`
+from the C-string/char overloads in C++11, later restored by P1148R0.
 
 ### See also
 
-- **find** — finds the first occurrence of the given substring (public member
-  function)
-- **rfind** — find the last occurrence of a substring (public member function)
-- **find_first_not_of** — find first absence of characters (public member
-  function)
-- **find_last_of** — find last occurrence of characters (public member function)
-- **find_last_not_of** — find last absence of characters (public member
-  function)
-- **find_first_of** — find first occurrence of characters (public member
-  function of `std::basic_string_view<CharT,Traits>`)
-- **strspn** — returns the length of the maximum initial segment that consists
-  of only the characters found in another byte string (function)
+- **find** — finds the first occurrence of a whole substring
+- **rfind** — find the last occurrence of a substring
+- **find_first_not_of** — find the first character *not* in a set
+- **find_last_of** — find the last occurrence of any character in a set
+- **find_last_not_of** — find the last character not in a set
 
 ---
 *Source: https://en.cppreference.com/w/cpp/string/basic_string/find_first_of*

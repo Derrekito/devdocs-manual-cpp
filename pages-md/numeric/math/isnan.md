@@ -1,52 +1,44 @@
 # std::isnan
 
-```cpp
-bool isnan( float num );
-bool isnan( double num );
-bool isnan( long double num );  // (since C++11) (until C++23)
-constexpr bool isnan( /* floating-point-type */ num );  // (since C++23)
-Additional overloads
-template< class Integer >
-bool isnan( Integer num );  // (A) (since C++11) (constexpr since C++23)
+Tests whether `num` is a not-a-number (NaN) value. This exists because
+the obvious ways to check don't work: NaN never compares equal to
+anything, **including itself** (`NaN == NaN` is `false`), so `x != x`
+is a well-known trick for detecting it — but `std::isnan` says the same
+thing directly and is the preferred spelling. `std::isnan` is a
+function template overload set (unlike the C macro `isnan` it's built
+on), so it participates in overload resolution and ADL the way normal
+C++ functions do.
+
+```cpp skip
+std::isnan(num);     // true if num is NaN
 ```
 
-1) Determines if the given floating point number `num` is a not-a-number (NaN)
-   value. The library provides overloads for all cv-unqualified floating-point
-   types as the type of the parameter `num`.(since C++23)
+### What you provide
 
-A) Additional overloads are provided for all integer types, which are treated as
-   `double`.
+- **num** — a floating-point or integer value (integers are always
+  `false` — there's no integer NaN).
 
-### Parameters
+### Guarantees and costs
 
-- **num** — floating-point or integer value
+- Returns `true` if `num` is a NaN, `false` otherwise.
+- `constexpr` since C++23.
+- There are many distinct NaN bit patterns (different sign bits and
+  payloads, see `std::nan` and `numeric_limits::quiet_NaN`); `isnan`
+  doesn't distinguish them — any NaN gives `true`.
 
-### Return value
+### Gotchas
 
-`true` if `num` is a NaN, `false` otherwise.
-
-### Notes
-
-There are many different NaN values with different sign bits and payloads, see
-`std::nan` and `std::numeric_limits::quiet_NaN`.
-
-NaN values never compare equal to themselves or to other NaN values. Copying a
-NaN is not required, by IEEE-754, to preserve its bit representation (sign and
-payload), though most implementation do.
-
-Another way to test if a floating-point value is NaN is to compare it with
-itself: `bool is_nan(double x) { return x != x; }`.
-
-GCC and Clang support a `-ffinite-math` option (additionally implied by
-`-ffast-math`), which allows the respective compiler to assume the nonexistence
-of special IEEE-754 floating point values such as NaN, infinity, or negative
-zero. In other words, `std::isnan` is assumed to always return `false` under
-this option.
-
-The additional overloads are not required to be provided exactly as (A). They
-only need to be sufficient to ensure that for their argument `num` of integer
-type, `std::isnan(num)` has the same effect as
-`std::isnan(static_cast<double>(num))`.
+- `x != x` works as a NaN test only because NaN is specifically
+  unequal to itself; it relies on IEEE-754 comparison semantics and is
+  easy to misread as a no-op or a bug by someone skimming the code —
+  prefer `std::isnan(x)`, which says what it means.
+- GCC and Clang's `-ffast-math` (via the implied `-ffinite-math`)
+  license the compiler to assume NaN can't occur, and under that flag
+  `std::isnan` is assumed to always return `false` — code that relies
+  on NaN detection must not be built with `-ffast-math`.
+- Copying a NaN is not required by IEEE-754 to preserve its exact bit
+  pattern (sign and payload), though most implementations do — don't
+  rely on a NaN's payload surviving a copy.
 
 ### Example
 
@@ -61,34 +53,40 @@ int main()
               << "isnan(NaN) = " << std::isnan(NAN) << '\n'
               << "isnan(Inf) = " << std::isnan(INFINITY) << '\n'
               << "isnan(0.0) = " << std::isnan(0.0) << '\n'
-              << "isnan(DBL_MIN/2.0) = " << std::isnan(DBL_MIN / 2.0) << '\n'
-              << "isnan(0.0 / 0.0)   = " << std::isnan(0.0 / 0.0) << '\n'
-              << "isnan(Inf - Inf)   = " << std::isnan(INFINITY - INFINITY) << '\n';
+              << "isnan(0.0 / 0.0) = " << std::isnan(0.0 / 0.0) << '\n'
+              << "isnan(Inf - Inf) = " << std::isnan(INFINITY - INFINITY) << '\n';
 }
 ```
-
-Output:
 
 ```text
 isnan(NaN) = true
 isnan(Inf) = false
 isnan(0.0) = false
-isnan(DBL_MIN/2.0) = false
-isnan(0.0 / 0.0)   = true
-isnan(Inf - Inf)   = true
+isnan(0.0 / 0.0) = true
+isnan(Inf - Inf) = true
 ```
+
+### Reference
+
+```cpp skip
+bool isnan( float num );
+bool isnan( double num );
+bool isnan( long double num );  // (since C++11) (until C++23)
+constexpr bool isnan( /* floating-point-type */ num );  // (since C++23)
+template< class Integer >
+bool isnan( Integer num );  // (since C++11) (constexpr since C++23)
+```
+
+The integer overload need only behave *as if* `num` were cast to
+`double` first, not be implemented exactly as the template above.
 
 ### See also
 
-- **nannanfnanl (C++11)(C++11)(C++11)** — not-a-number (NaN) (function)
-- **fpclassify (C++11)** — categorizes the given floating-point value (function)
-- **isfinite (C++11)** — checks if the given number has finite value (function)
-- **isinf (C++11)** — checks if the given number is infinite (function)
-- **isnormal (C++11)** — checks if the given number is normal (function)
-- **isunordered (C++11)** — checks if two floating-point values are unordered
-  (function)
-
-**C documentation for `isnan`**
+- **isinf** — checks if the given number is infinite (C++11)
+- **isfinite** — checks if the given number has a finite value (C++11)
+- **isnormal** — checks if the given number is normal (C++11)
+- **fpclassify** — categorizes the given floating-point value (C++11)
+- **nan** — generates a quiet NaN (C++11)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/numeric/math/isnan*

@@ -1,47 +1,46 @@
 # std::basic_string<CharT,Traits,Allocator>::starts_with
 
-```cpp
-constexpr bool
-    starts_with( std::basic_string_view<CharT,Traits> sv ) const noexcept;  // (1) (since C++20)
-constexpr bool
-    starts_with( CharT ch ) const noexcept;  // (2) (since C++20)
-constexpr bool
-    starts_with( const CharT* s ) const;  // (3) (since C++20)
+Checks whether the string begins with a given prefix — a
+`string_view`-convertible object, a single character, or a
+null-terminated C string. Available since **C++20**; this page covers
+`starts_with`, its mirror `ends_with` checks the tail instead, and
+C++23 adds `contains` for "anywhere in the string."
+
+```cpp skip
+s.starts_with(sv);    // prefix is a string_view (or convertible to one)
+s.starts_with(ch);    // prefix is a single character
+s.starts_with(cstr);  // prefix is a null-terminated C string
 ```
 
-Checks if the string begins with the given prefix. The prefix may be one of the
-following:
+### What you provide
 
-1) A string view `sv` (which may be a result of implicit conversion from another
-   `std::basic_string`).
+- **sv** — a `std::basic_string_view<CharT, Traits>`, including
+  another `basic_string` (implicitly convertible).
+- **ch** — a single character.
+- **s** — a null-terminated `const CharT*`.
 
-2) A single character `ch`.
+### Guarantees and costs
 
-3) A null-terminated character string `s`.
+- Returns `true` if the string begins with the prefix, `false`
+  otherwise; an empty prefix always matches.
+- All three overloads are equivalent to calling `starts_with` on a
+  `string_view` over the same data — no allocation.
+- The `sv` and `ch` overloads are `noexcept`; the C-string overload
+  can throw only from computing its length. `constexpr` throughout.
 
-All three overloads effectively return `std::basic_string_view<CharT,
-Traits>(data(), size()).starts_with(x)`, where `x` is the parameter.
+### Gotchas
 
-### Parameters
-
-- **sv** — a string view which may be a result of implicit conversion from
-  another `std::basic_string`
-- **ch** — a single character
-- **s** — a null-terminated character string
-
-### Return value
-
-`true` if the string begins with the provided prefix, `false` otherwise.
-
-### Notes
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_starts_ends_with` | 201711L | (C++20) | String prefix and suffix
-      checking: `starts_with()` and `ends_with()`
+- C++20 only — on an older standard, use
+  `s.compare(0, prefix.size(), prefix) == 0` or
+  `s.rfind(prefix, 0) == 0` instead.
+- Case-sensitive: `"Hello".starts_with("hello")` is `false`. There's
+  no case-insensitive overload.
+- Don't confuse with `contains` (C++23), which matches the prefix
+  *anywhere*, not just at the start.
 
 ### Example
 
-```cpp
+```cpp c++20
 #include <cassert>
 #include <string>
 #include <string_view>
@@ -52,35 +51,39 @@ int main()
 
     const auto str = "Hello, C++20!"s;
 
-    assert
-    (""
-        && str.starts_with("He"sv)  // (1)
-        && !str.starts_with("he"sv) // (1)
-        && str.starts_with("He"s)   // (1) implicit conversion string to string_view
-        && !str.starts_with("he"s)  // (1) implicit conversion string to string_view
-        && str.starts_with('H')     // (2)
-        && !str.starts_with('h')    // (2)
-        && str.starts_with("He")    // (3)
-        && !str.starts_with("he")   // (3)
-    );
+    assert(str.starts_with("He"sv));    // string_view prefix
+    assert(!str.starts_with("he"sv));   // case-sensitive
+    assert(str.starts_with('H'));       // single character
+    assert(str.starts_with("He"));      // C string
 }
 ```
 
+```text
+
+```
+
+### Reference
+
+```cpp skip
+constexpr bool
+    starts_with( std::basic_string_view<CharT,Traits> sv ) const noexcept;  // (1) (since C++20)
+constexpr bool
+    starts_with( CharT ch ) const noexcept;  // (2) (since C++20)
+constexpr bool
+    starts_with( const CharT* s ) const;  // (3) (since C++20)
+```
+
+All three overloads effectively return
+`std::basic_string_view<CharT, Traits>(data(), size()).starts_with(x)`.
+Feature-test macro `__cpp_lib_starts_ends_with` (value `201711L`)
+signals availability.
+
 ### See also
 
-- **ends_with (C++20)** — checks if the string ends with the given suffix
-  (public member function)
-- **starts_with (C++20)** — checks if the string view starts with the given
-  prefix (public member function of `std::basic_string_view<CharT,Traits>`)
-- **ends_with (C++20)** — checks if the string view ends with the given suffix
-  (public member function of `std::basic_string_view<CharT,Traits>`)
-- **contains (C++23)** — checks if the string contains the given substring or
-  character (public member function)
-- **contains (C++23)** — checks if the string view contains the given substring
-  or character (public member function of
-  `std::basic_string_view<CharT,Traits>`)
-- **compare** — compares two strings (public member function)
-- **substr** — returns a substring (public member function)
+- **ends_with** — checks if the string ends with a suffix (C++20)
+- **contains** — checks if the string contains a substring anywhere (C++23)
+- **compare** — compares two strings
+- **substr** — returns a substring
 
 ---
 *Source: https://en.cppreference.com/w/cpp/string/basic_string/starts_with*

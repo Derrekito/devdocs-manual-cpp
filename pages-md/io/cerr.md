@@ -1,92 +1,74 @@
 # std::cerr, std::wcerr
 
-```cpp
-extern std::ostream cerr;  // (1)
-extern std::wostream wcerr;  // (2)
+`std::cerr` is the global `std::ostream` wired to the process's standard
+error (`stderr`). It's **unbuffered** — every write reaches the OS
+immediately — and **tied** to `std::cout`, so writing to `cerr` first
+flushes any output still pending on `cout`. That's why diagnostics and
+error messages are written to `cerr` rather than `cout`: they show up right
+away, in the correct order relative to normal output, even if the program
+crashes moments later.
+
+```cpp skip
+extern std::ostream cerr;   // writes to stderr, unbuffered
+extern std::wostream wcerr; // wide version, writes to stderr, unbuffered
 ```
 
-The global objects `std::cerr` and `std::wcerr` control output to a stream
-buffer of implementation-defined type (derived from `std::streambuf` and
-`std::wstreambuf`, respectively), associated with the standard C error output
-stream `stderr`.
+### Guarantees and costs
 
-These objects are guaranteed to be initialized during or before the first time
-an object of type `std::ios_base::Init` is constructed and are available for use
-in the constructors and destructors of static objects with ordered
-initialization (as long as `<iostream>` is included before the object is
-defined).
+- `std::cerr`/`std::wcerr` are guaranteed initialized during or before the
+  first construction of a `std::ios_base::Init` object, so they're usable
+  from the constructors/destructors of static objects (as long as
+  `<iostream>` is included first).
+- Once initialized, `cerr` always has `std::ios_base::unitbuf` set: output
+  is flushed to the OS after every insertion, unlike the general buffering
+  `cout` does. This costs throughput — don't reach for `cerr` for high
+  volume output, only for diagnostics.
+- `cerr.tie()` returns `&std::cout` (same for `wcerr`/`wcout`), so any
+  output operation on `cerr` first executes `cout.flush()` — interleaved
+  `cout`/`cerr` output stays in the order you wrote it.
+- Unless `sync_with_stdio(false)` has been issued, concurrent use of `cerr`
+  from multiple threads is safe for both formatted and unformatted output.
 
-Unless `std::ios_base::sync_with_stdio(false)` has been issued, it is safe to
-concurrently access these objects from multiple threads for both formatted and
-unformatted output.
+### Gotchas
 
-Once initialized, `(std::cerr.flags() & unitbuf) != 0` (same for `std::wcerr`)
-meaning that any output sent to these stream objects is immediately flushed to
-the OS (via `std::basic_ostream::sentry`'s destructor).
-
-In addition, `std::cerr.tie()` returns `&std::cout` (same for `std::wcerr` and
-`std::wcout`), meaning that any output operation on `std::cerr` first executes
-`std::cout.flush()` (via `std::basic_ostream::sentry`'s constructor).
-
-### Notes
-
-The 'c' in the name refers to "character" (stroustrup.com FAQ); `cerr` means
-"character error (stream)" and `wcerr` means "wide character error (stream)".
+- Because `cerr` is unbuffered and flushes `cout` on every write, mixing
+  heavy `cerr` logging into a hot path is slow — reach for `clog` (buffered,
+  not tied to `cout`) instead if you want stderr output without the
+  per-write flush cost.
+- Reading `cerr`'s output right requires reading it separately from
+  `cout`'s: they're different OS streams (`stderr` vs `stdout`), so
+  redirecting one doesn't capture the other unless you merge them
+  explicitly (e.g. shell `2>&1`).
 
 ### Example
 
-Output to `stderr` via `std::cerr` flushes out the pending output on
-`std::cout`, while output to `stderr` via `std::clog` does not.
-
 ```cpp
-#include <chrono>
 #include <iostream>
-#include <thread>
-using namespace std::chrono_literals;
-
-void f()
-{
-    std::cout << "Output from thread...";
-    std::this_thread::sleep_for(2s);
-    std::cout << "...thread calls flush()" << std::endl;
-}
 
 int main()
 {
-    std::jthread t1{f};
-    std::this_thread::sleep_for(1000ms);
-    std::clog << "This output from main is not tie()'d to cout\n";
-    std::cerr << "This output is tie()'d to cout\n";
+    std::cout << std::boolalpha
+              << "cerr.tie() == &cout: " << (std::cerr.tie() == &std::cout)
+              << '\n'
+              << "cerr has unitbuf: "
+              << ((std::cerr.flags() & std::ios::unitbuf) != 0) << '\n';
+
+    std::cerr << "diagnostic (goes to stderr, not shown here)\n";
+    std::cout << "done\n";
 }
 ```
 
-Possible output:
-
 ```text
-This output from main is not tie()'d to cout
-Output from thread...This output is tie()'d to cout
-...thread calls flush()
+cerr.tie() == &cout: true
+cerr has unitbuf: true
+done
 ```
-
-### Defect reports
-
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
-
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 455 | C++98 | `std::cerr.tie()` and `std::wcerr.tie()` returned null
-      pointers | they return `&std::cout` and `&std::wcout` respectively
 
 ### See also
 
-- **Init** — initializes standard stream objects (public member class of
-  `std::ios_base`)
-- **clogwclog** — writes to the standard C error stream `stderr` (global object)
-- **coutwcout** — writes to the standard C output stream `stdout` (global
-  object)
-- **stdinstdoutstderr** — expression of type `FILE*` associated with the input
-  stream expression of type `FILE*` associated with the output stream expression
-  of type `FILE*` associated with the error output stream (macro constant)
+- **cout** — the stream `cerr` is tied to
+- **clog** — buffered stderr output, not tied to `cout`
+- **basic_ostream** — the type `cerr` is an instance of
 
 ---
 *Source: https://en.cppreference.com/w/cpp/io/cerr*

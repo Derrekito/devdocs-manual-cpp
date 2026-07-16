@@ -1,6 +1,93 @@
 # std::basic_string<CharT,Traits,Allocator>::rfind
 
+`rfind` is `find` run from the right: it looks for the *last*
+occurrence of a substring, C string, character, or `string_view`-like
+object, scanning right to left. It still returns the *starting*
+index of the match, not the end. `pos` means "the match may not begin
+after here" — the search effectively starts at `min(pos, size())` and
+walks backward, so `pos = npos` (the default) searches the whole
+string, and any `pos >= size() - 1` behaves the same as no `pos` at
+all.
+
+```cpp skip
+s.rfind(str);              // last occurrence of another string
+s.rfind(str, pos);         // ...match must not start after pos
+s.rfind(cstr);             // last occurrence of a C string
+s.rfind(cstr, pos, count);  // last occurrence of the first count chars of cstr
+s.rfind(ch);                // last occurrence of a single character
+s.rfind(ch, pos);
+s.rfind(string_view_like);  // (since C++17) anything convertible to string_view
+```
+
+### What you provide
+
+- **str / cstr / ch / t** — what to search for: another
+  `basic_string`, a null-terminated `const CharT*`, a single `CharT`,
+  or (since C++17) anything implicitly convertible to
+  `std::basic_string_view`.
+- **pos** — the rightmost start position to consider (default `npos`,
+  meaning "no limit — search the whole string"). The match's start
+  index must be `<= pos`.
+- **count** — (C-string overload only) treat only the first `count`
+  characters of `s` as the pattern.
+
+### Guarantees and costs
+
+- Returns `npos` if no match satisfies `xpos <= pos`.
+- An empty pattern is always "found": at `pos` if `pos < size()`,
+  otherwise at `size()` (this covers `pos == npos` too).
+- If the string itself is empty (and the pattern isn't), `npos` is
+  always returned.
+- Overloads taking `str`, `ch`, or a `string_view`-like are `noexcept`
+  (since C++11); the C-string overloads can throw only from
+  `Traits::length`. `constexpr` since C++20.
+- Strong exception safety: if it throws, the string is unchanged.
+
+### Gotchas
+
+- `pos` bounds where the match may *start*, not where scanning
+  begins from the right — `s.rfind("is", 4)` still requires the match
+  to start at index `<= 4`, even though characters past index 4 exist.
+- Like `find`, the return value is the match's start index, so
+  `s.rfind("is", 0)` is a common idiom for "does `s` start with
+  `\"is\"`" (equivalent to, and predates, `starts_with`).
+- Don't confuse `rfind` with `find_last_of`: `rfind` matches a whole
+  substring; `find_last_of` matches any one character from a set.
+
+### Example
+
 ```cpp
+#include <iostream>
+#include <string>
+
+int main()
+{
+    std::string s = "This is a string";
+
+    std::string::size_type n = s.rfind("is");        // search whole string
+    std::cout << n << '\n';
+
+    n = s.rfind("is", 4);                              // match must start <= 4
+    std::cout << n << '\n';
+
+    n = s.rfind("This", 0);                             // prefix check idiom
+    std::cout << (n == 0 ? "starts with This" : "no") << '\n';
+
+    n = s.rfind('q');                                   // not present
+    std::cout << (n == std::string::npos ? "not found" : "found") << '\n';
+}
+```
+
+```text
+5
+2
+starts with This
+not found
+```
+
+### Reference
+
+```cpp skip
 size_type rfind( const basic_string& str, size_type pos = npos ) const;  // (until C++11)
 size_type rfind( const basic_string& str,
                  size_type pos = npos ) const noexcept;  // (since C++11) (until C++20)
@@ -23,154 +110,19 @@ constexpr size_type
            size_type pos = npos ) const noexcept(/* see below */);  // (since C++20)
 ```
 
-Finds the last substring that is equal to the given character sequence. The
-search begins at `pos` and proceeds from right to left (thus, the found
-substring, if any, cannot begin in a position following `pos`). If `npos` or any
-value not smaller than `size() - 1` is passed as `pos`, the whole string will be
-searched.
-
-1) Finds the last substring equal to `str`.
-
-2) Finds the last substring equal to the range `[``s``,``s + count``)`. This
-   range can include null characters.
-
-If `[``s``,``s + count``)` is not a valid range, the behavior is undefined.
-
-3) Finds the last substring equal to the character string pointed to by `s`. The
-   length of the string is determined by the first null character using
-   `Traits::length(s)`.
-
-If `[``s``,``s + Traits::length(s)``)` is not a valid range, the behavior is
-   undefined.
-
-4) Finds the last character equal to `ch`.
-
-5) Implicitly converts `t` to a string view `sv` as if by
-   `std::basic_string_view<CharT, Traits> sv = t;`, then finds the last
-   substring equal to the contents of `sv`.
-
-This overload participates in overload resolution only if
-   `std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT,
-   Traits>>` is `true` and `std::is_convertible_v<const StringViewLike&, const
-   CharT*>` is `false`.
-
-In all cases, equality is checked by calling `Traits::eq`.
-
-### Parameters
-
-- **str** — string to search for
-- **pos** — position at which to begin searching
-- **count** — length of substring to search for
-- **s** — pointer to a character string to search for
-- **ch** — character to search for
-- **t** — object (convertible to `std::basic_string_view`) to search for
-
-### Return value
-
-Position of the first character of the found substring or `npos` if no such
-substring is found. Note that this is an offset from the start of the string,
-not the end.
-
-If searching for an empty string (i.e., `str.size()`, `count`, or
-`Traits::length(s)` is zero), the empty string is found immediately and `rfind`
-returns:
-
-- `pos`, if `pos < size()`;
-- `size()` otherwise, including the case where `pos == npos`.
-
-Otherwise, if `size()` is zero, `npos` is always returned.
-
-### Exceptions
-
-1,4) Throws nothing.
-
-5) `noexcept` specification: `noexcept(std::is_nothrow_convertible_v<const T&,
-   std::basic_string_view<CharT, Traits>>)`
-
-If an exception is thrown for any reason, this function has no effect (strong
-exception safety guarantee).
-
-### Example
-
-```cpp
-#include <iomanip>
-#include <iostream>
-#include <string>
-
-void print(std::string::size_type n,
-           std::string::size_type len,
-           std::string const &s)
-{
-    if (n == std::string::npos)
-        std::cout << "not found\n";
-    else
-        std::cout << "found: " << std::quoted(s.substr(n, len)) << " at " << n << '\n';
-}
-
-int main()
-{
-    std::string::size_type n;
-    std::string const s = "This is a string";
-
-    // search backwards from end of string
-    n = s.rfind("is");
-    print(n, 2, s);
-
-    // search backwards from position 4
-    n = s.rfind("is", 4);
-    print(n, 2, s);
-
-    // find a single character
-    n = s.rfind('s');
-    print(n, 1, s);
-
-    // find a single character
-    n = s.rfind('q');
-    print(n, 1, s);
-
-    // find the prefix (see also s.starts_with("This"))
-    n = s.rfind("This", 0);
-    print(n, 4, s);
-}
-```
-
-Output:
-
-```text
-found: "is" at 5
-found: "is" at 2
-found: "s" at 10
-not found
-found: "This" at 0
-```
-
-### Defect reports
-
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
-
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 847 | C++98 | there was no exception safety guarantee | added strong
-      exception safety guarantee
-  LWG 2064 | C++11 | overloads (3,4) were noexcept | removed
-  LWG 2946 | C++17 | overload (5) caused ambiguity in some cases | avoided by
-      making it a template
-  P1148R0 | C++11 C++17 | noexcept for overloads (4,5) were accidently dropped
-      by LWG2064/LWG2946 | restored
+Equality is checked via `Traits::eq`. The `StringViewLike` overload
+participates in overload resolution only if `t` converts to
+`std::basic_string_view<CharT, Traits>` but not to `const CharT*`.
+LWG 847 (C++98) added the strong exception safety guarantee
+retroactively; LWG 2064 removed erroneous `noexcept` from the
+C-string/char overloads in C++11, later restored by P1148R0.
 
 ### See also
 
-- **find** — finds the first occurrence of the given substring (public member
-  function)
-- **find_first_of** — find first occurrence of characters (public member
-  function)
-- **find_first_not_of** — find first absence of characters (public member
-  function)
-- **find_last_of** — find last occurrence of characters (public member function)
-- **find_last_not_of** — find last absence of characters (public member
-  function)
-- **rfind** — find the last occurrence of a substring (public member function of
-  `std::basic_string_view<CharT,Traits>`)
+- **find** — find the first occurrence of a substring
+- **find_first_of** — find the first occurrence of any character in a set
+- **find_last_of** — find the last occurrence of any character in a set
+- **starts_with** — checks if the string begins with a prefix (C++20)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/string/basic_string/rfind*

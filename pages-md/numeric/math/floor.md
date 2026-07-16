@@ -1,101 +1,91 @@
 # std::floor, std::floorf, std::floorl
 
-```cpp
-float       floor ( float num );
-double      floor ( double num );
-long double floor ( long double num );  // (until C++23)
-constexpr /* floating-point-type */
-            floor ( /* floating-point-type */ num );  // (since C++23)
-float       floorf( float num );  // (2) (since C++11) (constexpr since C++23)
-long double floorl( long double num );  // (3) (since C++11) (constexpr since C++23)
-Additional overloads (since C++11)
-template< class Integer >
-double      floor ( Integer num );  // (A) (constexpr since C++23)
+Rounds down to the largest integer not greater than `num` — for
+positive values this looks like truncation, but for negative values it
+moves *away* from zero: `floor(2.7)` is `2`, while `floor(-2.7)` is
+`-3`, not `-2`. Contrast with `std::ceil` (rounds up, toward `+∞`) and
+`std::trunc` (always rounds toward zero, so `trunc(-2.7)` is `-2`).
+
+```cpp skip
+std::floor(num);     // largest integer <= num, as float/double/long double
+std::floorf(num);    // float overload                    (since C++11)
+std::floorl(num);    // long double overload               (since C++11)
 ```
 
-1-3) Computes the largest integer value not greater than `num`. The library
-   provides overloads of `std::floor` for all cv-unqualified floating-point
-   types as the type of the parameter.(since C++23)
+### What you provide
 
-A) Additional overloads are provided for all integer types, which are treated as
-double.
-*(since C++11)*
+- **num** — a floating-point or integer value.
 
-### Parameters
+### Guarantees and costs
 
-- **num** — floating-point or integer value
+- Returns the largest integer value not greater than `num` (⌊num⌋),
+  still as a floating-point type — the current rounding mode has no
+  effect on this function.
+- `±∞` and `±0` are returned unmodified; `NaN` returns `NaN`.
+- Never overflows on its own (the largest representable floating-point
+  values are already exact integers), but the *result* can overflow if
+  you store it into a narrower integer type.
+- `FE_INEXACT` may (but need not) be raised when rounding a non-integer
+  finite value. Errors otherwise follow `math_errhandling`.
 
-### Return value
+### Gotchas
 
-If no errors occur, the largest integer value not greater than `num`, that is
-⌊num⌋, is returned.
-
-Return value
-
-`num`
-
-### Error handling
-
-Errors are reported as specified in `math_errhandling`.
-
-If the implementation supports IEEE floating-point arithmetic (IEC 60559),
-
-- The current rounding mode has no effect.
-- If `num` is ±∞, it is returned, unmodified.
-- If `num` is ±0, it is returned, unmodified.
-- If `num` is NaN, NaN is returned.
-
-### Notes
-
-`FE_INEXACT` may be (but isn't required to be) raised when rounding a
-non-integer finite value.
-
-The largest representable floating-point values are exact integers in all
-standard floating-point formats, so this function never overflows on its own;
-however the result may overflow any integer type (including `std::intmax_t`),
-when stored in an integer variable.
-
-The additional overloads are not required to be provided exactly as (A). They
-only need to be sufficient to ensure that for their argument `num` of integer
-type, `std::floor(num)` has the same effect as
-`std::floor(static_cast<double>(num))`.
+- On negative values `floor` rounds *away* from zero, the opposite of
+  what "round down toward zero" would suggest: `floor(-2.5)` is `-3`.
+  If you want rounding toward zero regardless of sign, use
+  `std::trunc` instead.
+- `floor(-0.0)` prints as `-0` — the sign is preserved even though the
+  value is already an integer.
+- The result is still a floating-point type; casting it to an integer
+  type is a separate step and can overflow if the value is out of
+  range for that type.
 
 ### Example
 
 ```cpp
 #include <cmath>
+#include <iomanip>
 #include <iostream>
 
 int main()
 {
-    std::cout << std::fixed
+    std::cout << std::fixed << std::setprecision(1)
               << "floor(+2.7) = " << std::floor(+2.7) << '\n'
               << "floor(-2.7) = " << std::floor(-2.7) << '\n'
-              << "floor(-0.0) = " << std::floor(-0.0) << '\n'
-              << "floor(-Inf) = " << std::floor(-INFINITY) << '\n';
+              << "floor(-2.5) = " << std::floor(-2.5) << '\n'
+              << "floor(-0.0) = " << std::floor(-0.0) << '\n';
 }
 ```
 
-Output:
-
 ```text
-floor(+2.7) = 2.000000
-floor(-2.7) = -3.000000
-floor(-0.0) = -0.000000
-floor(-Inf) = -inf
+floor(+2.7) = 2.0
+floor(-2.7) = -3.0
+floor(-2.5) = -3.0
+floor(-0.0) = -0.0
 ```
+
+### Reference
+
+```cpp skip
+float       floor ( float num );
+double      floor ( double num );
+long double floor ( long double num );  // (until C++23)
+constexpr /* floating-point-type */
+            floor ( /* floating-point-type */ num );  // (since C++23)
+float       floorf( float num );  // (since C++11) (constexpr since C++23)
+long double floorl( long double num );  // (since C++11) (constexpr since C++23)
+template< class Integer >
+double      floor ( Integer num );  // (since C++11) (constexpr since C++23)
+```
+
+The integer overload need only behave *as if* `num` were cast to
+`double` first, not be implemented exactly as the template above.
 
 ### See also
 
-- **ceilceilfceill (C++11)(C++11)** — nearest integer not less than the given
-  value (function)
-- **trunctruncftruncl (C++11)(C++11)(C++11)** — nearest integer not greater in
-  magnitude than the given value (function)
-- **roundroundfroundllroundlroundflroundlllroundllroundfllroundl
-  (C++11)(C++11)(C++11)(C++11)(C++11)(C++11)(C++11)(C++11)(C++11)** — nearest
-  integer, rounding away from zero in halfway cases (function)
-
-**C documentation for `floor`**
+- **ceil** — nearest integer not less than the given value
+- **trunc** — nearest integer not greater in magnitude than the value
+- **round** — nearest integer, rounding away from zero on ties (C++11)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/numeric/math/floor*

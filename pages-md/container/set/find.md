@@ -1,6 +1,71 @@
 # std::set<Key,Compare,Allocator>::find
 
+Looks up the element equivalent to the given key and returns an
+iterator to it — or `end()` if there's no such element. There's no
+exception and no special "not found" value other than `end()`, so the
+result must always be checked before dereferencing.
+
+```cpp skip
+s.find(key);      // iterator, or end() on miss
+s.find(x);         // heterogeneous lookup, needs transparent Compare (C++14)
+```
+
+### What you provide
+
+- **key** — the key to look up, compared with `Compare`.
+- **x** — a value of any type comparable to `Key` without converting
+  it first. This overload only exists if the set's `Compare` (e.g.
+  `std::less<>`) has a `Compare::is_transparent` member type
+  (C++14) — it avoids constructing a temporary `Key` just to search.
+
+### Guarantees and costs
+
+- O(log n) — same as any other lookup on `set`.
+- Returns `iterator` (or `const_iterator` on a const set) to the
+  matching element, or `end()` if no element has that key.
+
+### Gotchas
+
+- Dereferencing the result without checking for `end()` first is
+  undefined behavior — this is the single most common bug with
+  `find`. The standard idiom, using a C++17 init-statement `if`, keeps
+  the lookup scoped to the branch that uses it:
+  `if (auto it = s.find(k); it != s.end()) { ... }`.
+- `find` only ever returns zero or one element on `set` (keys are
+  unique) — for `multiset`, pair it with `equal_range` instead.
+- The transparent overload requires the set itself to be declared with
+  a transparent comparator, e.g. `std::set<K, std::less<>>` — a set
+  using the default `std::less<K>` doesn't get it, and passing an `x`
+  of the wrong type will construct a temporary `Key` instead.
+
+### Example
+
 ```cpp
+#include <iostream>
+#include <set>
+
+int main()
+{
+    std::set<int> s{1, 2, 3, 4};
+
+    if (auto it = s.find(2); it != s.end())
+        std::cout << "found " << *it << '\n';
+    else
+        std::cout << "not found\n";
+
+    if (auto it = s.find(9); it == s.end())
+        std::cout << "9 not found\n";
+}
+```
+
+```text
+found 2
+9 not found
+```
+
+### Reference
+
+```cpp skip
 iterator find( const Key& key );  // (1)
 const_iterator find( const Key& key ) const;  // (2)
 template< class K >
@@ -9,83 +74,16 @@ template< class K >
 const_iterator find( const K& x ) const;  // (4) (since C++14)
 ```
 
-1,2) Finds an element with key equivalent to `key`.
-
-3,4) Finds an element with key that compares *equivalent* to the value `x`. This
-   overload participates in overload resolution only if the qualified-id
-   `Compare::is_transparent` is valid and denotes a type. It allows calling this
-   function without constructing an instance of `Key`.
-
-### Parameters
-
-- **key** — key value of the element to search for
-- **x** — a value of any type that can be transparently compared with a key
-
-### Return value
-
-Iterator to an element with key equivalent to `key`. If no such element is
-found, past-the-end (see `end()`) iterator is returned.
-
-### Complexity
-
-Logarithmic in the size of the container.
-
-### Notes
-
-  Feature-test macro | Value | Std | Feature
-  `__cpp_lib_generic_associative_lookup` | 201304L | (C++14) | Heterogeneous
-      comparison lookup in associative containers; overloads (3,4)
-
-### Example
-
-```cpp
-#include <iostream>
-#include <set>
-
-struct FatKey   { int x; int data[1000]; };
-struct LightKey { int x; };
-// Note: as detailed above, the container must use std::less<> (or other
-// transparent Comparator) to access these overloads.
-// This includes standard overloads, such as between std::string and std::string_view.
-bool operator<(const FatKey& fk, const LightKey& lk) { return fk.x < lk.x; }
-bool operator<(const LightKey& lk, const FatKey& fk) { return lk.x < fk.x; }
-bool operator<(const FatKey& fk1, const FatKey& fk2) { return fk1.x < fk2.x; }
-
-int main()
-{
-    // Simple comparison demo.
-    std::set<int> example = {1, 2, 3, 4};
-
-    if (auto search = example.find(2); search != example.end())
-        std::cout << "Found " << (*search) << '\n';
-    else
-        std::cout << "Not found\n";
-
-    // Transparent comparison demo.
-    std::set<FatKey, std::less<>> example2 = {{1, {}}, {2, {}}, {3, {}}, {4, {}}};
-
-    LightKey lk = {2};
-    if (auto search = example2.find(lk); search != example2.end())
-        std::cout << "Found " << search->x << '\n';
-    else
-        std::cout << "Not found\n";
-
-}
-```
-
-Output:
-
-```text
-Found 2
-Found 2
-```
+Overloads (3,4) participate in overload resolution only if
+`Compare::is_transparent` is a valid type.
 
 ### See also
 
-- **count** — returns the number of elements matching specific key (public
-  member function)
-- **equal_range** — returns range of elements matching a specific key (public
-  member function)
+- **count** — number of elements matching a key (0 or 1 on `set`)
+- **contains** — checks for a key without returning an iterator (C++20)
+- **equal_range** — range of elements matching a key
+- **lower_bound** — first element not less than a key
+- **erase** — removes elements
 
 ---
 *Source: https://en.cppreference.com/w/cpp/container/set/find*

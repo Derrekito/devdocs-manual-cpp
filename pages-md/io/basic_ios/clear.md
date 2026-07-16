@@ -1,86 +1,108 @@
 # std::basic_ios<CharT,Traits>::clear
 
-```cpp
-void clear( std::ios_base::iostate state = std::ios_base::goodbit );
+`clear()` **sets** the stream's error state to whatever you pass it —
+it does not merely turn bits off. Called with no argument it assigns
+`goodbit`, which has the effect of clearing every flag, and that's
+the call you need before a stream can be read from again after
+`fail()` became true: once `failbit` or `badbit` is set, every further
+read is a silent no-op until something resets the state, and `clear()`
+is that something. The standard recovery recipe pairs it with
+`basic_istream::ignore`: `clear()` to unstick the stream, then
+`ignore(numeric_limits<streamsize>::max(), '\n')` to throw away the
+bad token so the next read doesn't immediately fail again on the same
+text.
+
+```cpp skip
+in.clear();                                 // reset to goodbit (no error)
+in.clear(std::ios_base::eofbit);            // set to a specific state
+in.clear(in.rdstate() & ~std::ios_base::failbit);  // drop just one flag
 ```
 
-Sets the stream error state flags by assigning them the value of `state`. By
-default, assigns `std::ios_base::goodbit` which has the effect of clearing all
-error state flags.
+### What you provide
 
-If `rdbuf()` is a null pointer (i.e. there is no associated stream buffer), then
-`state | std::ios_base::badbit` is assigned.
+- **state** — the new state, defaulting to `goodbit`. It can be
+  `goodbit` (no error), `badbit` (irrecoverable), `failbit`
+  (formatting/extraction failure), or `eofbit` (end reached), OR'd
+  together. Whatever you pass *becomes* `rdstate()` — it replaces the
+  old flags rather than adding to or subtracting from them.
 
-### Parameters
+### Guarantees and costs
 
-- **state** — new error state flags setting. It can be a combination of the
-  following constants: Constant Explanation `goodbit` no error `badbit`
-  irrecoverable stream error `failbit` input/output operation failed (formatting
-  or extraction error) `eofbit` associated input sequence has reached
-  end-of-file
-- **`goodbit`** — no error
-- **`badbit`** — irrecoverable stream error
-- **`failbit`** — input/output operation failed (formatting or extraction error)
-- **`eofbit`** — associated input sequence has reached end-of-file
+- O(1).
+- If `rdbuf()` is null (no associated stream buffer), `badbit` is
+  forced on regardless of the `state` you pass — `state | badbit` is
+  assigned instead.
+- If the new state includes a bit that is also set in the stream's
+  `exceptions()` mask, `clear()` throws `std::ios_base::failure`.
 
-### Return value
+### Gotchas
 
-(none)
-
-### Exceptions
-
-If the new error state includes a bit that is also included in the
-`exceptions()` mask, throws an exception of type `failure`.
+- `clear()` alone doesn't discard the bad input still sitting in the
+  buffer — it only resets the flags. Follow it with
+  `basic_istream::ignore` (or read/discard the offending text some
+  other way), or the next extraction fails again on the same
+  characters.
+- To clear only one flag and keep the rest, read `rdstate()` first and
+  mask it: `in.clear(in.rdstate() & ~std::ios_base::failbit)`. Calling
+  `clear()` bare wipes everything, including `eofbit` you may still
+  want.
+- Since C++11, a successful `seekg()`/`tellg()` clears `eofbit` itself
+  as its first step — but only if the stream isn't already in a
+  failed state, so `clear()` still has to run first when `failbit` is
+  also set.
 
 ### Example
 
-`clear()` without arguments can be used to unset the `failbit` after unexpected
-input; for `std::cin.putback(c)` see `ungetc`.
-
 ```cpp
 #include <iostream>
-#include <string>
+#include <limits>
+#include <sstream>
 
 int main()
 {
-    for (char c : {'\n', '4', '1', '.', '3', '\n', 'Z', 'Y', 'X'})
-        std::cin.putback(c); // emulate user's input (not portable: see ungetc Notes)
-
+    std::istringstream in("abc 3.14");
     double n;
-    while (std::cout << "Please, enter a number: " && !(std::cin >> n))
+
+    while (!(in >> n))
     {
-        std::cin.clear();
-        std::string line;
-        std::getline(std::cin, line);
-        std::cout << line << "\nI am sorry, but '" << line << "' is not a number\n";
+        in.clear();                          // unstick the stream
+        in.ignore(std::numeric_limits<std::streamsize>::max(), ' ');
+        std::cout << "skipped bad token\n";
     }
-    std::cout << n << "\nThank you for entering the number " << n << '\n';
+    std::cout << "parsed " << n << '\n';
 }
 ```
 
-Output:
-
 ```text
-Please, enter a number: XYZ
-I am sorry, but 'XYZ' is not a number
-Please, enter a number: 3.14
-Thank you for entering the number 3.14
+skipped bad token
+parsed 3.14
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+```cpp skip
+void clear( std::ios_base::iostate state = std::ios_base::goodbit );
+```
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 412 | C++98 | an excption would be thrown if the current error state
-      includes a bit that is also included in the `exceptions()` mask | checks
-      the new error state instead
+`state` combines `goodbit`, `badbit`, `failbit`, `eofbit`. LWG 412
+(applied retroactively to C++98): originally an exception was thrown
+if the *current* error state intersected the `exceptions()` mask;
+corrected so it's the *new* state that's checked instead.
 
 ### See also
 
-- **setstate** — sets state flags (public member function)
-- **rdstate** — returns state flags (public member function)
+- `basic_ios::fail` — the check `clear()` exists to unstick
+- `basic_ios::eof` — the flag most often left set after `clear()`'s
+  default call
+- `basic_ios::good` — true immediately after a bare `clear()`
+- `basic_istream::ignore` — pairs with `clear()` in the standard
+  recovery recipe
+- `basic_istream::getline` — another read that needs this same
+  recovery after overflow
+- `basic_ios::setstate` — sets state flags without resetting others
+  (public member function)
+- `basic_ios::rdstate` — returns the current state flags (public
+  member function)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/io/basic_ios/clear*

@@ -1,115 +1,91 @@
 # std::trunc, std::truncf, std::truncl
 
-```cpp
-float       trunc ( float num );
-double      trunc ( double num );
-long double trunc ( long double num );  // (until C++23)
-constexpr /* floating-point-type */
-            trunc ( /* floating-point-type */ num );  // (since C++23)
-float       truncf( float num );  // (2) (since C++11) (constexpr since C++23)
-long double truncl( long double num );  // (3) (since C++11) (constexpr since C++23)
-Additional overloads (since C++11)
-template< class Integer >
-double      trunc ( Integer num );  // (A) (constexpr since C++23)
+Rounds toward zero, dropping the fractional part regardless of sign:
+`trunc(2.7)` is `2` and `trunc(-2.7)` is `-2`. This is where it differs
+from `std::floor` and `std::ceil`, which always move in one direction
+on the number line — `floor(-2.5)` is `-3` and `ceil(2.5)` is `3`, but
+`trunc(-2.5)` is `-2` and `trunc(2.5)` is `2`.
+
+```cpp skip
+std::trunc(num);     // toward zero, as float/double/long double
+std::truncf(num);    // float overload                    (since C++11)
+std::truncl(num);    // long double overload               (since C++11)
 ```
 
-1-3) Computes the nearest integer not greater in magnitude than `num`. The
-   library provides overloads of `std::trunc` for all cv-unqualified
-   floating-point types as the type of the parameter.(since C++23)
+### What you provide
 
-A) Additional overloads are provided for all integer types, which are treated as
-double.
-*(since C++11)*
+- **num** — a floating-point or integer value.
 
-### Parameters
+### Guarantees and costs
 
-- **num** — floating-point or integer value
+- Returns the nearest integer not greater in magnitude than `num` —
+  `num` rounded toward zero — still as a floating-point type.
+- `±∞` and `±0` are returned unmodified; `NaN` returns `NaN`. The
+  current rounding mode has no effect on this function.
+- Never overflows on its own (the largest representable floating-point
+  values are already exact integers), but the *result* can overflow if
+  you store it into a narrower integer type.
+- `FE_INEXACT` may (but need not) be raised when truncating a
+  non-integer finite value. Errors otherwise follow `math_errhandling`.
 
-### Return value
+### Gotchas
 
-If no errors occur, the nearest integer value not greater in magnitude than
-`num` (in other words, `num` rounded towards zero) is returned.
-
-Return value
-
-`num`
-
-### Error handling
-
-Errors are reported as specified in `math_errhandling`.
-
-If the implementation supports IEEE floating-point arithmetic (IEC 60559),
-
-- The current rounding mode has no effect.
-- If `num` is ±∞, it is returned, unmodified.
-- If `num` is ±0, it is returned, unmodified.
-- If `num` is NaN, NaN is returned.
-
-### Notes
-
-`FE_INEXACT` may be (but isn't required to be) raised when truncating a
-non-integer finite value.
-
-The largest representable floating-point values are exact integers in all
-standard floating-point formats, so this function never overflows on its own;
-however the result may overflow any integer type (including `std::intmax_t`),
-when stored in an integer variable.
-
-The implicit conversion from floating-point to integral types also rounds
-towards zero, but is limited to the values that can be represented by the target
-type.
-
-The additional overloads are not required to be provided exactly as (A). They
-only need to be sufficient to ensure that for their argument `num` of integer
-type, `std::trunc(num)` has the same effect as
-`std::trunc(static_cast<double>(num))`.
+- `trunc` is the one of the three that matches "just drop the decimal
+  part" intuition on negative numbers; `floor` and `ceil` don't.
+  `trunc(-2.5)` is `-2`, while `floor(-2.5)` is `-3`.
+- The implicit conversion from a floating-point type to an integer type
+  also rounds toward zero (same direction as `trunc`), but it's UB if
+  the value doesn't fit the target type — `trunc` itself never has that
+  problem since its result stays floating-point.
+- `trunc(-0.9)` is `-0`, not `0` — the sign survives even though the
+  magnitude rounds all the way to zero.
 
 ### Example
 
 ```cpp
 #include <cmath>
-#include <initializer_list>
+#include <iomanip>
 #include <iostream>
 
 int main()
 {
-    const auto data = std::initializer_list<double>
-    {
-        +2.7, -2.9, +0.7, -0.9, +0.0, 0.0, -INFINITY, +INFINITY, -NAN, +NAN
-    };
-
-    std::cout << std::showpos;
-    for (double const x : data)
-        std::cout << "trunc(" << x << ") == " << std::trunc(x) << '\n';
+    std::cout << std::fixed << std::setprecision(1)
+              << "trunc(+2.7) = " << std::trunc(+2.7) << '\n'
+              << "trunc(-2.7) = " << std::trunc(-2.7) << '\n'
+              << "trunc(-2.5) = " << std::trunc(-2.5) << '\n'
+              << "trunc(-0.9) = " << std::trunc(-0.9) << '\n';
 }
 ```
 
-Possible output:
-
 ```text
-trunc(+2.7) == +2
-trunc(-2.9) == -2
-trunc(+0.7) == +0
-trunc(-0.9) == -0
-trunc(+0) == +0
-trunc(+0) == +0
-trunc(-inf) == -inf
-trunc(+inf) == +inf
-trunc(-nan) == -nan
-trunc(+nan) == +nan
+trunc(+2.7) = 2.0
+trunc(-2.7) = -2.0
+trunc(-2.5) = -2.0
+trunc(-0.9) = -0.0
 ```
+
+### Reference
+
+```cpp skip
+float       trunc ( float num );
+double      trunc ( double num );
+long double trunc ( long double num );  // (until C++23)
+constexpr /* floating-point-type */
+            trunc ( /* floating-point-type */ num );  // (since C++23)
+float       truncf( float num );  // (since C++11) (constexpr since C++23)
+long double truncl( long double num );  // (since C++11) (constexpr since C++23)
+template< class Integer >
+double      trunc ( Integer num );  // (since C++11) (constexpr since C++23)
+```
+
+The integer overload need only behave *as if* `num` were cast to
+`double` first, not be implemented exactly as the template above.
 
 ### See also
 
-- **floorfloorffloorl (C++11)(C++11)** — nearest integer not greater than the
-  given value (function)
-- **ceilceilfceill (C++11)(C++11)** — nearest integer not less than the given
-  value (function)
-- **roundroundfroundllroundlroundflroundlllroundllroundfllroundl
-  (C++11)(C++11)(C++11)(C++11)(C++11)(C++11)(C++11)(C++11)(C++11)** — nearest
-  integer, rounding away from zero in halfway cases (function)
-
-**C documentation for `trunc`**
+- **floor** — nearest integer not greater than the given value
+- **ceil** — nearest integer not less than the given value
+- **round** — nearest integer, rounding away from zero on ties (C++11)
 
 ---
 *Source: https://en.cppreference.com/w/cpp/numeric/math/trunc*

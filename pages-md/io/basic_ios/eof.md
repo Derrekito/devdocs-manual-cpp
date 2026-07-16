@@ -1,81 +1,97 @@
 # std::basic_ios<CharT,Traits>::eof
 
-```cpp
-bool eof() const;
+`eof()` is true **after** a read has already hit the end of the input
+— not before it. It only reports what the *last* operation found, so
+the read that consumes the final line still returns success, and
+`eof()` stays false; only the *next* read, which finds nothing, sets
+`eofbit`. That lag is why `while (!in.eof())` is a classic bug: the
+loop body still runs once more after the last good read, processing
+stale data (or garbage from an untouched variable), and only stops
+when the following read fails. Loop on the read itself instead —
+`while (in >> x)` or `while (std::getline(in, line))` — its own
+success or failure is exactly what you want to test.
+
+```cpp skip
+if (in.eof())                 // true only after a read past the end
+while (in >> x) { ... }       // correct: stops exactly when nothing's left
+while (!in.eof()) { ... }     // WRONG: one stale extra iteration
 ```
 
-Returns `true` if the associated stream has reached end-of-file. Specifically,
-returns `true` if `eofbit` is set in `rdstate()`.
+### What you provide
 
-See `ios_base::iostate` for the list of conditions that set `eofbit`.
+No parameters. Call it after a read fails, to check whether "ran out
+of input" was the reason (as opposed to a formatting error).
 
-### Parameters
+### Guarantees and costs
 
-(none)
+- O(1); equivalent to `rdstate() & eofbit`.
+- Reports only the state left by the most recent I/O operation — it
+  never probes the underlying source on its own.
 
-### Return value
+### Gotchas
 
-`true` if an end-of-file has occurred, `false` otherwise.
-
-### Notes
-
-This function only reports the stream state as set by the most recent I/O
-operation; it does not examine the associated data source. For example, if the
-most recent I/O was a `get()` which returned the last byte of a file, `eof()`
-returns `false`. The next `get()` fails to read anything and sets the `eofbit`.
-Only then does `eof()` return `true`.
-
-In typical usage, input stream processing stops on any error. `eof()` and
-`fail()` can then be used to distinguish between different error conditions.
+- `eof()` can also flip to true as a side effect of a *successful*
+  extraction: parsing a number needs to peek one character past its
+  last digit to know it's finished, and if that peek finds nothing,
+  `eofbit` is set even though the value was read correctly and
+  `fail()` stays false. This is still "after a read hit the end", just
+  the same call that succeeded.
+- `eof()` true does not mean the last read failed — check `fail()` for
+  that (see `basic_ios::fail`).
+- Don't reset just `eofbit` to "try again" at the same spot: since
+  C++11 `seekg()`/`tellg()` clear `eofbit` themselves as their first
+  step, but only once the stream isn't in a failed state — call
+  `basic_ios::clear` first if `failbit` is also set.
 
 ### Example
 
 ```cpp
-#include <cstdlib>
-#include <fstream>
 #include <iostream>
+#include <sstream>
+#include <string>
 
 int main()
 {
-    std::ifstream file("test.txt");
-    if (!file) // operator! is used here
+    std::istringstream in("line1\nline2\n");
+    std::string line;
+    int lines = 0;
+
+    while (std::getline(in, line))
     {
-        std::cout << "File opening failed\n";
-        return EXIT_FAILURE;
+        ++lines;
+        std::cout << "read '" << line << "', eof=" << std::boolalpha
+                   << in.eof() << '\n';
     }
-
-    // typical C++ I/O loop uses the return value of the I/O function
-    // as the loop controlling condition, operator bool() is used here
-    for (int n; file >> n;)
-       std::cout << n << ' ';
-    std::cout << '\n';
-
-    if (file.bad())
-        std::cout << "I/O error while reading\n";
-    else if (file.eof())
-        std::cout << "End of file reached successfully\n";
-    else if (file.fail())
-        std::cout << "Non-integer data encountered\n";
+    std::cout << "loop exited after " << lines << " lines, eof="
+               << in.eof() << '\n';
 }
 ```
 
+```text
+read 'line1', eof=false
+read 'line2', eof=false
+loop exited after 2 lines, eof=true
+```
+
+### Reference
+
+```cpp skip
+bool eof() const;
+```
+
+Equivalent to `rdstate() & eofbit`. See `ios_base::iostate` for every
+flag; `basic_ios::fail` carries the full accessor-combination table
+for this cluster.
+
 ### See also
 
-The following table shows the value of `basic_ios` accessors (`good()`,
-`fail()`, etc.) for all possible combinations of `ios_base::iostate` flags:
-
-  `ios_base::iostate` flags | `basic_ios` accessors
-  `eofbit` | `failbit` | `badbit` | `good()` | `fail()` | `bad()` | **`eof()`**
-      | `operator bool` | `operator!`
-  false | false | false | true | false | false | false | true | false
-  false | false | true | false | true | true | false | false | true
-  false | true | false | false | true | false | false | false | true
-  false | true | true | false | true | true | false | false | true
-  true | false | false | false | false | false | true | true | false
-  true | false | true | false | true | true | true | false | true
-  true | true | false | false | true | false | true | false | true
-  true | true | true | false | true | true | true | false | true
-
+- `basic_ios::fail` — the check that actually answers "did it work?"
+- `basic_ios::good` — true only when every flag, including `eofbit`,
+  is clear
+- `basic_ios::clear` — resets the state so the stream works again
+- `basic_istream::ignore` — skip past bad input before retrying
+- `basic_istream::getline` — the char-array read this loop pattern
+  also applies to
 - **feof** — checks for the end-of-file (function)
 
 ---

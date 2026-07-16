@@ -1,156 +1,75 @@
 # std::basic_string<CharT,Traits,Allocator>::insert
 
-```cpp
-basic_string& insert( size_type index, size_type count, CharT ch );  // (until C++20)
-constexpr basic_string& insert( size_type index, size_type count, CharT ch );  // (since C++20)
-basic_string& insert( size_type index, const CharT* s );  // (until C++20)
-constexpr basic_string& insert( size_type index, const CharT* s );  // (since C++20)
-basic_string& insert( size_type index, const CharT* s, size_type count );  // (until C++20)
-constexpr basic_string& insert( size_type index,
-                                const CharT* s, size_type count );  // (since C++20)
-basic_string& insert( size_type index, const basic_string& str );  // (until C++20)
-constexpr basic_string& insert( size_type index, const basic_string& str );  // (since C++20)
-basic_string& insert( size_type index, const basic_string& str,
-                      size_type s_index, size_type count );  // (until C++14)
-basic_string& insert( size_type index, const basic_string& str,
-                      size_type s_index, size_type count = npos );  // (since C++14) (until C++20)
-constexpr basic_string& insert( size_type index, const basic_string& str,
-                                size_type s_index, size_type count = npos );  // (since C++20)
-iterator insert( iterator pos, CharT ch );  // (until C++11)
-iterator insert( const_iterator pos, CharT ch );  // (since C++11) (until C++20)
-constexpr iterator insert( const_iterator pos, CharT ch );  // (since C++20)
-void insert( iterator pos, size_type count, CharT ch );  // (until C++11)
-iterator insert( const_iterator pos, size_type count, CharT ch );  // (since C++11) (until C++20)
-constexpr iterator insert( const_iterator pos, size_type count, CharT ch );  // (since C++20)
-template< class InputIt >
-void insert( iterator pos, InputIt first, InputIt last );  // (until C++11)
-template< class InputIt >
-iterator insert( const_iterator pos, InputIt first, InputIt last );  // (since C++11) (until C++20)
-template< class InputIt >
-constexpr iterator insert( const_iterator pos, InputIt first, InputIt last );  // (since C++20)
-iterator insert( const_iterator pos, std::initializer_list<CharT> ilist );  // (since C++11) (until C++20)
-constexpr iterator insert( const_iterator pos,
-                           std::initializer_list<CharT> ilist );  // (since C++20)
-template< class StringViewLike >
-basic_string& insert( size_type index, const StringViewLike& t );  // (since C++17) (until C++20)
-template< class StringViewLike >
-constexpr basic_string& insert( size_type index, const StringViewLike& t );  // (since C++20)
-template< class StringViewLike >
-basic_string& insert( size_type index, const StringViewLike& t,
-                      size_type t_index, size_type count = npos );  // (since C++17) (until C++20)
-template< class StringViewLike >
-constexpr basic_string& insert( size_type index, const StringViewLike& t,
-                                size_type t_index, size_type count = npos );  // (since C++20)
+Inserts characters into the string. The overload set is large, but it
+splits cleanly along two axes: **where** (an `index` counted from the
+start, or an iterator `pos`) and **what** (a repeated char, a C
+string, a `basic_string` or substring of one, a range, an
+initializer list, or — since C++17 — anything convertible to
+`string_view`).
+
+```cpp skip
+s.insert(index, count, ch);       // count copies of ch, at index
+s.insert(index, cstr);            // null-terminated C string, at index
+s.insert(index, cstr, count);     // first count chars of cstr, at index
+s.insert(index, str);             // another basic_string, at index
+s.insert(index, str, s_index, count);  // str.substr(s_index, count), at index
+s.insert(index, string_view_like);     // (since C++17) anything convertible
+s.insert(pos, ch);                // one char, before iterator pos
+s.insert(pos, count, ch);         // count copies of ch, before pos
+s.insert(pos, first, last);       // range [first, last), before pos
+s.insert(pos, ilist);             // initializer_list, before pos
 ```
 
-Inserts characters into the string.
+### What you provide
 
-1) Inserts `count` copies of character `ch` at the position `index`.
+- **index** — position to insert at, counted from `0`; throws if it
+  exceeds `size()`.
+- **pos** — iterator to insert before; must be valid on `*this`, or
+  behavior is undefined.
+- **ch / count** — a character and how many copies of it to insert.
+- **s / cstr** — a null-terminated `const CharT*`, or (with an
+  explicit `count`) a pointer to `count` characters that may contain
+  embedded nulls.
+- **str / s_index** — a `basic_string` to insert whole, or (with
+  `s_index`, `count`) the substring `str.substr(s_index, count)`.
+- **first, last** — an iterator range whose value type meets
+  LegacyInputIterator.
+- **ilist** — a `std::initializer_list<CharT>`.
+- **t / t_index** — (since C++17) anything implicitly convertible to
+  `std::basic_string_view<CharT, Traits>` but not to `const CharT*`;
+  optionally a subview `[t_index, t_index + count)` of it.
 
-2) Inserts null-terminated character string pointed to by `s` at the position
-   `index`. The length of the string is determined by the first null character
-   using `Traits::length(s)`.
+### Guarantees and costs
 
-3) Inserts the characters in the range `[``s``,``s + count``)` at the position
-   `index`. The range can contain null characters.
+- Index-based overloads (1-5, 10, 11) return `*this`.
+- Iterator-based overloads (6-9) return an iterator to the first
+  inserted character, or `pos` unchanged if nothing was inserted
+  (`count == 0`, `first == last`, or an empty `ilist`).
+- Throws `std::out_of_range` if `index > size()` (and, for the
+  substring/subview forms, if `s_index`/`t_index` exceeds the source's
+  size). Throws `std::length_error` if the result would exceed
+  `max_size()`.
+- Strong exception safety: if any overload throws, `*this` is
+  unchanged.
+- `constexpr` since C++20.
 
-4) Inserts string `str` at the position `index`.
+### Gotchas
 
-5) Inserts a string, obtained by `str.substr(s_index, count)` at the position
-   `index`.
-
-6) Inserts character `ch` before the character pointed by `pos`.
-
-7) Inserts `count` copies of character `ch` before the element (if any) pointed
-   by `pos`.
-
-8) Inserts characters from the range `[``first``,``last``)` before the element
-   (if any) pointed by `pos`, as if by `insert(pos - begin(),
-   basic_string(first, last, get_allocator()))`. This overload does not
-   participate in overload resolution if `InputIt` does not satisfy
-   LegacyInputIterator. (since C++11)
-
-9) Inserts elements from initializer list `ilist` before the element (if any)
-   pointed by `pos`.
-
-10) Implicitly converts `t` to a string view `sv` as if by
-   `std::basic_string_view<CharT, Traits> sv = t;`, then inserts the elements
-   from `sv` before the element (if any) pointed by `index`, as if by
-   `insert(index, sv.data(), sv.size())`.
-
-This overload participates in overload resolution only if
-   `std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT,
-   Traits>>` is `true` and `std::is_convertible_v<const StringViewLike&, const
-   CharT*>` is `false`.
-11) Implicitly converts `t` to a string view `sv` as if by
-`std::basic_string_view<CharT, Traits> sv = t;`, then inserts, before the
-element (if any) pointed by `index`, the characters from the subview
-`[``t_index``,``t_index + count``)` of `sv`.
-
-- If the requested subview lasts past the end of `sv`, or if `count == npos`,
-  the resulting subview is `[``t_index``,``sv.size()``)`.
-- If `t_index > sv.size()`, or if `index > size()`, `std::out_of_range` is
-  thrown.
-
-This overload participates in overload resolution only if
-   `std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT,
-   Traits>>` is `true` and `std::is_convertible_v<const StringViewLike&, const
-   CharT*>` is `false`.
-
-If `pos` is not a valid iterator on `*this`, the behavior is undefined.
-
-### Parameters
-
-- **index** — position at which the content will be inserted
-- **pos** — iterator before which the characters will be inserted
-- **ch** — character to insert
-- **count** — number of characters to insert
-- **s** — pointer to the character string to insert
-- **str** — string to insert
-- **first, last** — range defining characters to insert
-- **s_index** — position of the first character in `str` to insert
-- **ilist** — `std::initializer_list` to insert the characters from
-- **t** — object (convertible to `std::basic_string_view`) to insert the
-  characters from
-- **t_index** — position of the first character in `t` to insert
-
-**Type requirements**
-
-**-`InputIt` must meet the requirements of LegacyInputIterator.**
-
-### Return value
-
-1-5) `*this`
-
-6-9) An iterator which refers to the copy of the first inserted character or
-   `pos` if no characters were inserted (`count == 0` or `first == last` or
-   `ilist.size() == 0`)
-
-10,11) `*this`
-
-### Exceptions
-
-1-4,10) Throws `std::out_of_range` if `index > size()`.
-
-5) Throws `std::out_of_range` if `index > size()` or if `s_index > str.size()`.
-
-11) Throws `std::out_of_range` if `index > size()` or if `t_index > sv.size()`.
-
-In all cases, throws `std::length_error` if `size() + ins_count > max_size()`
-where `ins_count` is the number of characters that will be inserted.
-
-In all cases, if std::allocator_traits<Allocator>::allocate throws an exception,
-it is rethrown.
-*(since C++20)*
-
-If an exception is thrown for any reason, this function has no effect (strong
-exception safety guarantee).
+- The `count`-qualified C-string overload copies exactly `count`
+  characters, embedded nulls and all; passing a `count` that reads
+  past the buffer is undefined behavior, just like any bad-range bug.
+- Any insertion can reallocate, invalidating every iterator, pointer,
+  and reference into the string — don't hold onto old ones across a
+  call.
+- The `string_view`-like overload only participates in overload
+  resolution when `t` converts to `string_view` but *not* to
+  `const CharT*`; this is why passing a `const char*` still resolves
+  to the C-string overload instead.
 
 ### Example
 
-```cpp
-#include <cassert>
-#include <iterator>
+```cpp c++17
+#include <iostream>
 #include <string>
 
 using namespace std::string_literals;
@@ -159,64 +78,102 @@ int main()
 {
     std::string s = "xmplr";
 
-    // insert(size_type index, size_type count, char ch)
-    s.insert(0, 1, 'E');
-    assert("Exmplr" == s);
+    s.insert(0, 1, 'E');            // index, count, ch
+    std::cout << s << '\n';
 
-    // insert(size_type index, const char* s)
-    s.insert(2, "e");
-    assert("Exemplr" == s);
+    s.insert(2, "e");               // index, C string
+    std::cout << s << '\n';
 
-    // insert(size_type index, string const& str)
-    s.insert(6, "a"s);
-    assert("Exemplar" == s);
+    s.insert(6, "a"s);              // index, basic_string
+    std::cout << s << '\n';
 
-    // insert(size_type index, string const& str,
-    //        size_type s_index, size_type count)
-    s.insert(8, " is an example string."s, 0, 14);
-    assert("Exemplar is an example" == s);
-
-    // insert(const_iterator pos, char ch)
-    s.insert(s.cbegin() + s.find_first_of('n') + 1, ':');
-    assert("Exemplar is an: example" == s);
-
-    // insert(const_iterator pos, size_type count, char ch)
-    s.insert(s.cbegin() + s.find_first_of(':') + 1, 2, '=');
-    assert("Exemplar is an:== example" == s);
-
-    // insert(const_iterator pos, InputIt first, InputIt last)
-    {
-        std::string seq = " string";
-        s.insert(s.begin() + s.find_last_of('e') + 1,
-            std::begin(seq), std::end(seq));
-        assert("Exemplar is an:== example string" == s);
-    }
-
-    // insert(const_iterator pos, std::initializer_list<char>)
-    s.insert(s.cbegin() + s.find_first_of('g') + 1, {'.'});
-    assert("Exemplar is an:== example string." == s);
+    s.insert(s.cbegin() + 5, ' ');  // pos, ch
+    std::cout << s << '\n';
 }
 ```
 
-### Defect reports
+```text
+Exmplr
+Exemplr
+Exemplar
+Exemp lar
+```
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+### Reference
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 7 | C++98 | overload (8) referred to a non-existing overload | refers to
-      overload (4) correctly
-  LWG 847 | C++98 | there was no exception safety guarantee | added strong
-      exception safety guarantee
-  LWG 2946 | C++17 | overload (10) caused ambiguity in some cases | avoided by
-      making it a template
+```cpp skip
+basic_string& insert( size_type index, size_type count, CharT ch );  // (until C++20)
+constexpr basic_string&
+    insert( size_type index, size_type count, CharT ch );  // (since C++20)
+basic_string& insert( size_type index, const CharT* s );  // (until C++20)
+constexpr basic_string& insert( size_type index, const CharT* s );  // (since C++20)
+basic_string&
+    insert( size_type index, const CharT* s, size_type count );  // (until C++20)
+constexpr basic_string& insert( size_type index,
+                                const CharT* s, size_type count );  // (since C++20)
+basic_string& insert( size_type index, const basic_string& str );  // (until C++20)
+constexpr basic_string&
+    insert( size_type index, const basic_string& str );  // (since C++20)
+basic_string& insert( size_type index, const basic_string& str,
+                      size_type s_index, size_type count );  // (until C++14)
+basic_string& insert( size_type index, const basic_string& str,
+                      size_type s_index,
+                      size_type count = npos );  // (since C++14) (until C++20)
+constexpr basic_string& insert( size_type index, const basic_string& str,
+                                size_type s_index,
+                                size_type count = npos );  // (since C++20)
+iterator insert( iterator pos, CharT ch );  // (until C++11)
+iterator insert( const_iterator pos, CharT ch );  // (since C++11) (until C++20)
+constexpr iterator insert( const_iterator pos, CharT ch );  // (since C++20)
+void insert( iterator pos, size_type count, CharT ch );  // (until C++11)
+iterator insert( const_iterator pos, size_type count,
+                 CharT ch );  // (since C++11) (until C++20)
+constexpr iterator insert( const_iterator pos, size_type count,
+                           CharT ch );  // (since C++20)
+template< class InputIt >
+void insert( iterator pos, InputIt first, InputIt last );  // (until C++11)
+template< class InputIt >
+iterator insert( const_iterator pos, InputIt first,
+                 InputIt last );  // (since C++11) (until C++20)
+template< class InputIt >
+constexpr iterator insert( const_iterator pos, InputIt first,
+                           InputIt last );  // (since C++20)
+iterator insert( const_iterator pos,
+                 std::initializer_list<CharT> ilist );  // (since C++11) (until C++20)
+constexpr iterator insert( const_iterator pos,
+                           std::initializer_list<CharT> ilist );  // (since C++20)
+template< class StringViewLike >
+basic_string& insert( size_type index,
+                      const StringViewLike& t );  // (since C++17) (until C++20)
+template< class StringViewLike >
+constexpr basic_string& insert( size_type index,
+                                const StringViewLike& t );  // (since C++20)
+template< class StringViewLike >
+basic_string& insert( size_type index, const StringViewLike& t,
+                      size_type t_index,
+                      size_type count = npos );  // (since C++17) (until C++20)
+template< class StringViewLike >
+constexpr basic_string& insert( size_type index, const StringViewLike& t,
+                                size_type t_index,
+                                size_type count = npos );  // (since C++20)
+```
+
+`InputIt` must meet LegacyInputIterator; the range overload (8) does
+not participate in overload resolution otherwise. The `StringViewLike`
+overloads (10, 11) participate only if `t` converts to
+`std::basic_string_view<CharT, Traits>` but not to `const CharT*`, and
+insert as if via `insert(index, sv.data(), sv.size())` on the
+(sub)view. (LWG 7) overload (8) originally cited the wrong overload
+in its as-if description; corrected to overload (4). (LWG 2946)
+overload (10) was made a template to avoid ambiguity.
 
 ### See also
 
-- **insert_range (C++23)** — inserts a range of characters (public member
-  function)
-- **append** — appends characters to the end (public member function)
-- **push_back** — appends a character to the end (public member function)
+- **erase** — removes characters from the string
+- **append** — appends characters to the end
+- **push_back** — appends a single character to the end
+- **insert_range** (C++23) — inserts a range of characters
+- **replace** — replaces a range of characters with new content
 
 ---
 *Source: https://en.cppreference.com/w/cpp/string/basic_string/insert*

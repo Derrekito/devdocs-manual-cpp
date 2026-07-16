@@ -1,71 +1,102 @@
 # std::basic_ios<CharT,Traits>::fail
 
-```cpp
-bool fail() const;
+`fail()` is true once a read has failed to deliver a value — that is,
+once `failbit` or `badbit` is set. This is the question you actually
+want answered after `in >> x` or similar ("did that work?"), and it's
+what the stream's own boolean conversion tests: `operator bool` is
+defined as `!fail()`, so `if (in)` and `if (!in.fail())` are the same
+check. One surprise: `eofbit` on its own, with neither `failbit` nor
+`badbit` set, does **not** make `fail()` true — reaching the end while
+still successfully extracting a value is not a failure (see
+`basic_ios::eof`).
+
+```cpp skip
+if (!(in >> x))      // idiomatic: operator bool is !fail()
+if (in.fail())        // the same check, spelled out
+if (in.bad())          // narrower: only the unrecoverable subset
 ```
 
-Returns `true` if an error has occurred on the associated stream. Specifically,
-returns `true` if `badbit` or `failbit` is set in `rdstate()`.
+### What you provide
 
-See `ios_base::iostate` for the list of conditions that set `failbit` or
-`badbit`.
+No parameters. Call it right after the operation whose outcome you
+want to know, before anything else touches the stream.
 
-### Parameters
+### Guarantees and costs
 
-(none)
+- O(1); equivalent to `(rdstate() & (failbit | badbit)) != 0`.
+- `operator bool` is `!fail()` and `operator!` is `fail()` — that
+  identity is why idiomatic loops write `while (in >> x)` rather than
+  calling `fail()` explicitly.
 
-### Return value
+### Gotchas
 
-`true` if an error has occurred, `false` otherwise.
+- `eofbit` alone does not set `fail()`: a read that exhausts the input
+  while still producing a valid value leaves `fail()` false even
+  though `eof()` is now true.
+- Once `fail()` is true the stream is sticky — every further
+  formatted or unformatted operation is a no-op until `clear()` resets
+  the state (see `basic_ios::clear`).
+- `fail()` alone doesn't say *which* problem occurred: check `bad()`
+  to tell an irrecoverable I/O error apart from a mere formatting
+  mismatch.
 
 ### Example
 
 ```cpp
-#include <cstdlib>
-#include <fstream>
 #include <iostream>
+#include <sstream>
 
 int main()
 {
-    std::ifstream file("test.txt");
-    if (!file) // operator! is used here
-    {
-        std::cout << "File opening failed\n";
-        return EXIT_FAILURE;
-    }
+    std::istringstream in("10 20 notanumber");
+    int sum = 0, count = 0;
 
-    // typical C++ I/O loop uses the return value of the I/O function
-    // as the loop controlling condition, operator bool() is used here
-    for (int n; file >> n;)
-       std::cout << n << ' ';
-    std::cout << '\n';
+    for (int n; in >> n; ++count)
+        sum += n;
 
-    if (file.bad())
-        std::cout << "I/O error while reading\n";
-    else if (file.eof())
-        std::cout << "End of file reached successfully\n";
-    else if (file.fail())
-        std::cout << "Non-integer data encountered\n";
+    std::cout << "read " << count << " values, sum = " << sum << '\n';
+    std::cout << std::boolalpha << "fail=" << in.fail()
+               << " eof=" << in.eof() << " bad=" << in.bad() << '\n';
 }
 ```
 
+```text
+read 2 values, sum = 30
+fail=true eof=false bad=false
+```
+
+### Reference
+
+```cpp skip
+bool fail() const;
+```
+
+Equivalent to `rdstate() & (failbit | badbit) != 0`. This table gives
+every combination of the three `ios_base::iostate` flags and how each
+`basic_ios` accessor reads them — the reference for the whole cluster:
+
+  eofbit | failbit | badbit | good() | fail() | bad() | eof() | bool | !
+  ------ | ------- | ------ | ------ | ------ | ------| ----- | ---- | -
+  F | F | F | T | F | F | F | T | F
+  F | F | T | F | T | T | F | F | T
+  F | T | F | F | T | F | F | F | T
+  F | T | T | F | T | T | F | F | T
+  T | F | F | F | F | F | T | T | F
+  T | F | T | F | T | T | T | F | T
+  T | T | F | F | T | F | T | F | T
+  T | T | T | F | T | T | T | F | T
+
 ### See also
 
-The following table shows the value of `basic_ios` accessors (`good()`,
-**`fail()`**, etc.) for all possible combinations of `ios_base::iostate` flags:
-
-  `ios_base::iostate` flags | `basic_ios` accessors
-  `eofbit` | `failbit` | `badbit` | `good()` | **`fail()`** | `bad()` | `eof()`
-      | `operator bool` | `operator!`
-  false | false | false | true | false | false | false | true | false
-  false | false | true | false | true | true | false | false | true
-  false | true | false | false | true | false | false | false | true
-  false | true | true | false | true | true | false | false | true
-  true | false | false | false | false | false | true | true | false
-  true | false | true | false | true | true | true | false | true
-  true | true | false | false | true | false | true | false | true
-  true | true | true | false | true | true | true | false | true
-
+- `basic_ios::eof` — true once a read has hit the end; not the same
+  test as `fail()`
+- `basic_ios::good` — true only when every flag is clear, stricter
+  than `!fail()`
+- `basic_ios::clear` — resets the state so the stream works again
+- `basic_istream::ignore` — the usual next step: discard bad input
+  before retrying
+- `basic_istream::getline` — the char-array read that also sets
+  `failbit` on overflow
 - **ferror** — checks for a file error (function)
 
 ---

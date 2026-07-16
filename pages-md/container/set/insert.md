@@ -1,122 +1,55 @@
 # std::set<Key,Compare,Allocator>::insert
 
-```cpp
-std::pair<iterator, bool> insert( const value_type& value );  // (1)
-std::pair<iterator, bool> insert( value_type&& value );  // (2) (since C++11)
-iterator insert( iterator pos, const value_type& value );  // (until C++11)
-iterator insert( const_iterator pos, const value_type& value );  // (since C++11)
-iterator insert( const_iterator pos, value_type&& value );  // (4) (since C++11)
-template< class InputIt >
-void insert( InputIt first, InputIt last );  // (5)
-void insert( std::initializer_list<value_type> ilist );  // (6) (since C++11)
-insert_return_type insert( node_type&& nh );  // (7) (since C++17)
-iterator insert( const_iterator pos, node_type&& nh );  // (8) (since C++17)
+Inserts one or more elements — but **does nothing** if an equivalent
+key is already present (no throw, no overwrite: a `set` holds unique
+keys). Every form returns enough information to tell whether the
+insertion actually happened.
+
+```cpp skip
+s.insert(value);                    // copy/move a value_type
+s.insert(hint, value);              // positional hint, same rules
+s.insert(first, last);              // range of value_type-likes
+s.insert(ilist);                    // initializer_list
+s.insert(std::move(nh));            // node handle              (C++17)
+s.insert(hint, std::move(nh));      // node handle + hint        (C++17)
 ```
 
-Inserts element(s) into the container, if the container doesn't already contain
-an element with an equivalent key.
+### What you provide
 
-1,2) Inserts `value`.
+- **value** — the `value_type` (i.e. `Key`) to insert.
+- **hint** — an iterator suggesting where to insert. A correct hint
+  (the element belongs just before it) makes insertion amortized
+  O(1); a wrong hint still works, just at the usual O(log n).
+- **first, last** — an input-iterator range of `value_type`-likes.
+  Duplicate keys within the range are unspecified as to which wins.
+- **ilist** — a `std::initializer_list<value_type>`; same duplicate
+  rule as the range form.
+- **nh** — a node handle, e.g. from another set's `extract()`. An
+  empty handle is a no-op; the allocators must match.
 
-3,4) Inserts `value` in the position as close as possible to the position just
-   prior to `pos`.
+### Guarantees and costs
 
-5) Inserts elements from range `[``first``,``last``)`. If multiple elements in
-   the range have keys that compare equivalent, it is unspecified which element
-   is inserted (pending LWG2844).
+- Single-element insert: O(log n). Hinted insert: amortized O(1) if
+  the hint is correct, O(log n) otherwise. Range/list insert:
+  `O(N·log(size() + N))` for `N` inserted elements.
+- No iterators or references are invalidated by insertion — a `set`'s
+  nodes never move once placed.
+- If an exception is thrown during a single/hinted insert, the
+  insertion has no effect.
+- (C++17) Inserting a node handle successfully invalidates any
+  pointers/references obtained while it was held by the handle; ones
+  obtained before it was extracted become valid again.
 
-6) Inserts elements from initializer list `ilist`. If multiple elements in the
-   range have keys that compare equivalent, it is unspecified which element is
-   inserted (pending LWG2844).
+### Gotchas
 
-7) If `nh` is an empty node handle, does nothing. Otherwise, inserts the element
-   owned by `nh` into the container , if the container doesn't already contain
-   an element with a key equivalent to `nh.key()`. The behavior is undefined if
-   `nh` is not empty and `get_allocator() != nh.get_allocator()`.
-
-8) If `nh` is an empty node handle, does nothing and returns the end iterator.
-   Otherwise, inserts the element owned by `nh` into the container, if the
-   container doesn't already contain an element with a key equivalent to
-   `nh.key()`, and returns the iterator pointing to the element with key
-   equivalent to `nh.key()`(regardless of whether the insert succeeded or
-   failed). If the insertion succeeds, `nh` is moved from, otherwise it retains
-   ownership of the element. The element is inserted as close as possible to the
-   position just prior to `pos`. The behavior is undefined if `nh` is not empty
-   and `get_allocator() != nh.get_allocator()`.
-
-No iterators or references are invalidated. If the insertion is successful,
-pointers and references to the element obtained while it is held in the node
-handle are invalidated, and pointers and references obtained to that element
-before it was extracted become valid.(since C++17)
-
-### Parameters
-
-- **pos** — iterator to the position before which the new element will be
-  inserted
-- **value** — element value to insert
-- **first, last** — range of elements to insert
-- **ilist** — initializer list to insert the values from
-- **nh** — a compatible node handle
-
-**Type requirements**
-
-**-`InputIt` must meet the requirements of LegacyInputIterator.**
-
-### Return value
-
-1,2) Returns a pair consisting of an iterator to the inserted element (or to the
-   element that prevented the insertion) and a `bool` value set to `true` if and
-   only if the insertion took place.
-
-3,4) Returns an iterator to the inserted element, or to the element that
-   prevented the insertion.
-
-5,6) (none)
-7) Returns an `insert_return_type` with the members initialized as follows:
-
-- If `nh` is empty, `inserted` is `false`, `position` is `end()`, and `node` is
-  empty.
-- Otherwise if the insertion took place, `inserted` is `true`, `position` points
-  to the inserted element, and `node` is empty.
-- If the insertion failed, `inserted` is `false`, `node` has the previous value
-  of `nh`, and `position` points to an element with a key equivalent to
-  `nh.key()`.
-
-8) End iterator if `nh` was empty, iterator pointing to the inserted element if
-   insertion took place, and iterator pointing to an element with a key
-   equivalent to `nh.key()` if it failed.
-
-### Exceptions
-
-1-4) If an exception is thrown by any operation, the insertion has no effect.
-
-### Complexity
-
-1,2) Logarithmic in the size of the container, `O(log(size()))`.
-
-3,4) Amortized constant if the insertion happens in the position just
-   *after*(until C++11)*before*(since C++11) `pos`, logarithmic in the size of
-   the container otherwise.
-
-5,6) `O(N·log(size() + N))`, where `N` is the number of elements to insert.
-
-7) Logarithmic in the size of the container, `O(log(size()))`.
-
-8) Amortized constant if the insertion happens in the position just *before*
-   `pos`, logarithmic in the size of the container otherwise.
-
-### Notes
-
-The hinted insert (3,4) does not return a boolean in order to be
-signature-compatible with positional insert on sequential containers, such as
-`std::vector::insert`. This makes it possible to create generic inserters such
-as `std::inserter`. One way to check success of a hinted insert is to compare
-`size()` before and after.
-
-The overloads (5,6) are often implemented as a loop that calls the overload (3)
-with `end()` as the hint; they are optimized for appending a sorted sequence
-(such as another set) whose smallest element is greater than the last element in
-`*this`.
+- A failed insert (key already present) is silent — always check the
+  returned `bool` if the outcome matters: `s.insert(v).second`.
+- The hinted overloads return only an iterator, not a `pair` — to
+  detect success there, compare `size()` before and after.
+- The range/list overloads (5,6) are often implemented as a loop that
+  calls the hinted overload with `end()`; they're optimized for
+  appending an already-sorted sequence whose smallest element is
+  greater than the set's current last element.
 
 ### Example
 
@@ -127,52 +60,55 @@ with `end()` as the hint; they are optimized for appending a sorted sequence
 
 int main()
 {
-    std::set<int> set;
+    std::set<int> s;
 
-    auto result_1 = set.insert(3);
-    assert(result_1.first != set.end()); // it is a valid iterator
-    assert(*result_1.first == 3);
-    if (result_1.second)
+    auto [it1, ok1] = s.insert(3);
+    assert(*it1 == 3);
+    if (ok1)
         std::cout << "insert done\n";
 
-    auto result_2 = set.insert(3);
-    assert(result_2.first == result_1.first); // same iterator
-    assert(*result_2.first == 3);
-    if (!result_2.second)
+    auto [it2, ok2] = s.insert(3);
+    assert(it2 == it1);   // same element, no new node
+    if (!ok2)
         std::cout << "no insertion\n";
 }
 ```
-
-Output:
 
 ```text
 insert done
 no insertion
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+```cpp skip
+std::pair<iterator, bool> insert( const value_type& value );  // (1)
+std::pair<iterator, bool> insert( value_type&& value );  // (2) (since C++11)
+iterator insert( const_iterator pos, const value_type& value );  // (3)
+iterator insert( const_iterator pos, value_type&& value );  // (4) (since C++11)
+template< class InputIt >
+void insert( InputIt first, InputIt last );  // (5)
+void insert( std::initializer_list<value_type> ilist );  // (6) (since C++11)
+insert_return_type insert( node_type&& nh );  // (7) (since C++17)
+iterator insert( const_iterator pos, node_type&& nh );  // (8) (since C++17)
+```
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 233 | C++98 | `pos` was just a hint, it could be totally ignored | the
-      insertion is required to be as close as possible to the position just
-      prior to `pos`
-  LWG 264 | C++98 | the complexity of overload (5) was required to be linear if
-      the range `[``first``,``last``)` is sorted according to `Compare` |
-      removed the linear requirement in this special case
-  LWG 316 | C++98 | in the return value of overload (1), it was not specified
-      which bool value indicates a successful insertion | success is indicated
-      by `true`
+`InputIt` must meet LegacyInputIterator. Overload (7) returns an
+`insert_return_type` with `inserted`, `position`, and `node` members
+describing whether the insertion took place; overload (8) returns the
+position iterator directly. The behavior is undefined if `nh` is
+non-empty and its allocator differs from the container's. Two earlier
+defects (LWG 233, LWG 316) are folded into the guarantees above: the
+hint is honored as a real position hint, not just ignored, and success
+is indicated by `true`.
 
 ### See also
 
-- **emplace (C++11)** — constructs element in-place (public member function)
-- **emplace_hint (C++11)** — constructs elements in-place using a hint (public
-  member function)
-- **inserter** — creates a `std::insert_iterator` of type inferred from the
-  argument (function template)
+- **emplace** — constructs element in-place (C++11)
+- **emplace_hint** — same, with a positional hint (C++11)
+- **erase** — removes elements
+- **find** — locates an element by key
+- **inserter** — creates a `std::insert_iterator` of the right type
 
 ---
 *Source: https://en.cppreference.com/w/cpp/container/set/insert*

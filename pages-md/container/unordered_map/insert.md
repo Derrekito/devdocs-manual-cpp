@@ -1,134 +1,65 @@
 # std::unordered_map<Key,T,Hash,KeyEqual,Allocator>::insert
 
-```cpp
-std::pair<iterator,bool> insert( const value_type& value );  // (1) (since C++11)
-std::pair<iterator,bool> insert( value_type&& value );  // (2) (since C++17)
-template< class P >
-std::pair<iterator,bool> insert( P&& value );  // (3) (since C++11)
-iterator insert( const_iterator hint, const value_type& value );  // (4) (since C++11)
-iterator insert( const_iterator hint, value_type&& value );  // (5) (since C++17)
-template< class P >
-iterator insert( const_iterator hint, P&& value );  // (6) (since C++11)
-template< class InputIt >
-void insert( InputIt first, InputIt last );  // (7) (since C++11)
-void insert( std::initializer_list<value_type> ilist );  // (8) (since C++11)
-insert_return_type insert( node_type&& nh );  // (9) (since C++17)
-iterator insert( const_iterator hint, node_type&& nh );  // (10) (since C++17)
+Inserts one or more elements — but **does nothing** if the key already
+exists (no throw, no overwrite; use `operator[]` or `insert_or_assign`
+for that). Every form returns enough information to tell whether the
+insertion actually happened.
+
+```cpp skip
+m.insert({key, value});             // copy/move a value_type
+m.insert(some_pair);                // convertible-to-value_type overload
+m.insert(hint, {key, value});       // positional hint, same rules
+m.insert(first, last);              // range of value_type-likes
+m.insert(ilist);                    // initializer_list
+m.insert(std::move(nh));            // node handle              (C++17)
+m.insert(hint, std::move(nh));      // node handle + hint        (C++17)
 ```
 
-Inserts element(s) into the container, if the container doesn't already contain
-an element with an equivalent key.
+### What you provide
 
-1-3) Inserts `value`.
+- **value / some_pair** — a `std::pair<const Key, T>`, or anything
+  convertible to it; forwarded as if to `emplace`.
+- **hint** — an iterator, used only as a non-binding suggestion of
+  where to start searching; unlike on `map`, it does not change the
+  complexity here.
+- **first, last** — an input-iterator range of `value_type`-likes.
+  Duplicate keys within the range are unspecified as to which wins.
+  Neither iterator may point into `*this`.
+- **ilist** — a `std::initializer_list<value_type>`; same duplicate
+  rule as the range form.
+- **nh** — a node handle, e.g. from another `unordered_map`'s
+  `extract()`. An empty handle is a no-op; the allocators must match.
 
-Overload (3) is equivalent to `emplace(std::forward<P>(value))` and only
-   participates in overload resolution if `std::is_constructible<value_type,
-   P&&>::value == true`.
+### Guarantees and costs
 
-4-6) Inserts `value`, using `hint` as a non-binding suggestion to where the
-   search should start.
+- Single/hinted/node insert: average O(1), worst case O(size()) — the
+  worst case comes from hash collisions forcing a bucket scan.
+- Range/list insert: average O(N) for `N` inserted elements, worst
+  case `O(N · size() + N)`.
+- If the resulting element count exceeds
+  `max_load_factor() * bucket_count()`, the container rehashes. A
+  rehash invalidates **all** iterators; without one, iterators are
+  left alone.
+- If an exception is thrown by any single/hinted/node-handle insert,
+  that call has no effect. The range and initializer-list overloads
+  give no exception-safety guarantee at all.
+- (C++17) Inserting a node handle successfully invalidates any
+  pointers/references obtained while it was held by the handle; ones
+  obtained before it was extracted become valid again.
 
-Overload (6) is equivalent to `emplace_hint(hint, std::forward<P>(value))` and
-   only participates in overload resolution if
-   `std::is_constructible<value_type, P&&>::value == true`.
+### Gotchas
 
-7) Inserts elements from range `[``first``,``last``)`. If multiple elements in
-   the range have keys that compare equivalent, it is unspecified which element
-   is inserted (pending LWG2844).
-
-If `[``first``,``last``)` is not a valid range, or `first` and/or `last` are
-   iterators into `*this`, the behavior is undefined.
-
-8) Inserts elements from initializer list `ilist`. If multiple elements in the
-   range have keys that compare equivalent, it is unspecified which element is
-   inserted (pending LWG2844).
-
-9) If `nh` is an empty node handle, does nothing. Otherwise, inserts the element
-   owned by `nh` into the container , if the container doesn't already contain
-   an element with a key equivalent to `nh.key()`. The behavior is undefined if
-   `nh` is not empty and `get_allocator() != nh.get_allocator()`.
-
-10) If `nh` is an empty node handle, does nothing and returns the end iterator.
-   Otherwise, inserts the element owned by `nh` into the container, if the
-   container doesn't already contain an element with a key equivalent to
-   `nh.key()`, and returns the iterator pointing to the element with key
-   equivalent to `nh.key()`(regardless of whether the insert succeeded or
-   failed). If the insertion succeeds, `nh` is moved from, otherwise it retains
-   ownership of the element. `hint` is used as a non-binding suggestion to where
-   the search should start. The behavior is undefined if `nh` is not empty and
-   `get_allocator() != nh.get_allocator()`.
-
-If after the operation the new number of elements is greater than old
-`max_load_factor() * bucket_count()` a rehashing takes place.
-If rehashing occurs (due to the insertion), all iterators are invalidated.
-Otherwise (no rehashing), iterators are not invalidated. If the insertion is
-successful, pointers and references to the element obtained while it is held in
-the node handle are invalidated, and pointers and references obtained to that
-element before it was extracted become valid.(since C++17)
-
-### Parameters
-
-- **hint** — iterator, used as a suggestion as to where to insert the content
-- **value** — element value to insert
-- **first, last** — range of elements to insert
-- **ilist** — initializer list to insert the values from
-- **nh** — a compatible node handle
-
-**Type requirements**
-
-**-`InputIt` must meet the requirements of LegacyInputIterator.**
-
-### Return value
-
-1-3) Returns a `std::pair` consisting of an iterator to the inserted element (or
-   to the element that prevented the insertion) and a `bool` denoting whether
-   the insertion took place (`true` if insertion happened, `false` if it did
-   not).
-
-4-6) Returns an iterator to the inserted element, or to the element that
-   prevented the insertion.
-
-7,8) (none)
-9) Returns an `insert_return_type` with the members initialized as follows:
-
-- If `nh` is empty, `inserted` is `false`, `position` is `end()`, and `node` is
-  empty.
-- Otherwise if the insertion took place, `inserted` is `true`, `position` points
-  to the inserted element, and `node` is empty.
-- If the insertion failed, `inserted` is `false`, `node` has the previous value
-  of `nh`, and `position` points to an element with a key equivalent to
-  `nh.key()`.
-
-10) End iterator if `nh` was empty, iterator pointing to the inserted element if
-   insertion took place, and iterator pointing to an element with a key
-   equivalent to `nh.key()` if it failed.
-
-### Exceptions
-
-1-6) If an exception is thrown for any reason, these functions have no effect
-   (strong exception safety guarantee).
-
-7,8) No exception safety guarantee.
-
-9,10) If an exception is thrown for any reason, these functions have no effect
-   (strong exception safety guarantee).
-
-### Complexity
-
-1-6) Average case: `O(1)`, worst case `O(size())`.
-
-7,8) Average case: `O(N)`, where N is the number of elements to insert. Worst
-   case: `O(N * size() + N)`.
-
-9,10) Average case: `O(1)`, worst case `O(size())`.
-
-### Notes
-
-The hinted insert (4-6) does not return a boolean in order to be
-signature-compatible with positional insert on sequential containers, such as
-`std::vector::insert`. This makes it possible to create generic inserters such
-as `std::inserter`. One way to check success of a hinted insert is to compare
-`size()` before and after.
+- A failed insert (key already present) is silent — always check the
+  returned `bool` if the outcome matters: `m.insert({k, v}).second`.
+- The hinted overloads return only an iterator, not a `pair` — to
+  detect success there, compare `size()` before and after.
+- A rehash can happen on *any* successful insert, not just large ones
+  — any iterator you're holding into the map may die. If you need one
+  to survive, re-`find` it afterward, or call `reserve()` up front to
+  avoid the rehash entirely.
+- Reaching for `insert` just to update an existing key is a bug in
+  waiting: it silently does nothing. Use `operator[]` or `insert_or_assign`
+  (C++17) when the key may already be there.
 
 ### Example
 
@@ -137,54 +68,58 @@ as `std::inserter`. One way to check success of a hinted insert is to compare
 #include <string>
 #include <unordered_map>
 
-int main ()
+int main()
 {
     std::unordered_map<int, std::string> dict = {{1, "one"}, {2, "two"}};
     dict.insert({3, "three"});
-    dict.insert(std::make_pair(4, "four"));
-    dict.insert({{4, "another four"}, {5, "five"}});
 
     bool ok = dict.insert({1, "another one"}).second;
     std::cout << "inserting 1 => \"another one\" "
               << (ok ? "succeeded" : "failed") << '\n';
 
-    std::cout << "contents:\n";
-    for (auto& p : dict)
-        std::cout << ' ' << p.first << " => " << p.second << '\n';
+    std::cout << "size: " << dict.size() << '\n';
 }
 ```
 
-Possible output:
-
 ```text
 inserting 1 => "another one" failed
-contents:
- 5 => five
- 1 => one
- 2 => two
- 3 => three
- 4 => four
+size: 3
 ```
 
-### Defect reports
+### Reference
 
-The following behavior-changing defect reports were applied retroactively to
-previously published C++ standards.
+```cpp skip
+std::pair<iterator,bool> insert( const value_type& value );  // (since C++11)
+std::pair<iterator,bool> insert( value_type&& value );  // (since C++17)
+template< class P >
+std::pair<iterator,bool> insert( P&& value );  // (since C++11)
+iterator insert( const_iterator hint, const value_type& value );  // (since C++11)
+iterator insert( const_iterator hint, value_type&& value );  // (since C++17)
+template< class P >
+iterator insert( const_iterator hint, P&& value );  // (since C++11)
+template< class InputIt >
+void insert( InputIt first, InputIt last );  // (since C++11)
+void insert( std::initializer_list<value_type> ilist );  // (since C++11)
+insert_return_type insert( node_type&& nh );  // (since C++17)
+iterator insert( const_iterator hint, node_type&& nh );  // (since C++17)
+```
 
-  DR | Applied to | Behavior as published | Correct behavior
-  LWG 2005 | C++11 | overloads (3,6) would only particiate in overload
-      resolution if `P` is implicitly convertible to `value_type` | only
-      participates if `value_type` is constructible from `P&&`
+The `P&&` overloads are equivalent to `emplace(std::forward<P>(value))`
+(and its hinted counterpart `emplace_hint`), participating in overload
+resolution only if `value_type` is constructible from `P&&`. The node
+handle overload returns an `insert_return_type` with `inserted`,
+`position`, and `node` members describing whether the insertion took
+place. An earlier defect (LWG 2005) is folded into the wording above:
+the `P&&` overloads require `value_type` to be constructible from
+`P&&`, not merely that `P` convert to it.
 
 ### See also
 
-- **emplace** — constructs element in-place (public member function)
-- **emplace_hint** — constructs elements in-place using a hint (public member
-  function)
-- **insert_or_assign (C++17)** — inserts an element or assigns to the current
-  element if the key already exists (public member function)
-- **inserter** — creates a `std::insert_iterator` of type inferred from the
-  argument (function template)
+- **emplace** — constructs element in-place
+- **emplace_hint** — same, with a positional hint
+- **insert_or_assign** — inserts, or assigns if the key exists (C++17)
+- **erase** — removes elements
+- **find** — looks up an element by key
 
 ---
 *Source: https://en.cppreference.com/w/cpp/container/unordered_map/insert*

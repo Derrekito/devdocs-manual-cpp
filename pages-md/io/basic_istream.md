@@ -1,275 +1,136 @@
 # std::basic_istream
 
+`std::istream`, behind `std::cin` and `>>`. Reads fail **silently**: a bad
+extraction doesn't throw or return an error code, it just sets a fail bit on
+the stream (and writes zero into the target) and leaves the rest of the
+input untouched — always wrap the read in a check, `if (in >> x)`, rather
+than trusting the value blindly. It layers formatted input (`operator>>`)
+and unformatted input (`get`, `read`, ...) on top of a stream buffer; every
+readable stream in the library (`ifstream`, `istringstream`, `cin`, ...) is a
+`basic_istream` underneath.
+
+```cpp skip
+if (in >> x) ...                // idiomatic: true iff the extraction worked
+in >> x >> y;                   // chained, skips leading whitespace
+in.get(c);                      // one raw character, whitespace included
+std::getline(in, line);         // a whole line into a std::string
+in.ignore(n, delim);             // discard up to n chars or until delim
+in.read(buf, n);                // n raw bytes, no formatting
+in.gcount();                    // count from the last unformatted read
+```
+
+`std::wistream` is the `wchar_t` typedef.
+
+### What you provide
+
+- **CharT** — the character type (`char` for `std::istream`, `wchar_t` for
+  `std::wistream`).
+- **Traits** — character traits, defaults to `std::char_traits<CharT>`.
+
+### Member functions
+
+Own members (beyond what's inherited):
+
+| Member | What it does |
+| --- | --- |
+| `operator>>` | formatted extract: arithmetic, `bool`, pointers, manipulators |
+| `get(c)` / `get(buf, n)` | one or more raw characters, whitespace included |
+| `peek()` | looks at the next character without extracting it |
+| `unget()` / `putback(c)` | pushes the last (or given) character back on |
+| `getline(buf, n, delim)` | extracts into a buffer until `delim` or `n` chars |
+| `ignore(n, delim)` | discards up to `n` characters or until `delim` |
+| `read(buf, n)` | `n` raw bytes, unformatted |
+| `readsome(buf, n)` | like `read`, but only what's already buffered |
+| `gcount()` | characters extracted by the last **unformatted** read |
+| `tellg()` / `seekg(pos)` | returns / sets the input position |
+| `sync()` | synchronizes with the underlying device |
+| `swap(other)` (C++11) | swaps two streams, not the buffer (protected) |
+
+Member class `sentry` prepares the stream before an input operation; you
+don't call it directly. The free function `std::getline(istream&, string&)`
+is the usual way to read a whole line into a `std::string`.
+
+Everything else — state (`good`/`eof`/`fail`/`bad`/`operator bool`/`clear`),
+format flags (`flags`/`setf`/`precision`/`width`), locale (`imbue`) — is
+inherited from **basic_ios** and **ios_base**.
+
+### Guarantees and costs
+
+- `operator>>` skips leading whitespace by default (governed by the
+  `skipws` flag); unformatted reads (`get`, `read`, ...) do not.
+- On a failed extraction, `operator>>` sets `failbit` (and `eofbit` if input
+  ran out), writes zero into the target, and never throws unless you've
+  opted in via `exceptions()`.
+- `gcount()` only reflects **unformatted** reads (`get`, `getline`, `ignore`,
+  `read`, `readsome`, ...); `operator>>` doesn't update it.
+- Once an error bit is set, every later formatted or unformatted read is a
+  no-op until `clear()` runs — the state does not reset itself.
+
+### Gotchas
+
+- The classic bug: `while (in >> x) { ... }` is correct; `while (!in.eof())`
+  is not. `eof()` only reports the state set by the *last* operation — if
+  a `get()` consumes the final byte of a file, `eof()` is still `false`;
+  only the *next* read, which finds nothing, sets `eofbit`. Looping on
+  `!eof()` runs the body one extra time on exhausted input.
+- `if (in >> x)` tests the stream's state, not `x` — it correctly rejects a
+  read that landed on a stream already in a fail state, even if `x` looks
+  plausible.
+- Once an error bit is set, it stays set until an explicit `clear()` —
+  nothing about a later successful-looking operation resets it for you.
+
+### Example
+
 ```cpp
+#include <iostream>
+#include <sstream>
+#include <string>
+
+int main()
+{
+    std::istringstream in{"42 abc oops"};
+
+    int n;
+    std::string word;
+    if (in >> n >> word)
+        std::cout << "read: " << n << ' ' << word << '\n';
+
+    double d;
+    if (!(in >> d))
+        std::cout << "extraction failed, stream flagged bad\n";
+}
+```
+
+```text
+read: 42 abc
+extraction failed, stream flagged bad
+```
+
+### Reference
+
+```cpp skip
 template<
     class CharT,
     class Traits = std::char_traits<CharT>
-> class basic_istream : virtual public std::basic_ios<CharT, Traits>
+> class basic_istream : virtual public std::basic_ios<CharT, Traits>;
 ```
 
-The class template `basic_istream` provides support for high level input
-operations on character streams. The supported operations include formatted
-input (e.g. integer values or whitespace-separated characters and characters
-strings) and unformatted input (e.g. raw characters and character arrays). This
-functionality is implemented in terms of the interface provided by the
-underlying `basic_streambuf` class, accessed through the `basic_ios` base class.
-The only non-inherited data member of `basic_istream`, in most implementations,
-is the value returned by `basic_istream::gcount()`.
+Typedefs: `std::istream` is `basic_istream<char>`; `std::wistream` is
+`basic_istream<wchar_t>`. Member types `char_type`, `traits_type`,
+`int_type`, `pos_type`, `off_type` name `CharT`, `Traits`,
+`Traits::int_type`, `Traits::pos_type`, `Traits::off_type`; the program is
+ill-formed if `Traits::char_type` is not `CharT`. The only non-inherited
+data member, in most implementations, is the value returned by `gcount()`.
 
-Several typedefs for common character types are provided:
+Two global `basic_istream` objects exist: `cin`/`wcin`, reading from
+`stdin`.
 
-- **`std::istream`** — std::basic_istream<char>
-- **`std::wistream`** — std::basic_istream<wchar_t>
+### See also
 
-### Global objects
-
-Two global basic_istream objects are provided by the standard library.
-
-- **cinwcin** — reads from the standard C input stream `stdin` (global object)
-
-### Member types
-
-- **`char_type`** — `CharT`
-- **`traits_type`** — `Traits`; the program is ill-formed if `Traits::char_type`
-  is not `CharT`.
-- **`int_type`** — `Traits::int_type`
-- **`pos_type`** — `Traits::pos_type`
-- **`off_type`** — `Traits::off_type`
-
-### Member functions
-
-- **(constructor)** — constructs the object (public member function)
-- **(destructor) [virtual]** — destructs the object (virtual public member
-  function)
-- **operator= (C++11)** — move-assigns from another `basic_istream` (protected
-  member function)
-
-**Formatted input**
-
-- **operator>>** — extracts formatted data (public member function)
-
-**Unformatted input**
-
-- **get** — extracts characters (public member function)
-- **peek** — reads the next character without extracting it (public member
-  function)
-- **unget** — unextracts a character (public member function)
-- **putback** — puts a character into input stream (public member function)
-- **getline** — extracts characters until the given character is found (public
-  member function)
-- **ignore** — extracts and discards characters until the given character is
-  found (public member function)
-- **read** — extracts blocks of characters (public member function)
-- **readsome** — extracts already available blocks of characters (public member
-  function)
-- **gcount** — returns number of characters extracted by last unformatted input
-  operation (public member function)
-
-**Positioning**
-
-- **tellg** — returns the input position indicator (public member function)
-- **seekg** — sets the input position indicator (public member function)
-
-**Miscellaneous**
-
-- **sync** — synchronizes with the underlying storage device (public member
-  function)
-- **swap (C++11)** — swaps stream objects, except for the associated buffer
-  (protected member function)
-
-### Member classes
-
-- **sentry** — implements basic logic for preparation of the stream for input
-  operations (public member class)
-
-### Non-member functions
-
-- **operator>>(std::basic_istream)** — extracts characters and character arrays
-  (function template)
-
-## Inherited from std::basic_ios
-
-### Member types
-
-- **`char_type`** — `CharT`
-- **`traits_type`** — `Traits`
-- **`int_type`** — `Traits::int_type`
-- **`pos_type`** — `Traits::pos_type`
-- **`off_type`** — `Traits::off_type`
-
-### Member functions
-
-**State functions**
-
-- **good** — checks if no error has occurred i.e. I/O operations are available
-  (public member function of `std::basic_ios<CharT,Traits>`)
-- **eof** — checks if end-of-file has been reached (public member function of
-  `std::basic_ios<CharT,Traits>`)
-- **fail** — checks if an error has occurred (public member function of
-  `std::basic_ios<CharT,Traits>`)
-- **bad** — checks if a non-recoverable error has occurred (public member
-  function of `std::basic_ios<CharT,Traits>`)
-- **operator!** — checks if an error has occurred (synonym of `fail()`) (public
-  member function of `std::basic_ios<CharT,Traits>`)
-- **operator bool** — checks if no error has occurred (synonym of `!``fail()`)
-  (public member function of `std::basic_ios<CharT,Traits>`)
-- **rdstate** — returns state flags (public member function of
-  `std::basic_ios<CharT,Traits>`)
-- **setstate** — sets state flags (public member function of
-  `std::basic_ios<CharT,Traits>`)
-- **clear** — modifies state flags (public member function of
-  `std::basic_ios<CharT,Traits>`)
-
-**Formatting**
-
-- **copyfmt** — copies formatting information (public member function of
-  `std::basic_ios<CharT,Traits>`)
-- **fill** — manages the fill character (public member function of
-  `std::basic_ios<CharT,Traits>`)
-
-**Miscellaneous**
-
-- **exceptions** — manages exception mask (public member function of
-  `std::basic_ios<CharT,Traits>`)
-- **imbue** — sets the locale (public member function of
-  `std::basic_ios<CharT,Traits>`)
-- **rdbuf** — manages associated stream buffer (public member function of
-  `std::basic_ios<CharT,Traits>`)
-- **tie** — manages tied stream (public member function of
-  `std::basic_ios<CharT,Traits>`)
-- **narrow** — narrows characters (public member function of
-  `std::basic_ios<CharT,Traits>`)
-- **widen** — widens characters (public member function of
-  `std::basic_ios<CharT,Traits>`)
-
-## Inherited from std::ios_base
-
-### Member functions
-
-**Formatting**
-
-- **flags** — manages format flags (public member function of `std::ios_base`)
-- **setf** — sets specific format flag (public member function of
-  `std::ios_base`)
-- **unsetf** — clears specific format flag (public member function of
-  `std::ios_base`)
-- **precision** — manages decimal precision of floating point operations (public
-  member function of `std::ios_base`)
-- **width** — manages field width (public member function of `std::ios_base`)
-
-**Locales**
-
-- **imbue** — sets locale (public member function of `std::ios_base`)
-- **getloc** — returns current locale (public member function of
-  `std::ios_base`)
-
-**Internal extensible array**
-
-- **xalloc [static]** — returns a program-wide unique integer that is safe to
-  use as index to `pword()` and `iword()` (public static member function of
-  `std::ios_base`)
-- **iword** — resizes the private storage if necessary and access to the long
-  element at the given index (public member function of `std::ios_base`)
-- **pword** — resizes the private storage if necessary and access to the void*
-  element at the given index (public member function of `std::ios_base`)
-
-**Miscellaneous**
-
-- **register_callback** — registers event callback function (public member
-  function of `std::ios_base`)
-- **sync_with_stdio [static]** — sets whether C++ and C I/O libraries are
-  interoperable (public static member function of `std::ios_base`)
-
-**Member classes**
-
-- **failure** — stream exception (public member class of `std::ios_base`)
-- **Init** — initializes standard stream objects (public member class of
-  `std::ios_base`)
-
-**Member types and constants**
-
-- **openmode** — stream open mode type The following constants are also defined:
-  Constant Explanation `app` seek to the end of stream before each write
-  `binary` open in binary mode `in` open for reading `out` open for writing
-  `trunc` discard the contents of the stream when opening `ate` seek to the end
-  of stream immediately after open `noreplace` (C++23) open in exclusive mode
-  (typedef)
-- **`app`** — seek to the end of stream before each write
-- **`binary`** — open in binary mode
-- **`in`** — open for reading
-- **`out`** — open for writing
-- **`trunc`** — discard the contents of the stream when opening
-- **`ate`** — seek to the end of stream immediately after open
-- **`noreplace` (C++23)** — open in exclusive mode
-- **fmtflags** — formatting flags type The following constants are also defined:
-  Constant Explanation `dec` use decimal base for integer I/O: see `std::dec`
-  `oct` use octal base for integer I/O: see `std::oct` `hex` use hexadecimal
-  base for integer I/O: see `std::hex` `basefield` `dec | oct | hex`. Useful for
-  masking operations `left` left adjustment (adds fill characters to the right):
-  see `std::left` `right` right adjustment (adds fill characters to the left):
-  see `std::right` `internal` internal adjustment (adds fill characters to the
-  internal designated point): see `std::internal` `adjustfield` `left | right |
-  internal`. Useful for masking operations `scientific` generate floating point
-  types using scientific notation, or hex notation if combined with `fixed`: see
-  `std::scientific` `fixed` generate floating point types using fixed notation,
-  or hex notation if combined with `scientific`: see `std::fixed` `floatfield`
-  `scientific | fixed`. Useful for masking operations `boolalpha` insert and
-  extract bool type in alphanumeric format: see `std::boolalpha` `showbase`
-  generate a prefix indicating the numeric base for integer output, require the
-  currency indicator in monetary I/O: see `std::showbase` `showpoint` generate a
-  decimal-point character unconditionally for floating-point number output: see
-  `std::showpoint` `showpos` generate a + character for non-negative numeric
-  output: see `std::showpos` `skipws` skip leading whitespace before certain
-  input operations: see `std::skipws` `unitbuf` flush the output after each
-  output operation: see `std::unitbuf` `uppercase` replace certain lowercase
-  letters with their uppercase equivalents in certain output operations: see
-  `std::uppercase` (typedef)
-- **`dec`** — use decimal base for integer I/O: see `std::dec`
-- **`oct`** — use octal base for integer I/O: see `std::oct`
-- **`hex`** — use hexadecimal base for integer I/O: see `std::hex`
-- **`basefield`** — `dec | oct | hex`. Useful for masking operations
-- **`left`** — left adjustment (adds fill characters to the right): see
-  `std::left`
-- **`right`** — right adjustment (adds fill characters to the left): see
-  `std::right`
-- **`internal`** — internal adjustment (adds fill characters to the internal
-  designated point): see `std::internal`
-- **`adjustfield`** — `left | right | internal`. Useful for masking operations
-- **`scientific`** — generate floating point types using scientific notation, or
-  hex notation if combined with `fixed`: see `std::scientific`
-- **`fixed`** — generate floating point types using fixed notation, or hex
-  notation if combined with `scientific`: see `std::fixed`
-- **`floatfield`** — `scientific | fixed`. Useful for masking operations
-- **`boolalpha`** — insert and extract bool type in alphanumeric format: see
-  `std::boolalpha`
-- **`showbase`** — generate a prefix indicating the numeric base for integer
-  output, require the currency indicator in monetary I/O: see `std::showbase`
-- **`showpoint`** — generate a decimal-point character unconditionally for
-  floating-point number output: see `std::showpoint`
-- **`showpos`** — generate a + character for non-negative numeric output: see
-  `std::showpos`
-- **`skipws`** — skip leading whitespace before certain input operations: see
-  `std::skipws`
-- **`unitbuf`** — flush the output after each output operation: see
-  `std::unitbuf`
-- **`uppercase`** — replace certain lowercase letters with their uppercase
-  equivalents in certain output operations: see `std::uppercase`
-- **iostate** — state of the stream type The following constants are also
-  defined: Constant Explanation `goodbit` no error `badbit` irrecoverable stream
-  error `failbit` input/output operation failed (formatting or extraction error)
-  `eofbit` associated input sequence has reached end-of-file (typedef)
-- **`goodbit`** — no error
-- **`badbit`** — irrecoverable stream error
-- **`failbit`** — input/output operation failed (formatting or extraction error)
-- **`eofbit`** — associated input sequence has reached end-of-file
-- **seekdir** — seeking direction type The following constants are also defined:
-  Constant Explanation `beg` the beginning of a stream `end` the ending of a
-  stream `cur` the current position of stream position indicator (typedef)
-- **`beg`** — the beginning of a stream
-- **`end`** — the ending of a stream
-- **`cur`** — the current position of stream position indicator
-- **event** — specifies event type (enum)
-- **event_callback** — callback function type (typedef)
+- **basic_ostream** — the write side of the same interface
+- **basic_stringstream** — the same interface over an in-memory string
+- **basic_ifstream** — the same interface over a file
+- **cin**
 
 ---
 *Source: https://en.cppreference.com/w/cpp/io/basic_istream*
